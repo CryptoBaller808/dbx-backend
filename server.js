@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const http = require('http');
 const socketIo = require('socket.io');
 const { initializeBlockchainServices } = require('./services/blockchain');
-const { initializeModels } = require('./models');
+const { initializeDatabase } = require('./models');
 const { 
   secureConnection, 
   validateQuery, 
@@ -217,7 +217,7 @@ const initializeServices = async () => {
     console.log('[Server] Initializing enhanced database services...');
     
     // Initialize enhanced database manager
-    const db = await initializeModels();
+    const db = await initializeDatabase();
     
     console.log('[Server] Initializing blockchain services...');
     
