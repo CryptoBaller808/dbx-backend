@@ -50,16 +50,70 @@ const config = {
 const env = process.env.NODE_ENV || 'development';
 const dbConfig = config[env];
 
-// Initialize Sequelize
-if (dbConfig.use_env_variable) {
-  sequelize = new Sequelize(process.env[dbConfig.use_env_variable], dbConfig);
-} else {
-  sequelize = new Sequelize(
-    dbConfig.database,
-    dbConfig.username,
-    dbConfig.password,
-    dbConfig
-  );
+// Validate DATABASE_URL for production
+if (env === 'production' && dbConfig.use_env_variable) {
+  const databaseUrl = process.env[dbConfig.use_env_variable];
+  
+  if (!databaseUrl) {
+    console.error('❌ [Database] CRITICAL ERROR: DATABASE_URL environment variable is not set!');
+    console.error('📋 [Database] Please set DATABASE_URL in your Render dashboard with this format:');
+    console.error('🔗 [Database] postgresql://username:password@hostname:port/database_name');
+    console.error('📝 [Database] Example: postgresql://dbx_user:secure_password@dpg-abc123-a.oregon-postgres.render.com:5432/dbx_production');
+    console.error('⚙️  [Database] In Render Dashboard:');
+    console.error('   1. Go to your service dashboard');
+    console.error('   2. Click "Environment" tab');
+    console.error('   3. Add: DATABASE_URL = your_postgresql_connection_string');
+    console.error('   4. Redeploy the service');
+    throw new Error('DATABASE_URL environment variable is required for production deployment');
+  }
+  
+  // Validate DATABASE_URL format
+  try {
+    const url = new URL(databaseUrl);
+    if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+      throw new Error('Invalid protocol');
+    }
+    if (!url.hostname || !url.pathname) {
+      throw new Error('Missing hostname or database name');
+    }
+    console.log('✅ [Database] DATABASE_URL format validation passed');
+    console.log(`🔗 [Database] Connecting to: ${url.hostname}:${url.port || 5432}${url.pathname}`);
+  } catch (error) {
+    console.error('❌ [Database] CRITICAL ERROR: Invalid DATABASE_URL format!');
+    console.error('🔗 [Database] Current DATABASE_URL:', databaseUrl.substring(0, 20) + '...');
+    console.error('📋 [Database] Required format: postgresql://username:password@hostname:port/database_name');
+    console.error('📝 [Database] Example: postgresql://dbx_user:secure_password@dpg-abc123-a.oregon-postgres.render.com:5432/dbx_production');
+    console.error('🔧 [Database] Error details:', error.message);
+    throw new Error(`Invalid DATABASE_URL format: ${error.message}`);
+  }
+}
+
+// Initialize Sequelize with enhanced error handling
+let sequelize;
+try {
+  if (dbConfig.use_env_variable) {
+    const databaseUrl = process.env[dbConfig.use_env_variable];
+    console.log('🔄 [Database] Initializing Sequelize with DATABASE_URL...');
+    sequelize = new Sequelize(databaseUrl, dbConfig);
+  } else {
+    console.log('🔄 [Database] Initializing Sequelize with individual parameters...');
+    sequelize = new Sequelize(
+      dbConfig.database,
+      dbConfig.username,
+      dbConfig.password,
+      dbConfig
+    );
+  }
+  console.log('✅ [Database] Sequelize instance created successfully');
+} catch (error) {
+  console.error('❌ [Database] CRITICAL ERROR: Failed to create Sequelize instance!');
+  console.error('🔧 [Database] Error details:', error.message);
+  if (env === 'production') {
+    console.error('📋 [Database] For Render deployment, ensure DATABASE_URL is set correctly:');
+    console.error('   Format: postgresql://username:password@hostname:port/database_name');
+    console.error('   Example: postgresql://dbx_user:secure_password@dpg-abc123-a.oregon-postgres.render.com:5432/dbx_production');
+  }
+  throw error;
 }
 
 // Initialize database object
