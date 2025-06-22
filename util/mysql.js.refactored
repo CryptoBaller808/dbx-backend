@@ -1,0 +1,70 @@
+/**
+ * Sequelize database utility
+ * Replaces direct MySQL connection with Sequelize
+ * 
+ * This file is maintained for backward compatibility
+ * New code should use models/index.js and util/database.js instead
+ */
+const { Sequelize } = require('sequelize');
+const db = require('../models');
+
+// Export sequelize instance for backward compatibility
+module.exports = {
+  // Legacy mysqlInstance property maintained for backward compatibility
+  // This redirects to the Sequelize instance
+  get mysqlInstance() {
+    console.warn('WARNING: Direct MySQL access via mysqlInstance is deprecated. Use Sequelize models instead.');
+    return {
+      query: (sql, values, callback) => {
+        if (typeof values === 'function') {
+          callback = values;
+          values = [];
+        }
+        
+        // Execute query through Sequelize
+        db.sequelize.query(sql, {
+          replacements: Array.isArray(values) ? values : [],
+          type: Sequelize.QueryTypes.SELECT
+        })
+        .then(results => {
+          if (typeof callback === 'function') {
+            callback(null, [results, null]);
+          }
+          return results;
+        })
+        .catch(error => {
+          if (typeof callback === 'function') {
+            callback(error, null);
+          }
+          throw error;
+        });
+      },
+      
+      // Add other MySQL methods as needed for backward compatibility
+      execute: (sql, values, callback) => {
+        if (typeof values === 'function') {
+          callback = values;
+          values = [];
+        }
+        
+        // Execute query through Sequelize
+        db.sequelize.query(sql, {
+          replacements: Array.isArray(values) ? values : [],
+          type: Sequelize.QueryTypes.UPDATE
+        })
+        .then(results => {
+          if (typeof callback === 'function') {
+            callback(null, [results, null]);
+          }
+          return results;
+        })
+        .catch(error => {
+          if (typeof callback === 'function') {
+            callback(error, null);
+          }
+          throw error;
+        });
+      }
+    };
+  }
+};

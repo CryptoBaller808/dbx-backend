@@ -1,0 +1,110 @@
+/**
+ * Consolidated models index file
+ * Central configuration for all Sequelize models
+ */
+const fs = require('fs');
+const path = require('path');
+const Sequelize = require('sequelize');
+const basename = path.basename(__filename);
+const env = process.env.NODE_ENV || 'development';
+const config = require('../config/database.js')[env];
+
+const db = {};
+
+// Initialize Sequelize with database configuration
+const sequelize = new Sequelize(
+  config.database,
+  config.username,
+  config.password,
+  {
+    host: config.host,
+    dialect: config.dialect,
+    port: config.port,
+    pool: {
+      max: 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    logging: config.logging || false
+  }
+);
+
+// Import all model files from consolidated directory
+fs.readdirSync(path.join(__dirname, 'consolidated'))
+  .filter(file => {
+    return (
+      file.indexOf('.') !== 0 &&
+      file !== basename &&
+      file.slice(-3) === '.js'
+    );
+  })
+  .forEach(file => {
+    const model = require(path.join(__dirname, 'consolidated', file))(
+      sequelize,
+      Sequelize.DataTypes
+    );
+    db[model.name] = model;
+  });
+
+// Set up model associations
+Object.keys(db).forEach(modelName => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
+});
+
+// Define specific associations
+// Users and Items
+db.users.hasMany(db.items, { foreignKey: 'user_id', as: 'items' });
+db.items.belongsTo(db.users, { foreignKey: 'user_id', as: 'creator' });
+
+// Collections and Items
+db.collections.hasMany(db.items, { foreignKey: 'collection_id', as: 'items' });
+db.items.belongsTo(db.collections, { foreignKey: 'collection_id', as: 'collection' });
+
+// Categories and Items
+db.categories.hasMany(db.items, { foreignKey: 'category_id', as: 'items' });
+db.items.belongsTo(db.categories, { foreignKey: 'category_id', as: 'category' });
+
+// Items and Properties
+db.items.hasMany(db.item_properties, { foreignKey: 'item_id', as: 'properties' });
+db.item_properties.belongsTo(db.items, { foreignKey: 'item_id', as: 'item' });
+
+// Items and Sale Info
+db.items.hasMany(db.item_sale_info, { foreignKey: 'item_id', as: 'item_sale_info' });
+db.item_sale_info.belongsTo(db.items, { foreignKey: 'item_id', as: 'item' });
+
+// Items and Bids
+db.items.hasMany(db.item_bids, { foreignKey: 'item_id', as: 'bids' });
+db.item_bids.belongsTo(db.items, { foreignKey: 'item_id', as: 'item' });
+
+// Users and Bids
+db.users.hasMany(db.item_bids, { foreignKey: 'user_id', as: 'bids' });
+db.item_bids.belongsTo(db.users, { foreignKey: 'user_id', as: 'bidder' });
+
+// Items and Activity
+db.items.hasMany(db.item_activity, { foreignKey: 'item_id', as: 'activities' });
+db.item_activity.belongsTo(db.items, { foreignKey: 'item_id', as: 'item' });
+
+// Users and Activity
+db.users.hasMany(db.item_activity, { foreignKey: 'user_id', as: 'activities' });
+db.item_activity.belongsTo(db.users, { foreignKey: 'user_id', as: 'user' });
+
+// Users and Wishlist
+db.users.hasMany(db.wishlist, { foreignKey: 'user_id', as: 'wishlist_items' });
+db.wishlist.belongsTo(db.users, { foreignKey: 'user_id', as: 'user' });
+
+// Items and Wishlist
+db.items.hasMany(db.wishlist, { foreignKey: 'item_id', as: 'wishlisted_by' });
+db.wishlist.belongsTo(db.items, { foreignKey: 'item_id', as: 'item' });
+
+// Users and Roles
+db.roles.hasMany(db.users, { foreignKey: 'role_id', as: 'users' });
+db.users.belongsTo(db.roles, { foreignKey: 'role_id', as: 'role' });
+
+// Export the db object
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;

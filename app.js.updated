@@ -1,0 +1,51 @@
+/**
+ * Database configuration update for app.js
+ * Standardizes database connections to use Sequelize
+ */
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const routes = require('./routes');
+const db = require('./models'); // Standardized Sequelize models
+const { initializeDatabase } = require('./scripts/initialize-database');
+
+// Initialize Express app
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Initialize database connection
+db.sequelize.authenticate()
+  .then(() => {
+    console.log('Database connection established successfully.');
+    
+    // Initialize database with default data if needed
+    return initializeDatabase();
+  })
+  .catch(err => {
+    console.error('Unable to connect to the database:', err);
+  });
+
+// Routes
+app.use('/api', routes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    message: 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+module.exports = app;

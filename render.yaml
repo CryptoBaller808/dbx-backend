@@ -1,0 +1,96 @@
+# DBX Backend Render Blueprint Configuration
+services:
+  - type: web
+    name: dbx-backend-api
+    env: node
+    plan: pro
+    region: oregon
+    buildCommand: npm ci --only=production
+    startCommand: npm start
+    healthCheckPath: /health
+    numInstances: 1
+    autoDeploy: true
+    
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dbx-postgres
+          property: connectionString
+      - key: REDIS_URL
+        value: redis://default:your-redis-password@your-redis-host:6379
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://your-frontend-domain.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://your-frontend-domain.onrender.com,https://your-admin-domain.onrender.com
+      
+      # Blockchain Configuration
+      - key: ETH_RPC_URL
+        value: https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID
+      - key: BNB_RPC_URL
+        value: https://bsc-dataseed1.binance.org
+      - key: AVAX_RPC_URL
+        value: https://api.avax.network/ext/bc/C/rpc
+      - key: MATIC_RPC_URL
+        value: https://polygon-rpc.com
+      - key: SOL_RPC_URL
+        value: https://api.mainnet-beta.solana.com
+      - key: XRP_RPC_URL
+        value: wss://xrplcluster.com
+      - key: XLM_RPC_URL
+        value: https://horizon.stellar.org
+      - key: BTC_RPC_URL
+        value: https://blockstream.info/api
+      - key: XDC_RPC_URL
+        value: https://rpc.xinfin.network
+      
+      # External Services
+      - key: INFURA_PROJECT_ID
+        value: YOUR_INFURA_PROJECT_ID
+      - key: ALCHEMY_API_KEY
+        value: YOUR_ALCHEMY_API_KEY
+      - key: MORALIS_API_KEY
+        value: YOUR_MORALIS_API_KEY
+      
+      # Email Configuration
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        value: your-email@gmail.com
+      - key: SMTP_PASS
+        value: your-app-password
+      
+      # Monitoring
+      - key: SENTRY_DSN
+        value: YOUR_BACKEND_SENTRY_DSN
+      
+      # Feature Flags
+      - key: ENABLE_BITCOIN
+        value: true
+      - key: ENABLE_XDC
+        value: true
+      - key: ENABLE_TRADING
+        value: true
+      - key: ENABLE_STAKING
+        value: true
+      - key: ENABLE_NFT_MARKETPLACE
+        value: true
+
+databases:
+  - name: dbx-postgres
+    databaseName: dbx_production
+    user: dbx_user
+    plan: starter
+    region: oregon
+
