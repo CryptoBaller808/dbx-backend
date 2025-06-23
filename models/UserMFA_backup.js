@@ -195,7 +195,7 @@ module.exports = (sequelize) => {
   UserMFA.associate = function(models) {
     UserMFA.belongsTo(models.User, {
       foreignKey: 'userId',
-      as: 'userBackup',
+      as: 'archivedUser',
       onDelete: 'CASCADE'
     });
   };
