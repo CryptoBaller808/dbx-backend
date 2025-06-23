@@ -181,7 +181,6 @@ fs.readdirSync(modelsDir)
         db.creator_verifications = model;
         db.CreatorVerification = model;
       } else if (modelName === 'UserMFA') {
-        db.user_mfa = model;
         db.UserMFA = model;
       } else if (modelName === 'UserMFA_backup') {
         db.UserMFABackup = model;

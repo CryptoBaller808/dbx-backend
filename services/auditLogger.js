@@ -12,6 +12,9 @@ class AuditLogger {
    */
   static async logUserAuth(eventType, req, user = null, additionalData = {}) {
     try {
+      // Get models from the database instance
+      const { audit_logs } = require('../models');
+      
       const ip = this.getClientIP(req);
       const geo = geoip.lookup(ip);
       
