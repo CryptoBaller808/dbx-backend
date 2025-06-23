@@ -5,7 +5,7 @@ const { DataTypes } = require('sequelize');
  * Stores MFA configuration and recovery codes for users
  */
 module.exports = (sequelize) => {
-  const UserMFA = sequelize.define('UserMFA', {
+  const UserMFA = sequelize.define('UserMFABackup', {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
@@ -76,7 +76,7 @@ module.exports = (sequelize) => {
       defaultValue: DataTypes.NOW
     }
   }, {
-    tableName: 'user_mfa',
+    tableName: 'user_mfa_backup',
     timestamps: true,
     indexes: [
       {

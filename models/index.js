@@ -183,6 +183,8 @@ fs.readdirSync(modelsDir)
       } else if (modelName === 'UserMFA') {
         db.user_mfa = model;
         db.UserMFA = model;
+      } else if (modelName === 'UserMFA_backup') {
+        db.UserMFABackup = model;
       } else if (modelName === 'AuditLog') {
         db.audit_logs = model;
         db.AuditLog = model;
