@@ -83,7 +83,10 @@ class XRPAdapter extends BlockchainAdapter {
       if (this.config.xummApiKey && this.config.xummApiSecret) {
         this.xummSdk = new XummSdk(
           this.config.xummApiKey,
-          this.config.xummApiSecret
+          this.config.xummApiSecret,
+          {
+            network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+          }
         );
       }
 

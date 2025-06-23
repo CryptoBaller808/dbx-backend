@@ -5,7 +5,13 @@ const Aws = require("aws-sdk");
 const { XummSdk } = require("xumm-sdk");
 const axios = require("axios");
 const xrpl = require("xrpl");
-const Sdk = new XummSdk(process.env.XUMM_API_KEY, process.env.XUMM_API_SECRET);
+const Sdk = new XummSdk(
+  process.env.XUMM_API_KEY,
+  process.env.XUMM_API_SECRET,
+  {
+    network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+  }
+);
 var Sequelize = require("sequelize");
 
 // Import models from the database connection

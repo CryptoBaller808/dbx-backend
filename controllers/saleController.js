@@ -10,7 +10,13 @@ const xrpl = require("xrpl");
 const { XummSdk } = require("xumm-sdk");
 const { Console } = require("console");
 require("dotenv/config");
-const Sdk = new XummSdk(process.env.XUMM_API_KEY, process.env.XUMM_API_SECRET);
+const Sdk = new XummSdk(
+  process.env.XUMM_API_KEY,
+  process.env.XUMM_API_SECRET,
+  {
+    network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+  }
+);
 // create main Model
 const ActivityEnum = Object.freeze({
   1: "transaction",

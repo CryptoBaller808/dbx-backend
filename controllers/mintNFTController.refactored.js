@@ -15,7 +15,13 @@ const db = require("../models");
 const dbUtil = require("../util/database");
 
 // XUMM SDK initialization
-const Sdk = new XummSdk(process.env.XUMM_API_KEY, process.env.XUMM_API_SECRET);
+const Sdk = new XummSdk(
+  process.env.XUMM_API_KEY,
+  process.env.XUMM_API_SECRET,
+  {
+    network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+  }
+);
 const sdk1 = require("api")("@xumm/v0.9#4r71r49l0zx90kh");
 
 // Activity type enum

@@ -5,7 +5,13 @@ const multer = require("multer"); // multer will be used to handle the form data
 const Aws = require("aws-sdk"); // aws-sdk library will used to upload image to s3 bucket.
 const { XummSdk } = require("xumm-sdk");
 const xrpl = require("xrpl");
-const Sdk = new XummSdk(process.env.XUMM_API_KEY, process.env.XUMM_API_SECRET);
+const Sdk = new XummSdk(
+  process.env.XUMM_API_KEY,
+  process.env.XUMM_API_SECRET,
+  {
+    network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+  }
+);
 const sdk = require("api")("@xumm/v0.9#4r71r49l0zx90kh");
 const http = require("https");
 // create main Model
