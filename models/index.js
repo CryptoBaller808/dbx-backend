@@ -122,20 +122,44 @@ const db = {};
 db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
-// Import models dynamically
+// Import models dynamically with proper naming
 const modelsDir = __dirname;
 const consolidatedDir = path.join(modelsDir, 'consolidated');
 
-// Import consolidated models
+console.log('🔄 [Models] Loading models...');
+
+// Import consolidated models first
 if (fs.existsSync(consolidatedDir)) {
   fs.readdirSync(consolidatedDir)
     .filter(file => {
       return (file.indexOf('.') !== 0) && (file !== 'index.js') && (file.slice(-3) === '.js');
     })
     .forEach(file => {
-      const model = require(path.join(consolidatedDir, file))(sequelize, DataTypes);
-      const modelName = file.replace('.js', '').toLowerCase();
-      db[modelName] = model;
+      try {
+        const model = require(path.join(consolidatedDir, file))(sequelize, DataTypes);
+        const modelName = file.replace('.js', '').replace('Model', '');
+        
+        // Standardize model names
+        if (modelName === 'user') {
+          db.users = model;
+          db.User = model;
+        } else if (modelName === 'role') {
+          db.roles = model;
+          db.Role = model;
+        } else if (modelName === 'collections') {
+          db.collections = model;
+          db.Collection = model;
+        } else if (modelName === 'item') {
+          db.items = model;
+          db.Item = model;
+        } else {
+          db[modelName] = model;
+        }
+        
+        console.log(`✅ [Models] Loaded consolidated model: ${modelName}`);
+      } catch (error) {
+        console.warn(`⚠️  [Models] Warning: Could not load consolidated model ${file}:`, error.message);
+      }
     });
 }
 
@@ -145,165 +169,170 @@ fs.readdirSync(modelsDir)
     return (file.indexOf('.') !== 0) && 
            (file !== 'index.js') && 
            (file.slice(-3) === '.js') &&
-           (file !== 'consolidated');
+           !fs.statSync(path.join(modelsDir, file)).isDirectory();
   })
   .forEach(file => {
     try {
       const model = require(path.join(modelsDir, file))(sequelize, DataTypes);
-      const modelName = file.replace('.js', '').toLowerCase();
-      db[modelName] = model;
+      const modelName = file.replace('.js', '');
+      
+      // Standardize model names for associations
+      if (modelName === 'CreatorVerification') {
+        db.creator_verifications = model;
+        db.CreatorVerification = model;
+      } else if (modelName === 'UserMFA') {
+        db.user_mfa = model;
+        db.UserMFA = model;
+      } else if (modelName === 'AuditLog') {
+        db.audit_logs = model;
+        db.AuditLog = model;
+      } else if (modelName.startsWith('NFT')) {
+        const snakeName = modelName.replace(/([A-Z])/g, '_$1').toLowerCase().substring(1);
+        db[snakeName] = model;
+        db[modelName] = model;
+      } else {
+        db[modelName.toLowerCase()] = model;
+        db[modelName] = model;
+      }
+      
+      console.log(`✅ [Models] Loaded main model: ${modelName}`);
     } catch (error) {
-      console.warn(`[Models] Warning: Could not load model ${file}:`, error.message);
+      console.warn(`⚠️  [Models] Warning: Could not load main model ${file}:`, error.message);
     }
   });
 
-// Define model associations
+console.log('🔄 [Models] Setting up model associations...');
+
+// Define model associations AFTER all models are loaded
 Object.keys(db).forEach(modelName => {
-  if (db[modelName].associate) {
-    db[modelName].associate(db);
+  if (db[modelName] && typeof db[modelName].associate === 'function') {
+    try {
+      console.log(`🔗 [Models] Setting up associations for: ${modelName}`);
+      db[modelName].associate(db);
+    } catch (error) {
+      console.error(`❌ [Models] Error setting up associations for ${modelName}:`, error.message);
+      console.error(`🔧 [Models] Available models:`, Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    }
   }
 });
 
-// Enhanced model relationships
-if (db.collectionsmodel && db.itemmodel) {
-  db.collectionsmodel.hasMany(db.itemmodel, {
-    as: "collection_items_count",
-    foreignKey: "collection_id",
-  });
+// Manual associations for legacy compatibility
+try {
+  // Collections and Items
+  if (db.collections && db.items) {
+    db.collections.hasMany(db.items, {
+      as: "collection_items_count",
+      foreignKey: "collection_id",
+    });
 
-  db.itemmodel.belongsTo(db.collectionsmodel, {
-    as: "item_collection",
-    foreignKey: "collection_id",
-  });
-}
+    db.items.belongsTo(db.collections, {
+      as: "item_collection",
+      foreignKey: "collection_id",
+    });
+  }
 
-if (db.itemmodel && db.itemsaleinfomodel) {
-  db.itemmodel.hasOne(db.itemsaleinfomodel, {
-    as: "item_sale_info",
-    foreignKey: "item_id",
-  });
+  // Items and Sale Info
+  if (db.items && db.itemsaleinfo) {
+    db.items.hasOne(db.itemsaleinfo, {
+      as: "item_sale_info",
+      foreignKey: "item_id",
+    });
 
-  db.itemmodel.hasOne(db.itemsaleinfomodel, { 
-    as: "hot_bids", 
-    foreignKey: "item_id" 
-  });
+    db.items.hasOne(db.itemsaleinfo, { 
+      as: "hot_bids", 
+      foreignKey: "item_id" 
+    });
 
-  db.itemmodel.hasOne(db.itemsaleinfomodel, {
-    as: "live_auctions",
-    foreignKey: "item_id",
-  });
+    db.items.hasOne(db.itemsaleinfo, {
+      as: "live_auctions",
+      foreignKey: "item_id",
+    });
 
-  db.itemmodel.hasOne(db.itemsaleinfomodel, { 
-    as: "explore", 
-    foreignKey: "item_id" 
-  });
+    db.items.hasOne(db.itemsaleinfo, { 
+      as: "explore", 
+      foreignKey: "item_id" 
+    });
 
-  db.itemsaleinfomodel.belongsTo(db.itemmodel, {
-    as: "item_sale_info_item",
-    foreignKey: "item_id",
-  });
-}
+    db.itemsaleinfo.belongsTo(db.items, {
+      as: "item_sale_info_item",
+      foreignKey: "item_id",
+    });
+  }
 
-if (db.itemmodel && db.itembidsmodel) {
-  db.itemmodel.hasMany(db.itembidsmodel, {
-    as: "item_bids",
-    foreignKey: "item_id",
-  });
+  // Items and Bids
+  if (db.items && db.itembids) {
+    db.items.hasMany(db.itembids, {
+      as: "item_bids",
+      foreignKey: "item_id",
+    });
 
-  db.itembidsmodel.belongsTo(db.itemmodel, {
-    as: "item_bids_item",
-    foreignKey: "item_id",
-  });
-}
+    db.itembids.belongsTo(db.items, {
+      as: "item_bids_item",
+      foreignKey: "item_id",
+    });
+  }
 
-if (db.usermodel && db.itembidsmodel) {
-  db.usermodel.hasMany(db.itembidsmodel, {
-    as: "user_bids",
-    foreignKey: "user_id",
-  });
+  // Users and Bids
+  if (db.users && db.itembids) {
+    db.users.hasMany(db.itembids, {
+      as: "user_bids",
+      foreignKey: "user_id",
+    });
 
-  db.itembidsmodel.belongsTo(db.usermodel, {
-    as: "item_bids_user",
-    foreignKey: "user_id",
-  });
-}
+    db.itembids.belongsTo(db.users, {
+      as: "item_bids_user",
+      foreignKey: "user_id",
+    });
+  }
 
-if (db.usermodel && db.itemmodel) {
-  db.usermodel.hasMany(db.itemmodel, {
-    as: "user_items",
-    foreignKey: "user_id",
-  });
+  // Users and Items
+  if (db.users && db.items) {
+    db.users.hasMany(db.items, {
+      as: "user_items",
+      foreignKey: "user_id",
+    });
 
-  db.itemmodel.belongsTo(db.usermodel, {
-    as: "item_user",
-    foreignKey: "user_id",
-  });
-}
+    db.items.belongsTo(db.users, {
+      as: "item_user",
+      foreignKey: "user_id",
+    });
+  }
 
-if (db.usermodel && db.collectionsmodel) {
-  db.usermodel.hasMany(db.collectionsmodel, {
-    as: "user_collections",
-    foreignKey: "user_id",
-  });
+  // Users and Collections
+  if (db.users && db.collections) {
+    db.users.hasMany(db.collections, {
+      as: "user_collections",
+      foreignKey: "user_id",
+    });
 
-  db.collectionsmodel.belongsTo(db.usermodel, {
-    as: "collection_user",
-    foreignKey: "user_id",
-  });
-}
+    db.collections.belongsTo(db.users, {
+      as: "collection_user",
+      foreignKey: "user_id",
+    });
+  }
 
-// NFT model relationships
-if (db.nft && db.nftcollection) {
-  db.nftcollection.hasMany(db.nft, {
-    as: "nfts",
-    foreignKey: "collection_id",
-  });
-
-  db.nft.belongsTo(db.nftcollection, {
-    as: "collection",
-    foreignKey: "collection_id",
-  });
-}
-
-if (db.nft && db.nftauction) {
-  db.nft.hasMany(db.nftauction, {
-    as: "auctions",
-    foreignKey: "nft_id",
-  });
-
-  db.nftauction.belongsTo(db.nft, {
-    as: "nft",
-    foreignKey: "nft_id",
-  });
-}
-
-if (db.nftauction && db.nftbid) {
-  db.nftauction.hasMany(db.nftbid, {
-    as: "bids",
-    foreignKey: "auction_id",
-  });
-
-  db.nftbid.belongsTo(db.nftauction, {
-    as: "auction",
-    foreignKey: "auction_id",
-  });
+  console.log('✅ [Models] Manual associations completed');
+} catch (error) {
+  console.error('❌ [Models] Error in manual associations:', error.message);
 }
 
 // Initialize database connection
 const initializeDatabase = async () => {
   try {
     await sequelize.authenticate();
-    console.log('[Models] Database connection established successfully');
+    console.log('✅ [Database] Database connection established successfully');
     
     // Sync models in development
     if (env === 'development') {
       await sequelize.sync({ alter: true });
-      console.log('[Models] Database models synchronized');
+      console.log('✅ [Database] Database models synchronized');
     }
+    
+    console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
     
     return sequelize;
   } catch (error) {
-    console.error('[Models] Database connection failed:', error);
+    console.error('❌ [Database] Database connection failed:', error);
     throw error;
   }
 };
