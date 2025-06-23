@@ -89,7 +89,6 @@ if (env === 'production' && dbConfig.use_env_variable) {
 }
 
 // Initialize Sequelize with enhanced error handling
-let sequelize;
 try {
   if (dbConfig.use_env_variable) {
     const databaseUrl = process.env[dbConfig.use_env_variable];
