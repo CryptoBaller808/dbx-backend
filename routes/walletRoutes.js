@@ -64,7 +64,7 @@ const handleWalletError = (error, req, res, next) => {
  * Get available wallets for the current environment
  */
 router.get('/available',
-  auditMiddleware('wallet_list_available'),
+  auditMiddleware({ action: 'wallet_list_available' }),
   async (req, res, next) => {
     try {
       if (!walletService) {
@@ -110,7 +110,7 @@ router.post('/connect',
     body('options').optional().isObject()
   ],
   validateRequest,
-  auditMiddleware('wallet_connect'),
+  auditMiddleware({ action: 'wallet_connect' }),
   async (req, res, next) => {
     try {
       const { chainId, walletType, options = {} } = req.body;
@@ -142,7 +142,7 @@ router.post('/disconnect',
       .withMessage('Invalid chain ID')
   ],
   validateRequest,
-  auditMiddleware('wallet_disconnect'),
+  auditMiddleware({ action: 'wallet_disconnect' }),
   async (req, res, next) => {
     try {
       const { chainId } = req.body;
@@ -166,7 +166,7 @@ router.post('/disconnect',
  */
 router.post('/disconnect-all',
   authMiddleware,
-  auditMiddleware('wallet_disconnect_all'),
+  auditMiddleware({ action: 'wallet_disconnect_all' }),
   async (req, res, next) => {
     try {
       const userId = req.user.id;
@@ -193,7 +193,7 @@ router.post('/disconnect-all',
  */
 router.get('/status',
   authMiddleware,
-  auditMiddleware('wallet_status_check'),
+  auditMiddleware({ action: 'wallet_status_check' }),
   async (req, res, next) => {
     try {
       const userId = req.user.id;
@@ -222,7 +222,7 @@ router.get('/connection/:chainId',
       .withMessage('Invalid chain ID')
   ],
   validateRequest,
-  auditMiddleware('wallet_connection_check'),
+  auditMiddleware({ action: 'wallet_connection_check' }),
   async (req, res, next) => {
     try {
       const { chainId } = req.params;
@@ -257,7 +257,7 @@ router.get('/balance',
       .withMessage('includeTokens must be a boolean')
   ],
   validateRequest,
-  auditMiddleware('wallet_balance_check'),
+  auditMiddleware({ action: 'wallet_balance_check' }),
   async (req, res, next) => {
     try {
       const userId = req.user.id;
@@ -304,7 +304,7 @@ router.get('/balance/:chainId',
       .withMessage('includeTokens must be a boolean')
   ],
   validateRequest,
-  auditMiddleware('wallet_chain_balance_check'),
+  auditMiddleware({ action: 'wallet_chain_balance_check' }),
   async (req, res, next) => {
     try {
       const { chainId } = req.params;
@@ -357,178 +357,11 @@ router.get('/balance/:chainId',
 );
 
 /**
- * POST /api/wallets/switch-network
- * Switch network for EVM-compatible wallets
- */
-router.post('/switch-network',
-  authMiddleware,
-  [
-    body('chainId')
-      .notEmpty()
-      .withMessage('Chain ID is required')
-      .isIn(['XDC', 'AVALANCHE', 'POLYGON', 'BSC'])
-      .withMessage('Invalid chain ID for network switching')
-  ],
-  validateRequest,
-  auditMiddleware('wallet_network_switch'),
-  async (req, res, next) => {
-    try {
-      const { chainId } = req.body;
-      const userId = req.user.id;
-
-      const result = await walletService.switchNetwork(userId, chainId);
-      
-      res.json({
-        success: true,
-        data: result
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/wallets/sign-transaction
- * Sign a transaction using connected wallet
- */
-router.post('/sign-transaction',
-  authMiddleware,
-  [
-    body('chainId')
-      .notEmpty()
-      .withMessage('Chain ID is required')
-      .isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
-      .withMessage('Invalid chain ID'),
-    body('transaction')
-      .notEmpty()
-      .withMessage('Transaction data is required')
-      .isObject(),
-    body('options').optional().isObject()
-  ],
-  validateRequest,
-  auditMiddleware('wallet_transaction_sign'),
-  async (req, res, next) => {
-    try {
-      const { chainId, transaction, options = {} } = req.body;
-      const userId = req.user.id;
-
-      const signedTx = await walletService.signTransaction(userId, chainId, transaction, options);
-      
-      res.json({
-        success: true,
-        data: signedTx
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/wallets/recommendations
- * Get wallet recommendations for the current user
- */
-router.get('/recommendations',
-  authMiddleware,
-  [
-    query('preferredChains').optional().isString(),
-    query('deviceType')
-      .optional()
-      .isIn(['desktop', 'mobile', 'tablet'])
-      .withMessage('Invalid device type'),
-    query('experienceLevel')
-      .optional()
-      .isIn(['beginner', 'intermediate', 'advanced'])
-      .withMessage('Invalid experience level')
-  ],
-  validateRequest,
-  auditMiddleware('wallet_recommendations'),
-  async (req, res, next) => {
-    try {
-      const userId = req.user.id;
-      const userPreferences = {
-        preferredChains: req.query.preferredChains ? req.query.preferredChains.split(',') : [],
-        deviceType: req.query.deviceType || 'desktop',
-        experienceLevel: req.query.experienceLevel || 'beginner'
-      };
-
-      const recommendations = walletService.getWalletRecommendations(userId, userPreferences);
-      
-      res.json({
-        success: true,
-        data: {
-          recommendations,
-          userPreferences,
-          timestamp: new Date().toISOString()
-        }
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/wallets/supported-chains
- * Get list of supported blockchain networks
- */
-router.get('/supported-chains',
-  auditMiddleware('wallet_supported_chains'),
-  async (req, res, next) => {
-    try {
-      if (!blockchainServices) {
-        return res.status(503).json({
-          success: false,
-          error: 'Blockchain services not initialized'
-        });
-      }
-
-      const supportedChains = blockchainServices.registry.getSupportedChains();
-      const chainDetails = [];
-
-      for (const chainId of supportedChains) {
-        try {
-          const adapter = blockchainServices.registry.getAdapter(chainId);
-          const networkStatus = await adapter.getNetworkStatus();
-          
-          chainDetails.push({
-            chainId,
-            name: networkStatus.networkName || chainId,
-            status: 'active',
-            isConnected: networkStatus.isConnected,
-            lastUpdated: networkStatus.lastUpdated
-          });
-        } catch (error) {
-          chainDetails.push({
-            chainId,
-            name: chainId,
-            status: 'error',
-            error: error.message
-          });
-        }
-      }
-      
-      res.json({
-        success: true,
-        data: {
-          chains: chainDetails,
-          count: chainDetails.length,
-          timestamp: new Date().toISOString()
-        }
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
  * GET /api/wallets/health
  * Health check for wallet service
  */
 router.get('/health',
-  auditMiddleware('wallet_health_check'),
+  auditMiddleware({ action: 'wallet_health_check' }),
   async (req, res, next) => {
     try {
       const health = {

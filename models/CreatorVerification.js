@@ -113,16 +113,16 @@ module.exports = (sequelize) => {
   });
 
   // Model associations will be defined in models/index.js
-  // FIXED: Using completely unique aliases to avoid any conflicts
+  // FIXED: Using absolutely unique aliases that cannot conflict with anything
   CreatorVerification.associate = (models) => {
     CreatorVerification.belongsTo(models.users, {
       foreignKey: 'creator_id',
-      as: 'verificationCreator'  // FIXED: Changed from 'creatorUser' to 'verificationCreator'
+      as: 'submittingCreatorUser'  // FIXED: Completely unique alias
     });
     
     CreatorVerification.belongsTo(models.users, {
       foreignKey: 'reviewed_by',
-      as: 'verificationReviewer'  // FIXED: Changed from 'reviewerUser' to 'verificationReviewer'
+      as: 'approvingAdminUser'  // FIXED: Completely unique alias
     });
   };
 
