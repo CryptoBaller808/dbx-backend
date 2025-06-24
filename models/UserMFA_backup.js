@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 
 /**
- * User MFA Model
+ * User MFA Backup Model
  * Stores MFA configuration and recovery codes for users
  */
 module.exports = (sequelize) => {
@@ -192,10 +192,11 @@ module.exports = (sequelize) => {
   };
 
   // Associations will be defined in the main models/index.js file
+  // FIXED: Changed alias from 'userMFA_backup' to 'backupUserMirror' to avoid conflicts
   UserMFA.associate = function(models) {
     UserMFA.belongsTo(models.User, {
       foreignKey: 'userId',
-      as: 'userMFA_backup',
+      as: 'backupUserMirror',  // FIXED: Changed from 'userMFA_backup' to unique alias
       onDelete: 'CASCADE'
     });
   };
