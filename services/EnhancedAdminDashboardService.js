@@ -691,7 +691,7 @@ class EnhancedAdminDashboardService {
   async getActiveUsers(timeRanges) {
     return await db.users.count({
       where: {
-        updated_at: {
+        updatedAt: {
           [Op.gte]: timeRanges.start,
           [Op.lte]: timeRanges.end
         }

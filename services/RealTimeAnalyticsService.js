@@ -185,7 +185,7 @@ class RealTimeAnalyticsService extends EventEmitter {
 
       const activeUsers = await db.users.count({
         where: {
-          updated_at: {
+          updatedAt: {
             [Op.gte]: fiveMinutesAgo
           }
         }
@@ -193,7 +193,7 @@ class RealTimeAnalyticsService extends EventEmitter {
 
       const newRegistrations = await db.users.count({
         where: {
-          created_at: {
+          createdAt: {
             [Op.gte]: fiveMinutesAgo
           }
         }
