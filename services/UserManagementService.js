@@ -602,13 +602,13 @@ class UserManagementService {
       // Check for potential money laundering patterns
       const amlPatterns = await this.db.sequelize.query(`
         SELECT 
-          user_id,
+          to_user_id AS user_id,
           COUNT(DISTINCT blockchain) as chain_count,
           COUNT(*) as transaction_count,
           AVG(amount) as avg_amount
         FROM nft_transactions 
         WHERE created_at >= NOW() - INTERVAL '7 days'
-        GROUP BY user_id
+        GROUP BY to_user_id
         HAVING COUNT(DISTINCT blockchain) > 5 AND AVG(amount) > 10000
       `, {
         type: this.db.sequelize.QueryTypes.SELECT
