@@ -24,6 +24,16 @@ async function initializeDatabase() {
       console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
     }
 
+    // Verify SystemAlert table creation
+    if (db.SystemAlert) {
+      console.log('✅ [Database] SystemAlert model found, ensuring table exists...');
+      await db.SystemAlert.sync({ alter: true });
+      console.log('✅ [Database] SystemAlert table synchronized successfully');
+    } else {
+      console.error('❌ [Database] SystemAlert model not found in db object!');
+      console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    }
+
     // Check if roles exist, create default roles if not
     const roleCount = await db.roles.count();
     if (roleCount === 0) {
