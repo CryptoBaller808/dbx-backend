@@ -3,7 +3,7 @@ const { body, param, query, validationResult } = require('express-validator');
 const WalletService = require('../services/blockchain/wallet-service');
 const { initializeBlockchainServices } = require('../services/blockchain');
 const { auditMiddleware } = require('../middleware/auditMiddleware');
-const authMiddleware = require('../middleware/auth');
+const { authenticateToken: authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
