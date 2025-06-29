@@ -193,7 +193,7 @@ module.exports = (sequelize) => {
 
   // Associations will be defined in the main models/index.js file
   UserMFA.associate = function(models) {
-    UserMFA.belongsTo(models.User, {
+    UserMFA.belongsTo(models.users, {
       foreignKey: 'userId',
       as: 'userMFA_primary',
       onDelete: 'CASCADE'

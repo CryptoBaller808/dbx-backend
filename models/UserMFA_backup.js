@@ -194,7 +194,7 @@ module.exports = (sequelize) => {
   // Associations will be defined in the main models/index.js file
   // FIXED: Changed alias from 'userMFA_backup' to 'backupUserMirror' to avoid conflicts
   UserMFA.associate = function(models) {
-    UserMFA.belongsTo(models.User, {
+    UserMFA.belongsTo(models.users, {
       foreignKey: 'userId',
       as: 'backupUserMirror',  // FIXED: Changed from 'userMFA_backup' to unique alias
       onDelete: 'CASCADE'

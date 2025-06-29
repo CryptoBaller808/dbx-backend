@@ -567,6 +567,81 @@ async function callAwait(wallet, usertoken, firstname = null, lastname = null, e
   return finalobj;
 }
 
+// FIXED: Added missing controller methods referenced in routes
+const xummWalletConnection = async (req, res) => {
+  try {
+    // Placeholder implementation for XUMM wallet connection
+    res.status(200).json({
+      success: true,
+      message: "XUMM wallet connection endpoint",
+      data: {}
+    });
+  } catch (error) {
+    console.error("XUMM wallet connection error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+const verifyUser = async (req, res) => {
+  try {
+    // Placeholder implementation for user verification
+    res.status(200).json({
+      success: true,
+      message: "User verification endpoint",
+      data: {}
+    });
+  } catch (error) {
+    console.error("User verification error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+const connectWalletMobile = async (req, res) => {
+  try {
+    // Placeholder implementation for mobile wallet connection
+    res.status(200).json({
+      success: true,
+      message: "Mobile wallet connection endpoint",
+      data: {}
+    });
+  } catch (error) {
+    console.error("Mobile wallet connection error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+const getAssetLists = async (req, res) => {
+  try {
+    // Placeholder implementation for asset lists
+    res.status(200).json({
+      success: true,
+      message: "Asset lists endpoint",
+      data: {
+        assets: []
+      }
+    });
+  } catch (error) {
+    console.error("Get asset lists error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   loginAdmin,
   changePassword,
@@ -580,5 +655,9 @@ module.exports = {
   getDashboardSummary,
   getNFTSalesLists,
   addUser,
-  callAwait
+  callAwait,
+  xummWalletConnection,
+  verifyUser,
+  connectWalletMobile,
+  getAssetLists
 };
