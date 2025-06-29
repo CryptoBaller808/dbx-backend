@@ -115,7 +115,7 @@ class RealTimeAnalyticsService extends EventEmitter {
         recentVolume: recentVolume || 0,
         transactionsByChain: transactionsByChain.map(item => ({
           chain: item.blockchain,
-          count: parseInt(item.dataValues.count)
+          count: parseInt(item.dataValues?.count || 0)
         })),
         tps: recentTransactions / 60 // Transactions per second
       };

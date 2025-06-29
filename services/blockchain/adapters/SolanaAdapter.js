@@ -23,6 +23,10 @@ class SolanaAdapter extends BlockchainAdapter {
       mainnet: {
         name: 'Solana Mainnet Beta',
         rpcUrl: 'https://api.mainnet-beta.solana.com',
+        backupRpcUrls: [
+          'https://solana-mainnet.g.alchemy.com',
+          'https://rpc.ankr.com/solana'
+        ],
         explorerUrl: 'https://explorer.solana.com',
         cluster: 'mainnet-beta',
         nativeCurrency: {
@@ -93,6 +97,39 @@ class SolanaAdapter extends BlockchainAdapter {
     } catch (error) {
       throw new BlockchainError(
         `Failed to initialize Solana adapter: ${error.message}`,
+        ErrorCodes.CONNECTION_ERROR,
+        this.chainId,
+        error
+      );
+    }
+  }
+
+  /**
+   * Connect to RPC endpoint
+   */
+  async connectToRpc(rpcUrl) {
+    try {
+      console.log(`[Solana Adapter] Connecting to RPC: ${rpcUrl}`);
+      
+      // Create connection
+      this.connection = new Connection(rpcUrl, 'confirmed');
+      
+      // Test connection
+      const version = await this.connection.getVersion();
+      const slot = await this.connection.getSlot();
+      
+      console.log(`[Solana Adapter] Connected to Solana RPC (version: ${version['solana-core']}, slot: ${slot})`);
+      
+      return {
+        success: true,
+        chainId: this.chainId,
+        rpcUrl: rpcUrl,
+        version: version['solana-core'],
+        currentSlot: slot
+      };
+    } catch (error) {
+      throw new BlockchainError(
+        `Failed to connect to Solana RPC: ${error.message}`,
         ErrorCodes.CONNECTION_ERROR,
         this.chainId,
         error

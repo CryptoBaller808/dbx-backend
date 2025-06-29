@@ -346,8 +346,9 @@ class SystemHealthMonitoringService {
           api_error_rate,
           blockchain_status,
           services_status,
-          raw_data
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          raw_data,
+          "createdAt"
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))
       `, {
         replacements: [
           healthData.timestamp,
@@ -358,7 +359,8 @@ class SystemHealthMonitoringService {
           healthData.api.error_rate,
           healthData.blockchain.overall_status,
           healthData.services.overall_status,
-          JSON.stringify(healthData)
+          JSON.stringify(healthData),
+          healthData.createdAt || null  // Will use NOW() if null
         ]
       });
     } catch (error) {
