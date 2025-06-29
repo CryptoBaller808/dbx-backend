@@ -61,7 +61,7 @@ class SolanaAdapter extends BlockchainAdapter {
   }
 
   /**
-   * Initialize the Solana adapter
+   * Initialize the Solana adapter with failover safety
    */
   async initialize() {
     try {
@@ -76,28 +76,125 @@ class SolanaAdapter extends BlockchainAdapter {
         );
       }
 
-      // Initialize connection
-      const rpcUrl = this.config.rpcUrl || networkConfig.rpcUrl;
-      this.connection = new Connection(rpcUrl, 'confirmed');
+      // Try primary RPC first, then fallback to backup URLs
+      const rpcUrls = [
+        this.config.rpcUrl || networkConfig.rpcUrl,
+        ...(networkConfig.backupRpcUrls || [])
+      ];
 
-      // Test connection
-      const version = await this.connection.getVersion();
+      let lastError = null;
+      for (const rpcUrl of rpcUrls) {
+        try {
+          console.log(`[Solana Adapter] Attempting connection to ${rpcUrl}`);
+          this.connection = new Connection(rpcUrl, 'confirmed');
+
+          // Test connection with timeout
+          const version = await Promise.race([
+            this.connection.getVersion(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection timeout')), 10000)
+            )
+          ]);
+          
+          this.isInitialized = true;
+          this.lastConnectionTime = Date.now();
+          console.log(`[Solana Adapter] ✅ Connected to ${network} (version: ${version['solana-core']})`);
+          
+          return {
+            success: true,
+            chainId: this.chainId,
+            network: networkConfig.name,
+            cluster: networkConfig.cluster,
+            version: version['solana-core'],
+            slot: await this.connection.getSlot()
+          };
+        } catch (error) {
+          lastError = error;
+          console.warn(`[Solana Adapter] ⚠️ Failed to connect to ${rpcUrl}: ${error.message}`);
+          continue;
+        }
+      }
+
+      // All RPC URLs failed
+      this.isInitialized = false;
+      console.error(`[Solana Adapter] ❌ All RPC endpoints failed. Last error: ${lastError?.message}`);
       
-      this.isInitialized = true;
-      console.log(`[Solana Adapter] Initialized for ${network} (version: ${version['solana-core']})`);
-      
+      // Don't throw error, just mark as offline for graceful degradation
       return {
-        success: true,
+        success: false,
         chainId: this.chainId,
-        network: networkConfig.name,
-        cluster: networkConfig.cluster,
-        version: version['solana-core'],
-        slot: await this.connection.getSlot()
+        error: `All Solana RPC endpoints unavailable: ${lastError?.message}`,
+        offline: true
       };
     } catch (error) {
-      throw new BlockchainError(
-        `Failed to initialize Solana adapter: ${error.message}`,
-        ErrorCodes.CONNECTION_ERROR,
+      this.isInitialized = false;
+      console.error(`[Solana Adapter] ❌ Initialization failed: ${error.message}`);
+      
+      // Return offline status instead of throwing
+      return {
+        success: false,
+        chainId: this.chainId,
+        error: error.message,
+        offline: true
+      };
+    }
+  }
+
+  /**
+   * Check if adapter needs reconnection
+   */
+  needsReconnection() {
+    if (!this.isInitialized) return true;
+    if (!this.lastConnectionTime) return true;
+    
+    // Reconnect if connection is older than 5 minutes
+    const fiveMinutes = 5 * 60 * 1000;
+    return (Date.now() - this.lastConnectionTime) > fiveMinutes;
+  }
+
+  /**
+   * Safely execute operations with automatic retry
+   */
+  async safeExecute(operation, operationName = 'operation') {
+    const maxRetries = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Check if we need to reconnect
+        if (this.needsReconnection()) {
+          console.log(`[Solana Adapter] Reconnecting before ${operationName} (attempt ${attempt})`);
+          await this.initialize();
+        }
+
+        if (!this.isInitialized) {
+          throw new Error('Adapter not initialized and reconnection failed');
+        }
+
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        console.warn(`[Solana Adapter] ⚠️ ${operationName} failed (attempt ${attempt}/${maxRetries}): ${error.message}`);
+        
+        if (attempt < maxRetries) {
+          // Wait before retry with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // Mark as uninitialized to force reconnection
+          this.isInitialized = false;
+        }
+      }
+    }
+
+    // All retries failed - log warning but don't crash
+    console.error(`[Solana Adapter] ❌ ${operationName} failed after ${maxRetries} attempts: ${lastError?.message}`);
+    throw new BlockchainError(
+      `Solana ${operationName} failed: ${lastError?.message}`,
+      ErrorCodes.CONNECTION_ERROR,
+      this.chainId
+    );
+  }
         this.chainId,
         error
       );
@@ -144,20 +241,16 @@ class SolanaAdapter extends BlockchainAdapter {
     try {
       new PublicKey(address);
       return true;
-    } catch {
+    } catch (error) {
       return false;
     }
   }
 
   /**
-   * Get balance for an address
+   * Get balance for an address with failover safety
    */
   async getBalance(address, tokenMint = null) {
-    try {
-      if (!this.isInitialized) {
-        await this.initialize();
-      }
-
+    return this.safeExecute(async () => {
       if (!this.isValidAddress(address)) {
         throw new BlockchainError(
           'Invalid Solana address format',
@@ -197,8 +290,7 @@ class SolanaAdapter extends BlockchainAdapter {
           );
           
           balance = tokenAccountInfo.value.amount;
-          decimals = tokenAccountInfo.value.decimals;
-          symbol = 'SPL'; // Would need to fetch from token metadata
+          decimals = tokenAccountInfo.value.decimals;          symbol = 'SPL'; // Would need to fetch from token metadata
         }
 
         const formattedBalance = (parseInt(balance) / Math.pow(10, decimals)).toString();

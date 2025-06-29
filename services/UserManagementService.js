@@ -565,11 +565,25 @@ class UserManagementService {
     try {
       // This would integrate with actual sanctions databases
       // For now, we'll simulate with a basic check
+      
+      // Defensive query - check if sanctions_checked field exists
+      let whereClause = { kyc_status: 'verified' };
+      
+      try {
+        // Test if sanctions_checked field exists by attempting a query
+        await this.db.users.findOne({
+          where: { sanctions_checked: false },
+          limit: 1
+        });
+        // Field exists, add to where clause
+        whereClause.sanctions_checked = false;
+      } catch (error) {
+        console.warn('[UserManagementService] sanctions_checked field not available, skipping field filter:', error.message);
+        // Field doesn't exist, proceed without it
+      }
+
       const usersToCheck = await this.db.users.findAll({
-        where: {
-          sanctions_checked: false,
-          kyc_status: 'verified'
-        },
+        where: whereClause,
         limit: 100
       });
 
@@ -589,8 +603,13 @@ class UserManagementService {
           await this.flagUser(user.id, 'sanctions_check', 'Potential sanctions list match', null);
         }
 
-        // Mark as checked
-        await user.update({ sanctions_checked: true });
+        // Mark as checked - only if field exists
+        try {
+          await user.update({ sanctions_checked: true });
+        } catch (error) {
+          console.warn('[UserManagementService] Could not update sanctions_checked field:', error.message);
+          // Continue without updating this field
+        }
       }
     } catch (error) {
       console.error('[UserManagementService] Error performing sanctions check:', error);

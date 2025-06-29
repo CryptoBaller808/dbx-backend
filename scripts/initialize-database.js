@@ -10,47 +10,63 @@ const config = require('../config');
  */
 async function initializeDatabase() {
   try {
-    // Sync all models with database - create missing tables
-    await db.sequelize.sync({ alter: true });
-    console.log('Database synchronized with table creation/alteration');
+    console.log('🔄 [Database] Starting database initialization...');
     
-    // Verify NFTAuction table creation
-    if (db.NFTAuction) {
-      console.log('✅ [Database] NFTAuction model found, ensuring table exists...');
-      await db.NFTAuction.sync({ alter: true });
-      console.log('✅ [Database] NFTAuction table synchronized successfully');
-    } else {
-      console.error('❌ [Database] NFTAuction model not found in db object!');
-      console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    // Sync all models with database - create missing tables (safe mode)
+    try {
+      await db.sequelize.sync({ alter: true });
+      console.log('✅ [Database] Database synchronized with table creation/alteration');
+    } catch (syncError) {
+      console.warn('⚠️ [Database] Global sync failed, attempting individual model sync:', syncError.message);
+    }
+    
+    // Verify critical models individually with error handling
+    const criticalModels = [
+      { name: 'NFTAuction', aliases: ['NFTAuction', 'nft_auctions'] },
+      { name: 'SystemAlert', aliases: ['SystemAlert', 'system_alerts'] },
+      { name: 'User', aliases: ['User', 'users'] },
+      { name: 'SystemHealthLog', aliases: ['SystemHealthLog', 'system_health_logs'] }
+    ];
+
+    for (const modelInfo of criticalModels) {
+      let model = null;
+      let foundAlias = null;
+
+      // Find the model by trying different aliases
+      for (const alias of modelInfo.aliases) {
+        if (db[alias]) {
+          model = db[alias];
+          foundAlias = alias;
+          break;
+        }
+      }
+
+      if (model) {
+        try {
+          console.log(`🔄 [Database] Syncing ${modelInfo.name} model (found as ${foundAlias})...`);
+          await model.sync({ alter: true });
+          console.log(`✅ [Database] ${modelInfo.name} table synchronized successfully`);
+        } catch (modelError) {
+          console.error(`❌ [Database] Failed to sync ${modelInfo.name} model:`, modelError.message);
+          // Continue with other models instead of failing completely
+        }
+      } else {
+        console.warn(`⚠️ [Database] ${modelInfo.name} model not found in db object!`);
+        console.log(`📋 [Database] Tried aliases: ${modelInfo.aliases.join(', ')}`);
+      }
     }
 
-    // Verify SystemAlert table creation
-    if (db.SystemAlert) {
-      console.log('✅ [Database] SystemAlert model found, ensuring table exists...');
-      await db.SystemAlert.sync({ alter: true });
-      console.log('✅ [Database] SystemAlert table synchronized successfully');
-    } else {
-      console.error('❌ [Database] SystemAlert model not found in db object!');
-      console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
-    }
+    // Log available models for debugging
+    const availableModels = Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize');
+    console.log('📋 [Database] Available models:', availableModels.join(', '));
 
-    // Verify User table creation and sanctions_checked column
-    if (db.users || db.User) {
-      const UserModel = db.users || db.User;
-      console.log('✅ [Database] User model found, ensuring table and sanctions_checked column exists...');
-      await UserModel.sync({ alter: true });
-      console.log('✅ [Database] User table synchronized successfully with sanctions_checked column');
-    } else {
-      console.error('❌ [Database] User model not found in db object!');
-      console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
-    }
-
-    // Check if roles exist, create default roles if not
-    const roleCount = await db.roles.count();
-    if (roleCount === 0) {
-      console.log('Creating default roles...');
-      await db.roles.bulkCreate([
-        {
+    // Check if roles exist, create default roles if not (with error handling)
+    try {
+      const roleCount = await db.roles.count();
+      if (roleCount === 0) {
+        console.log('Creating default roles...');
+        await db.roles.bulkCreate([
+          {
           name: 'admin',
           description: 'Administrator with full access',
           permissions: JSON.stringify({

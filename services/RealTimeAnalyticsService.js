@@ -80,34 +80,55 @@ class RealTimeAnalyticsService extends EventEmitter {
       const now = new Date();
       const oneMinuteAgo = new Date(now.getTime() - 60000);
 
-      const recentTransactions = await db.nft_transactions.count({
-        where: {
-          timestamp: {
-            [Op.gte]: oneMinuteAgo
-          }
-        }
-      });
+      // Defensive query with fallback
+      let recentTransactions = 0;
+      let recentVolume = 0;
+      let transactionsByChain = [];
 
-      const recentVolume = await db.nft_transactions.sum('price', {
-        where: {
-          timestamp: {
-            [Op.gte]: oneMinuteAgo
+      try {
+        recentTransactions = await db.nft_transactions.count({
+          where: {
+            timestamp: {
+              [Op.gte]: oneMinuteAgo
+            }
           }
-        }
-      });
+        });
+      } catch (error) {
+        console.warn('⚠️ Failed to fetch recent transactions count:', error.message);
+        recentTransactions = 0;
+      }
 
-      const transactionsByChain = await db.nft_transactions.findAll({
-        where: {
-          timestamp: {
-            [Op.gte]: oneMinuteAgo
+      try {
+        recentVolume = await db.nft_transactions.sum('price', {
+          where: {
+            timestamp: {
+              [Op.gte]: oneMinuteAgo
+            }
           }
-        },
-        group: ['blockchain'],
-        attributes: [
-          'blockchain',
-          [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
-        ]
-      });
+        });
+      } catch (error) {
+        console.warn('⚠️ Failed to fetch recent volume:', error.message);
+        recentVolume = 0;
+      }
+
+      try {
+        transactionsByChain = await db.nft_transactions.findAll({
+          attributes: [
+            'blockchain',
+            [db.sequelize.fn('COUNT', '*'), 'count']
+          ],
+          where: {
+            timestamp: {
+              [Op.gte]: oneMinuteAgo
+            }
+          },
+          group: ['blockchain'],
+          raw: true
+        });
+      } catch (error) {
+        console.warn('⚠️ Failed to fetch transactions by chain:', error.message);
+        transactionsByChain = [];
+      }
 
       // Safe check for empty results
       if (!transactionsByChain || transactionsByChain.length === 0) {
@@ -130,17 +151,24 @@ class RealTimeAnalyticsService extends EventEmitter {
         recentTransactions,
         recentVolume: recentVolume || 0,
         transactionsByChain: transactionsByChain.map(item => {
-          // Guard against undefined data or missing count
-          if (!item || !item.dataValues || typeof item.dataValues.count === 'undefined') {
-            console.error("RealTimeAnalyticsService: missing 'count' in data", item);
-            return {
-              chain: item?.blockchain || 'unknown',
-              count: 0
-            };
+          // Comprehensive guard against undefined data
+          if (!item) {
+            console.error("RealTimeAnalyticsService: null item in transactionsByChain", item);
+            return { chain: 'unknown', count: 0 };
           }
+
+          // Handle both raw query results and Sequelize model results
+          const count = item.count || item.dataValues?.count || 0;
+          const blockchain = item.blockchain || item.dataValues?.blockchain || 'unknown';
+
+          if (typeof count === 'undefined') {
+            console.error("RealTimeAnalyticsService: missing 'count' in data", item);
+            return { chain: blockchain, count: 0 };
+          }
+
           return {
-            chain: item.blockchain,
-            count: parseInt(item.dataValues.count || 0)
+            chain: blockchain,
+            count: parseInt(count)
           };
         }),
         tps: recentTransactions / 60 // Transactions per second
