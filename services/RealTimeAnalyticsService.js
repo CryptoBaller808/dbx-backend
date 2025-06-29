@@ -129,10 +129,20 @@ class RealTimeAnalyticsService extends EventEmitter {
         timestamp: now.toISOString(),
         recentTransactions,
         recentVolume: recentVolume || 0,
-        transactionsByChain: transactionsByChain.map(item => ({
-          chain: item.blockchain,
-          count: parseInt(item.dataValues?.count || 0)
-        })),
+        transactionsByChain: transactionsByChain.map(item => {
+          // Guard against undefined data or missing count
+          if (!item || !item.dataValues || typeof item.dataValues.count === 'undefined') {
+            console.error("RealTimeAnalyticsService: missing 'count' in data", item);
+            return {
+              chain: item?.blockchain || 'unknown',
+              count: 0
+            };
+          }
+          return {
+            chain: item.blockchain,
+            count: parseInt(item.dataValues.count || 0)
+          };
+        }),
         tps: recentTransactions / 60 // Transactions per second
       };
 
@@ -732,6 +742,16 @@ class RealTimeAnalyticsService extends EventEmitter {
 
       // Add logging to verify response shape
       console.log("Analytics Query Result:", result);
+
+      // Guard against undefined data or missing count
+      if (!result || result.length === 0 || !result[0] || typeof result[0].count === 'undefined') {
+        console.error("RealTimeAnalyticsService: missing 'count' in result", result);
+        return {
+          totalTransactions: 0,
+          totalVolume: 0,
+          avgPrice: 0
+        };
+      }
 
       const transactionCount = result[0].count || 0;
       const totalVolume = result[0].total_volume || 0;

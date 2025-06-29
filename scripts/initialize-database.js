@@ -34,6 +34,17 @@ async function initializeDatabase() {
       console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
     }
 
+    // Verify User table creation and sanctions_checked column
+    if (db.users || db.User) {
+      const UserModel = db.users || db.User;
+      console.log('✅ [Database] User model found, ensuring table and sanctions_checked column exists...');
+      await UserModel.sync({ alter: true });
+      console.log('✅ [Database] User table synchronized successfully with sanctions_checked column');
+    } else {
+      console.error('❌ [Database] User model not found in db object!');
+      console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    }
+
     // Check if roles exist, create default roles if not
     const roleCount = await db.roles.count();
     if (roleCount === 0) {
