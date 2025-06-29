@@ -289,7 +289,7 @@ module.exports = (sequelize, DataTypes) => {
           }
         },
         {
-          fields: ['created_at']
+          fields: ['createdAt']
         },
         {
           fields: ['total_volume']

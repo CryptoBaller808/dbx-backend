@@ -247,7 +247,7 @@ module.exports = (sequelize, DataTypes) => {
           fields: ['is_featured', 'status']
         },
         {
-          fields: ['created_at']
+          fields: ['createdAt']
         }
       ],
       hooks: {
