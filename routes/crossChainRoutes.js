@@ -2,8 +2,8 @@ const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const CrossChainTransactionService = require('../services/blockchain/CrossChainTransactionService');
 const { initializeBlockchainServices } = require('../services/blockchain');
-const auditMiddleware = require('../middleware/auditMiddleware');
-const authMiddleware = require('../middleware/auth');
+const { auditMiddleware } = require('../middleware/auditMiddleware');
+const { authenticateToken: authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
