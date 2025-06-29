@@ -347,8 +347,9 @@ class SystemHealthMonitoringService {
           blockchain_status,
           services_status,
           raw_data,
-          "createdAt"
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))
+          "createdAt",
+          "updatedAt"
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), COALESCE(?, NOW()))
       `, {
         replacements: [
           healthData.timestamp,
@@ -360,7 +361,8 @@ class SystemHealthMonitoringService {
           healthData.blockchain.overall_status,
           healthData.services.overall_status,
           JSON.stringify(healthData),
-          healthData.createdAt || null  // Will use NOW() if null
+          healthData.createdAt || null,  // Will use NOW() if null
+          healthData.updatedAt || null   // Will use NOW() if null
         ]
       });
     } catch (error) {
