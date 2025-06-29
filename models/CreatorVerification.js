@@ -117,12 +117,12 @@ module.exports = (sequelize) => {
   CreatorVerification.associate = (models) => {
     CreatorVerification.belongsTo(models.users, {
       foreignKey: 'creator_id',
-      as: 'submittingCreatorUser'  // FIXED: Completely unique alias
+      as: 'requestingCreator'  // FIXED: Changed from submittingCreatorUser to completely unique alias
     });
     
     CreatorVerification.belongsTo(models.users, {
       foreignKey: 'reviewed_by',
-      as: 'approvingAdminUser'  // FIXED: Completely unique alias
+      as: 'reviewingAdmin'  // FIXED: Simplified alias name
     });
   };
 

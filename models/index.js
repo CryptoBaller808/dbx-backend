@@ -178,7 +178,7 @@ fs.readdirSync(modelsDir)
       
       // Standardize model names for associations
       if (modelName === 'CreatorVerification') {
-        db.creator_verifications = model;
+        // FIXED: Only register once to avoid duplicate associations
         db.CreatorVerification = model;
       } else if (modelName === 'UserMFA') {
         db.UserMFA = model;
