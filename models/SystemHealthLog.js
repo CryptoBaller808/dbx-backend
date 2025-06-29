@@ -58,16 +58,14 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         comment: 'Raw health monitoring data in JSON format'
       },
-      // Timestamp fields with explicit field mapping
+      // Standard Sequelize timestamp fields
       createdAt: {
         type: DataTypes.DATE,
-        field: 'created_at',
         allowNull: false,
         defaultValue: DataTypes.NOW
       },
       updatedAt: {
         type: DataTypes.DATE,
-        field: 'updated_at',
         allowNull: false,
         defaultValue: DataTypes.NOW
       },
