@@ -109,6 +109,22 @@ class RealTimeAnalyticsService extends EventEmitter {
         ]
       });
 
+      // Safe check for empty results
+      if (!transactionsByChain || transactionsByChain.length === 0) {
+        console.warn("⚠️ No data returned from nft_transactions query");
+        // Still emit data with empty transactions
+        const streamData = {
+          timestamp: now.toISOString(),
+          recentTransactions: 0,
+          recentVolume: 0,
+          transactionsByChain: [],
+          tps: 0
+        };
+        this.io.to('admin_dashboard').emit('transaction_stream', streamData);
+        this.dataStreams.set('transactions', streamData);
+        return;
+      }
+
       const streamData = {
         timestamp: now.toISOString(),
         recentTransactions,
