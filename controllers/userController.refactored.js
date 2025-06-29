@@ -2,7 +2,7 @@
  * User Controller
  * Refactored to use Sequelize consistently
  */
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { BlobServiceClient } = require('@azure/storage-blob');
