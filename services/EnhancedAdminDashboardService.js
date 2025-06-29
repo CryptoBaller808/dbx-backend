@@ -6,7 +6,7 @@
 const { Op } = require('sequelize');
 const db = require('../models');
 const { RiskManagementSystem } = require('./trading/RiskManagementSystem');
-const { MultiChainNFTService } = require('./MultiChainNFTService');
+const MultiChainNFTService = require('./MultiChainNFTService');
 
 class EnhancedAdminDashboardService {
   constructor() {
