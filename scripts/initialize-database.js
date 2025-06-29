@@ -10,9 +10,19 @@ const config = require('../config');
  */
 async function initializeDatabase() {
   try {
-    // Sync all models with database
-    await db.sequelize.sync({ alter: false });
-    console.log('Database synchronized');
+    // Sync all models with database - create missing tables
+    await db.sequelize.sync({ alter: true });
+    console.log('Database synchronized with table creation/alteration');
+    
+    // Verify NFTAuction table creation
+    if (db.NFTAuction) {
+      console.log('✅ [Database] NFTAuction model found, ensuring table exists...');
+      await db.NFTAuction.sync({ alter: true });
+      console.log('✅ [Database] NFTAuction table synchronized successfully');
+    } else {
+      console.error('❌ [Database] NFTAuction model not found in db object!');
+      console.log('📋 [Database] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    }
 
     // Check if roles exist, create default roles if not
     const roleCount = await db.roles.count();

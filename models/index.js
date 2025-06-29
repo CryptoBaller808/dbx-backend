@@ -192,6 +192,13 @@ fs.readdirSync(modelsDir)
         const snakeName = modelName.replace(/([A-Z])/g, '_$1').toLowerCase().substring(1);
         db[snakeName] = model;
         db[modelName] = model;
+        
+        // Ensure specific NFT models are properly registered
+        if (modelName === 'NFTAuction') {
+          db.nft_auctions = model;
+          db.NFTAuction = model;
+          console.log(`✅ [Models] NFTAuction model registered as both 'nft_auctions' and 'NFTAuction'`);
+        }
       } else {
         db[modelName.toLowerCase()] = model;
         db[modelName] = model;
@@ -324,8 +331,9 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // Sync models in development
-    if (env === 'development') {
+    // Sync models to create missing tables
+    // TEMPORARY: Enable sync in production to create missing NFT tables
+    if (env === 'development' || env === 'production') {
       await sequelize.sync({ alter: true });
       console.log('✅ [Database] Database models synchronized');
     }
