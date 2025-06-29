@@ -84,6 +84,39 @@ class BNBAdapter extends BlockchainAdapter {
   }
 
   /**
+   * Connect to RPC endpoint
+   */
+  async connectToRpc(rpcUrl) {
+    try {
+      console.log(`[BNB Adapter] Connecting to RPC: ${rpcUrl}`);
+      
+      // Create provider with timeout settings
+      this.provider = new ethers.JsonRpcProvider(rpcUrl, {
+        chainId: this.networkConfig.mainnet.chainId,
+        name: 'BNB Smart Chain'
+      });
+      
+      // Test connection
+      const network = await this.provider.getNetwork();
+      console.log(`[BNB Adapter] Connected to network: ${network.name} (Chain ID: ${network.chainId})`);
+      
+      return {
+        success: true,
+        chainId: network.chainId,
+        networkName: network.name,
+        rpcUrl: rpcUrl
+      };
+    } catch (error) {
+      throw new BlockchainError(
+        `Failed to connect to BNB RPC: ${error.message}`,
+        ErrorCodes.CONNECTION_ERROR,
+        this.chainId,
+        error
+      );
+    }
+  }
+
+  /**
    * Get balance for an address
    */
   async getBalance(address, tokenAddress = null) {

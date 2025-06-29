@@ -34,7 +34,7 @@ class RealTimeAnalyticsService extends EventEmitter {
    * Initialize email transporter for reports
    */
   initializeEmailTransporter() {
-    this.emailTransporter = nodemailer.createTransporter({
+    this.emailTransporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: process.env.SMTP_PORT || 587,
       secure: false,

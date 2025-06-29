@@ -505,7 +505,7 @@ class CrossChainNFTBridge {
         whereClause.destination_chain = destination_chain;
       }
 
-      const stats = await db.nft_bridge_transactions.findAll({
+      const stats = await db.NFTBridgeTransaction.findAll({
         where: whereClause,
         attributes: [
           'status',
@@ -770,7 +770,7 @@ class CrossChainNFTBridge {
    */
   async loadActiveBridgeTransactions() {
     try {
-      const activeTransactions = await db.nft_bridge_transactions.findAll({
+      const activeTransactions = await db.NFTBridgeTransaction.findAll({
         where: {
           status: ['INITIATED', 'BURN_COMPLETED', 'VERIFYING', 'VERIFIED']
         }
@@ -814,7 +814,7 @@ class CrossChainNFTBridge {
     // Monitor for stuck transactions every 5 minutes
     setInterval(async () => {
       try {
-        const stuckTransactions = await db.nft_bridge_transactions.findAll({
+        const stuckTransactions = await db.NFTBridgeTransaction.findAll({
           where: {
             status: ['INITIATED', 'BURN_COMPLETED', 'VERIFYING'],
             created_at: {
@@ -838,7 +838,7 @@ class CrossChainNFTBridge {
    */
   async getChainPairStatistics(timeFilter) {
     try {
-      const chainPairs = await db.nft_bridge_transactions.findAll({
+      const chainPairs = await db.NFTBridgeTransaction.findAll({
         where: {
           created_at: {
             [Op.gte]: timeFilter
