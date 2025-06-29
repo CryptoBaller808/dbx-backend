@@ -198,7 +198,19 @@ fs.readdirSync(modelsDir)
           db.nft_auctions = model;
           db.NFTAuction = model;
           console.log(`✅ [Models] NFTAuction model registered as both 'nft_auctions' and 'NFTAuction'`);
+        } else if (modelName === 'NFTTransaction') {
+          db.nft_transactions = model;
+          db.NFTTransaction = model;
+          console.log(`✅ [Models] NFTTransaction model registered as both 'nft_transactions' and 'NFTTransaction'`);
+        } else if (modelName === 'NFTBridgeTransaction') {
+          db.nft_bridge_transactions = model;
+          db.NFTBridgeTransaction = model;
+          console.log(`✅ [Models] NFTBridgeTransaction model registered as both 'nft_bridge_transactions' and 'NFTBridgeTransaction'`);
         }
+      } else if (modelName === 'transactionsModel') {
+        db.transactions = model;
+        db.Transaction = model;
+        console.log(`✅ [Models] Transaction model registered as both 'transactions' and 'Transaction'`);
       } else {
         db[modelName.toLowerCase()] = model;
         db[modelName] = model;

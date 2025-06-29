@@ -25,9 +25,47 @@ class RealTimeAnalyticsService extends EventEmitter {
       userActivity: { warning: 100, critical: 500 }
     };
     
+    // Validate critical models are available
+    this.validateModels();
+    
     this.initializeEmailTransporter();
     this.startDataStreaming();
     this.setupScheduledReports();
+  }
+
+  /**
+   * Validate that all required models are properly loaded
+   */
+  validateModels() {
+    const requiredModels = [
+      'nft_transactions', 'NFTTransaction',
+      'transactions', 'Transaction', 
+      'users', 'User',
+      'nft_auctions', 'NFTAuction'
+    ];
+
+    const missingModels = [];
+    
+    for (const modelName of requiredModels) {
+      if (!db[modelName]) {
+        missingModels.push(modelName);
+      }
+    }
+
+    if (missingModels.length > 0) {
+      console.error('❌ [RealTimeAnalytics] CRITICAL: Missing required models:', missingModels);
+      console.log('📋 [RealTimeAnalytics] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    } else {
+      console.log('✅ [RealTimeAnalytics] All required models validated successfully');
+    }
+
+    // Store validated models for safe access
+    this.models = {
+      nftTransactions: db.nft_transactions || db.NFTTransaction,
+      transactions: db.transactions || db.Transaction,
+      users: db.users || db.User,
+      nftAuctions: db.nft_auctions || db.NFTAuction
+    };
   }
 
   /**
@@ -86,47 +124,67 @@ class RealTimeAnalyticsService extends EventEmitter {
       let transactionsByChain = [];
 
       try {
-        recentTransactions = await db.nft_transactions.count({
-          where: {
-            timestamp: {
-              [Op.gte]: oneMinuteAgo
+        if (!this.models.nftTransactions) {
+          console.warn('⚠️ [RealTimeAnalytics] NFT transactions model not available for count');
+          recentTransactions = 0;
+        } else {
+          recentTransactions = await this.models.nftTransactions.count({
+            where: {
+              createdAt: {
+                [Op.gte]: oneMinuteAgo
+              }
             }
-          }
-        });
+          });
+        }
       } catch (error) {
-        console.warn('⚠️ Failed to fetch recent transactions count:', error.message);
+        console.warn('⚠️ [RealTimeAnalytics] Failed to fetch recent transactions count:', error.message);
         recentTransactions = 0;
       }
 
       try {
-        recentVolume = await db.nft_transactions.sum('price', {
-          where: {
-            timestamp: {
-              [Op.gte]: oneMinuteAgo
+        if (!this.models.nftTransactions) {
+          console.warn('⚠️ [RealTimeAnalytics] NFT transactions model not available for sum');
+          recentVolume = 0;
+        } else {
+          const volumeResult = await this.models.nftTransactions.sum('price', {
+            where: {
+              createdAt: {
+                [Op.gte]: oneMinuteAgo
+              },
+              price: {
+                [Op.ne]: null
+              }
             }
-          }
-        });
+          });
+          recentVolume = volumeResult || 0;
+        }
       } catch (error) {
-        console.warn('⚠️ Failed to fetch recent volume:', error.message);
+        console.warn('⚠️ [RealTimeAnalytics] Failed to fetch recent volume:', error.message);
         recentVolume = 0;
       }
 
       try {
-        transactionsByChain = await db.nft_transactions.findAll({
-          attributes: [
-            'blockchain',
-            [db.sequelize.fn('COUNT', '*'), 'count']
-          ],
-          where: {
-            timestamp: {
-              [Op.gte]: oneMinuteAgo
-            }
-          },
-          group: ['blockchain'],
-          raw: true
-        });
+        // Use validated model with defensive checks
+        if (!this.models.nftTransactions) {
+          console.warn('⚠️ [RealTimeAnalytics] NFT transactions model not available, using fallback');
+          transactionsByChain = [];
+        } else {
+          transactionsByChain = await this.models.nftTransactions.findAll({
+            attributes: [
+              'blockchain',
+              [db.sequelize.fn('COUNT', '*'), 'count']
+            ],
+            where: {
+              createdAt: {
+                [Op.gte]: oneMinuteAgo
+              }
+            },
+            group: ['blockchain'],
+            raw: true
+          });
+        }
       } catch (error) {
-        console.warn('⚠️ Failed to fetch transactions by chain:', error.message);
+        console.warn('⚠️ [RealTimeAnalytics] Failed to fetch transactions by chain:', error.message);
         transactionsByChain = [];
       }
 

@@ -93,66 +93,94 @@ const createAdapterRegistry = async (configManager) => {
     // Register adapters for each supported blockchain
     
     // XRP Ledger
-    const xrpConfig = configs.get('xrp') || defaultConfigs.xrp;
-    if (xrpConfig && xrpConfig.isActive) {
-      const xrpAdapter = new XRPAdapter(xrpConfig);
-      registry.registerAdapter('XRP', xrpAdapter);
-      registry.registerAdapter('xrp', xrpAdapter); // Alias
-      console.log('[Blockchain Registry] XRP adapter registered');
+    try {
+      const xrpConfig = configs.get('xrp') || defaultConfigs.xrp;
+      if (xrpConfig && xrpConfig.isActive) {
+        const xrpAdapter = new XRPAdapter(xrpConfig);
+        registry.registerAdapter('XRP', xrpAdapter);
+        registry.registerAdapter('xrp', xrpAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ XRP adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register XRP adapter:', error.message);
     }
     
     // Stellar
-    const xlmConfig = configs.get('xlm') || defaultConfigs.xlm;
-    if (xlmConfig && xlmConfig.isActive) {
-      const xlmAdapter = new XLMAdapter(xlmConfig);
-      registry.registerAdapter('STELLAR', xlmAdapter);
-      registry.registerAdapter('xlm', xlmAdapter); // Alias
-      console.log('[Blockchain Registry] Stellar adapter registered');
+    try {
+      const xlmConfig = configs.get('xlm') || defaultConfigs.xlm;
+      if (xlmConfig && xlmConfig.isActive) {
+        const xlmAdapter = new XLMAdapter(xlmConfig);
+        registry.registerAdapter('STELLAR', xlmAdapter);
+        registry.registerAdapter('xlm', xlmAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ Stellar adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register Stellar adapter:', error.message);
     }
     
     // XDC Network
-    const xdcConfig = configs.get('xdc') || defaultConfigs.xdc;
-    if (xdcConfig && xdcConfig.isActive) {
-      const xdcAdapter = new XDCAdapter(xdcConfig);
-      registry.registerAdapter('XDC', xdcAdapter);
-      registry.registerAdapter('xdc', xdcAdapter); // Alias
-      console.log('[Blockchain Registry] XDC adapter registered');
+    try {
+      const xdcConfig = configs.get('xdc') || defaultConfigs.xdc;
+      if (xdcConfig && xdcConfig.isActive) {
+        const xdcAdapter = new XDCAdapter(xdcConfig);
+        registry.registerAdapter('XDC', xdcAdapter);
+        registry.registerAdapter('xdc', xdcAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ XDC adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register XDC adapter:', error.message);
     }
     
     // Solana
-    const solanaConfig = configs.get('solana') || defaultConfigs.solana;
-    if (solanaConfig && solanaConfig.isActive) {
-      const solanaAdapter = new SolanaAdapter(solanaConfig);
-      registry.registerAdapter('SOLANA', solanaAdapter);
-      registry.registerAdapter('solana', solanaAdapter); // Alias
-      console.log('[Blockchain Registry] Solana adapter registered');
+    try {
+      const solanaConfig = configs.get('solana') || defaultConfigs.solana;
+      if (solanaConfig && solanaConfig.isActive) {
+        const solanaAdapter = new SolanaAdapter(solanaConfig);
+        registry.registerAdapter('SOLANA', solanaAdapter);
+        registry.registerAdapter('solana', solanaAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ Solana adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register Solana adapter:', error.message);
     }
     
     // Avalanche
-    const avaxConfig = configs.get('avalanche') || defaultConfigs.avalanche;
-    if (avaxConfig && avaxConfig.isActive) {
-      const avaxAdapter = new AVAXAdapter(avaxConfig);
-      registry.registerAdapter('AVALANCHE', avaxAdapter);
-      registry.registerAdapter('avax', avaxAdapter); // Alias
-      console.log('[Blockchain Registry] Avalanche adapter registered');
+    try {
+      const avaxConfig = configs.get('avalanche') || defaultConfigs.avalanche;
+      if (avaxConfig && avaxConfig.isActive) {
+        const avaxAdapter = new AVAXAdapter(avaxConfig);
+        registry.registerAdapter('AVALANCHE', avaxAdapter);
+        registry.registerAdapter('avax', avaxAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ Avalanche adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register Avalanche adapter:', error.message);
     }
     
     // Polygon
-    const maticConfig = configs.get('polygon') || defaultConfigs.polygon;
-    if (maticConfig && maticConfig.isActive) {
-      const maticAdapter = new MATICAdapter(maticConfig);
-      registry.registerAdapter('POLYGON', maticAdapter);
-      registry.registerAdapter('matic', maticAdapter); // Alias
-      console.log('[Blockchain Registry] Polygon adapter registered');
+    try {
+      const maticConfig = configs.get('polygon') || defaultConfigs.polygon;
+      if (maticConfig && maticConfig.isActive) {
+        const maticAdapter = new MATICAdapter(maticConfig);
+        registry.registerAdapter('POLYGON', maticAdapter);
+        registry.registerAdapter('matic', maticAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ Polygon adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register Polygon adapter:', error.message);
     }
     
     // Binance Smart Chain
-    const bscConfig = configs.get('bsc') || defaultConfigs.bsc;
-    if (bscConfig && bscConfig.isActive) {
-      const bnbAdapter = new BNBAdapter(bscConfig);
-      registry.registerAdapter('BSC', bnbAdapter);
-      registry.registerAdapter('bnb', bnbAdapter); // Alias
-      console.log('[Blockchain Registry] BSC adapter registered');
+    try {
+      const bscConfig = configs.get('bsc') || defaultConfigs.bsc;
+      if (bscConfig && bscConfig.isActive) {
+        const bnbAdapter = new BNBAdapter(bscConfig);
+        registry.registerAdapter('BSC', bnbAdapter);
+        registry.registerAdapter('bnb', bnbAdapter); // Alias
+        console.log('[Blockchain Registry] ✅ BSC adapter registered successfully');
+      }
+    } catch (error) {
+      console.error('[Blockchain Registry] ❌ Failed to register BSC adapter:', error.message);
     }
     
     console.log(`[Blockchain Registry] Registered ${registry.getSupportedChains().length} blockchain adapters`);

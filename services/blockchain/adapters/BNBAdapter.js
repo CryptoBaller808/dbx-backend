@@ -1,5 +1,6 @@
-const { BlockchainAdapter, BlockchainError, ErrorCodes } = require('../blockchain-abstraction-layer');
 const { ethers } = require('ethers');
+const BlockchainAdapter = require('../BaseEVMAdapter');
+const { BlockchainError, ErrorCodes } = require('../enhanced-error-handling');
 
 /**
  * Binance Smart Chain (BNB) Blockchain Adapter
