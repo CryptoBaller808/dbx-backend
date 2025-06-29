@@ -7,12 +7,27 @@ const express = require('express');
 const router = express.Router();
 const BitcoinWalletService = require('../services/blockchain/BitcoinWalletService');
 const BitcoinTradingService = require('../services/blockchain/BitcoinTradingService');
-const { authenticateToken, validateRequest } = require('../middleware/auth');
-const { body, param, query } = require('express-validator');
+const { authenticateToken } = require('../middleware/auth');
+const { body, param, query, validationResult } = require('express-validator');
 
 // Initialize services
 const bitcoinWalletService = new BitcoinWalletService();
 const bitcoinTradingService = new BitcoinTradingService();
+
+/**
+ * Validation middleware
+ */
+const validateRequest = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors.array()
+    });
+  }
+  next();
+};
 
 // Validation middleware
 const validateWalletCreation = [
