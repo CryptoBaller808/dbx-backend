@@ -88,13 +88,18 @@ async function initializeDatabase() {
         }
       ]);
       console.log('Default roles created');
+      }
+    } catch (rolesError) {
+      console.warn('⚠️ [Database] Could not create default roles:', rolesError.message);
+      // Continue with initialization even if roles fail
     }
 
     // Check if blockchains exist, create default blockchains if not
-    const blockchainCount = await db.blockchain_list.count();
-    if (blockchainCount === 0) {
-      console.log('Creating default blockchains...');
-      await db.blockchain_list.bulkCreate([
+    try {
+      const blockchainCount = await db.blockchain_list.count();
+      if (blockchainCount === 0) {
+        console.log('Creating default blockchains...');
+        await db.blockchain_list.bulkCreate([
         {
           name: 'XRP Ledger',
           symbol: 'XRP',
@@ -148,6 +153,10 @@ async function initializeDatabase() {
         }
       ]);
       console.log('Default currencies created');
+      }
+    } catch (blockchainError) {
+      console.warn('⚠️ [Database] Could not create default blockchains/currencies:', blockchainError.message);
+      // Continue with initialization even if blockchain setup fails
     }
 
     console.log('Database initialization completed successfully');
