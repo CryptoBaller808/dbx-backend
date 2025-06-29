@@ -88,7 +88,7 @@ class HealthChecker {
    */
   async checkAdapters() {
     try {
-      const adapters = ['SOL', 'XRP', 'XLM', 'AVAX', 'BNB'];
+      const adapters = ['Solana', 'XRP', 'XLM', 'AVAX', 'BNB'];
       const adapterResults = {};
 
       for (const adapter of adapters) {
@@ -211,12 +211,12 @@ class HealthChecker {
 }
 
 /**
- * Express health check endpoint
+ * Create Express app with health check endpoint
  */
 function createHealthCheckEndpoint() {
   const app = express();
   
-  app.get('/health', async (req, res) => {
+  app.get('/', async (req, res) => {
     try {
       const checker = new HealthChecker();
       const result = await checker.runHealthCheck();

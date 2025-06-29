@@ -13,6 +13,8 @@ const {
   monitorConnectionPool 
 } = require('./middleware/databaseSecurity');
 
+const { createHealthCheckEndpoint } = require('./health-check');
+
 // Import your route files
 const adminRoutes = require('./routes/adminRoute');
 const mfaRoutes = require('./routes/mfaRoutes');
@@ -56,6 +58,9 @@ app.use(monitorConnectionPool);
 
 // Database Health Check Endpoint
 app.get('/api/health/database', healthCheck);
+
+// Comprehensive Health Check Endpoint
+app.use('/health', createHealthCheckEndpoint());
 
 // Health Check
 app.get('/', (req, res) => {

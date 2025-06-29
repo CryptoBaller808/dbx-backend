@@ -105,10 +105,6 @@ class UserManagementService {
         ];
       }
 
-      if (kycStatus) {
-        whereClause.kyc_status = kycStatus;
-      }
-
       if (userTier) {
         whereClause.user_tier = userTier;
       }
@@ -474,10 +470,10 @@ class UserManagementService {
         }
       });
 
-      // Update user KYC status
-      const userKycStatus = decision === 'approve' ? 'verified' : 'rejected';
+      // Update user status based on KYC decision
+      const userStatus = decision === 'approve' ? 'active' : 'suspended';
       await this.db.users.update(
-        { kyc_status: userKycStatus },
+        { status: userStatus },
         { where: { id: app.user_id } }
       );
 
@@ -566,8 +562,8 @@ class UserManagementService {
       // This would integrate with actual sanctions databases
       // For now, we'll simulate with a basic check
       
-      // Defensive query - check if sanctions_checked field exists
-      let whereClause = { kyc_status: 'verified' };
+      // Defensive query - check active users for sanctions
+      let whereClause = { status: 'active' };
       
       try {
         // Test if sanctions_checked field exists by attempting a query
@@ -792,8 +788,7 @@ class UserManagementService {
           COUNT(CASE WHEN status = 'active' THEN 1 END) as active_users,
           COUNT(CASE WHEN status = 'suspended' THEN 1 END) as suspended_users,
           COUNT(CASE WHEN status = 'banned' THEN 1 END) as banned_users,
-          COUNT(CASE WHEN kyc_status = 'verified' THEN 1 END) as verified_users,
-          COUNT(CASE WHEN kyc_status = 'pending' THEN 1 END) as pending_kyc,
+          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_users,
           COUNT(CASE WHEN "createdAt" >= NOW() - INTERVAL '24 hours' THEN 1 END) as new_users_24h,
           COUNT(CASE WHEN last_login >= NOW() - INTERVAL '24 hours' THEN 1 END) as active_24h
         FROM users
