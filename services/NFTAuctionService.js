@@ -73,7 +73,7 @@ class NFTAuctionService {
       }
 
       // Check if NFT is already in an active auction
-      const existingAuction = await db.nft_auctions.findOne({
+      const existingAuction = await db.NFTAuction.findOne({
         where: {
           nft_id,
           status: ['ACTIVE', 'DRAFT']
@@ -89,7 +89,7 @@ class NFTAuctionService {
       const end_time = new Date(start_time.getTime() + (duration_hours * 60 * 60 * 1000));
 
       // Create auction
-      const auction = await db.nft_auctions.create({
+      const auction = await db.NFTAuction.create({
         nft_id,
         seller_id,
         auction_type,
@@ -146,7 +146,7 @@ class NFTAuctionService {
   async placeBid(auctionId, bidderId, bidAmount, bidSignature = null) {
     try {
       // Get auction with lock to prevent race conditions
-      const auction = await db.nft_auctions.findByPk(auctionId, {
+      const auction = await db.NFTAuction.findByPk(auctionId, {
         lock: true,
         include: [
           { model: db.nfts, as: 'nft' },
@@ -346,7 +346,7 @@ class NFTAuctionService {
    */
   async completeAuction(auctionId, winnerId, finalPrice) {
     try {
-      const auction = await db.nft_auctions.findByPk(auctionId, {
+      const auction = await db.NFTAuction.findByPk(auctionId, {
         include: [{ model: db.nfts, as: 'nft' }]
       });
 
@@ -422,7 +422,7 @@ class NFTAuctionService {
    */
   async cancelAuction(auctionId, userId) {
     try {
-      const auction = await db.nft_auctions.findByPk(auctionId);
+      const auction = await db.NFTAuction.findByPk(auctionId);
       
       if (!auction) {
         throw new Error('Auction not found');
@@ -477,7 +477,7 @@ class NFTAuctionService {
    */
   async getAuctionDetails(auctionId) {
     try {
-      const auction = await db.nft_auctions.findByPk(auctionId, {
+      const auction = await db.NFTAuction.findByPk(auctionId, {
         include: [
           {
             model: db.nfts,
@@ -583,7 +583,7 @@ class NFTAuctionService {
         includeClause[0].include[0].where = { category_id };
       }
 
-      const auctions = await db.nft_auctions.findAndCountAll({
+      const auctions = await db.NFTAuction.findAndCountAll({
         where: whereClause,
         include: includeClause,
         order: [[sort_by, sort_order]],
@@ -675,7 +675,7 @@ class NFTAuctionService {
    */
   async loadActiveAuctions() {
     try {
-      const activeAuctions = await db.nft_auctions.findAll({
+      const activeAuctions = await db.NFTAuction.findAll({
         where: {
           status: 'ACTIVE',
           end_time: {
@@ -745,7 +745,7 @@ class NFTAuctionService {
    */
   async dropDutchAuctionPrice(auctionId) {
     try {
-      const auction = await db.nft_auctions.findByPk(auctionId);
+      const auction = await db.NFTAuction.findByPk(auctionId);
       
       if (!auction || auction.status !== 'ACTIVE') {
         // Clear timer if auction is no longer active
@@ -794,7 +794,7 @@ class NFTAuctionService {
    */
   async endAuction(auctionId) {
     try {
-      const auction = await db.nft_auctions.findByPk(auctionId);
+      const auction = await db.NFTAuction.findByPk(auctionId);
       
       if (!auction || auction.status !== 'ACTIVE') {
         return;
@@ -911,7 +911,7 @@ class NFTAuctionService {
     // Monitor for expired auctions every minute
     setInterval(async () => {
       try {
-        const expiredAuctions = await db.nft_auctions.findAll({
+        const expiredAuctions = await db.NFTAuction.findAll({
           where: {
             status: 'ACTIVE',
             end_time: {
@@ -951,13 +951,13 @@ class NFTAuctionService {
         whereClause.auction_type = auction_type;
       }
 
-      const stats = await db.nft_auctions.findAll({
+      const stats = await db.NFTAuction.findAll({
         where: whereClause,
         include: [{ model: db.nfts, as: 'nft' }],
         attributes: [
           'status',
           'auction_type',
-          [db.sequelize.fn('COUNT', db.sequelize.col('nft_auctions.id')), 'count'],
+          [db.sequelize.fn('COUNT', db.sequelize.col('NFTAuctions.id')), 'count'],
           [db.sequelize.fn('AVG', db.sequelize.col('final_sale_price')), 'avg_price'],
           [db.sequelize.fn('SUM', db.sequelize.col('final_sale_price')), 'total_volume']
         ],
