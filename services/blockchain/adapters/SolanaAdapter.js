@@ -195,11 +195,6 @@ class SolanaAdapter extends BlockchainAdapter {
       this.chainId
     );
   }
-        this.chainId,
-        error
-      );
-    }
-  }
 
   /**
    * Connect to RPC endpoint
@@ -290,7 +285,8 @@ class SolanaAdapter extends BlockchainAdapter {
           );
           
           balance = tokenAccountInfo.value.amount;
-          decimals = tokenAccountInfo.value.decimals;          symbol = 'SPL'; // Would need to fetch from token metadata
+          decimals = tokenAccountInfo.value.decimals;
+          symbol = 'SPL'; // Would need to fetch from token metadata
         }
 
         const formattedBalance = (parseInt(balance) / Math.pow(10, decimals)).toString();
@@ -321,17 +317,7 @@ class SolanaAdapter extends BlockchainAdapter {
           network: this.config.network || 'mainnet'
         };
       }
-    } catch (error) {
-      if (error instanceof BlockchainError) {
-        throw error;
-      }
-      throw new BlockchainError(
-        `Failed to get balance: ${error.message}`,
-        ErrorCodes.UNKNOWN_ERROR,
-        this.chainId,
-        error
-      );
-    }
+    }, 'getBalance');
   }
 
   /**
