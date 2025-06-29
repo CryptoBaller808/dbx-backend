@@ -578,12 +578,12 @@ class RealTimeAnalyticsService extends EventEmitter {
       });
 
       return {
-        transactions: transactions.rows,
+        transactions: transactions?.rows || [],
         pagination: {
-          total: transactions.count,
+          total: (transactions && transactions.count) ? transactions.count : 0,
           limit,
           offset,
-          pages: Math.ceil(transactions.count / limit)
+          pages: Math.ceil(((transactions && transactions.count) ? transactions.count : 0) / limit)
         },
         aggregated: {
           totalCount: parseInt(aggregatedData?.dataValues?.totalCount || 0),
