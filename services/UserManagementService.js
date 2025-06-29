@@ -514,13 +514,13 @@ class UserManagementService {
       // Check for suspicious transaction patterns
       const suspiciousTransactions = await this.db.sequelize.query(`
         SELECT 
-          user_id,
+          to_user_id as user_id,
           COUNT(*) as transaction_count,
-          SUM(amount) as total_amount
+          SUM(price) as total_amount
         FROM nft_transactions 
-        WHERE created_at >= NOW() - INTERVAL '24 hours'
-        GROUP BY user_id
-        HAVING COUNT(*) > 50 OR SUM(amount) > 100000
+        WHERE "createdAt" >= NOW() - INTERVAL '24 hours'
+        GROUP BY to_user_id
+        HAVING COUNT(*) > 50 OR SUM(price) > 100000
       `, {
         type: this.db.sequelize.QueryTypes.SELECT
       });
@@ -540,7 +540,7 @@ class UserManagementService {
           registration_ip,
           COUNT(*) as account_count
         FROM users 
-        WHERE created_at >= NOW() - INTERVAL '1 hour'
+        WHERE "createdAt" >= NOW() - INTERVAL '1 hour'
         GROUP BY registration_ip
         HAVING COUNT(*) > 5
       `, {
@@ -605,11 +605,11 @@ class UserManagementService {
           to_user_id AS user_id,
           COUNT(DISTINCT blockchain) as chain_count,
           COUNT(*) as transaction_count,
-          AVG(amount) as avg_amount
+          AVG(price) as avg_amount
         FROM nft_transactions 
-        WHERE created_at >= NOW() - INTERVAL '7 days'
+        WHERE "createdAt" >= NOW() - INTERVAL '7 days'
         GROUP BY to_user_id
-        HAVING COUNT(DISTINCT blockchain) > 5 AND AVG(amount) > 10000
+        HAVING COUNT(DISTINCT blockchain) > 5 AND AVG(price) > 10000
       `, {
         type: this.db.sequelize.QueryTypes.SELECT
       });
@@ -775,7 +775,7 @@ class UserManagementService {
           COUNT(CASE WHEN status = 'banned' THEN 1 END) as banned_users,
           COUNT(CASE WHEN kyc_status = 'verified' THEN 1 END) as verified_users,
           COUNT(CASE WHEN kyc_status = 'pending' THEN 1 END) as pending_kyc,
-          COUNT(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as new_users_24h,
+          COUNT(CASE WHEN "createdAt" >= NOW() - INTERVAL '24 hours' THEN 1 END) as new_users_24h,
           COUNT(CASE WHEN last_login >= NOW() - INTERVAL '24 hours' THEN 1 END) as active_24h
         FROM users
       `, {
@@ -797,7 +797,7 @@ class UserManagementService {
           COUNT(CASE WHEN severity = 'critical' THEN 1 END) as critical_events,
           COUNT(CASE WHEN severity = 'warning' THEN 1 END) as warning_events,
           COUNT(CASE WHEN status = 'open' THEN 1 END) as open_events,
-          COUNT(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as events_24h
+          COUNT(CASE WHEN "createdAt" >= NOW() - INTERVAL '24 hours' THEN 1 END) as events_24h
         FROM compliance_events
       `, {
         type: this.db.sequelize.QueryTypes.SELECT
