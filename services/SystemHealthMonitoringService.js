@@ -204,7 +204,7 @@ class SystemHealthMonitoringService {
       const [results] = await this.db.sequelize.query(`
         SELECT 
           COUNT(*) as connection_count,
-          (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()) as table_count
+          (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_database()) as table_count
       `);
 
       return {
