@@ -3,6 +3,8 @@
  * Standardized Sequelize implementation
  */
 module.exports = (sequelize, DataTypes) => {
+  const { Op } = require('sequelize');
+  
   const Item = sequelize.define(
     "Item",
     {
@@ -90,10 +92,10 @@ module.exports = (sequelize, DataTypes) => {
           unique: true,
           where: {
             token_id: {
-              [sequelize.Op.ne]: null
+              [Op.ne]: null
             },
             blockchain: {
-              [sequelize.Op.ne]: null
+              [Op.ne]: null
             }
           }
         }

@@ -4,6 +4,8 @@
  */
 
 module.exports = (sequelize, DataTypes) => {
+  const { Op } = require('sequelize');
+  
   const NFTBridgeTransaction = sequelize.define(
     "NFTBridgeTransaction",
     {
@@ -173,7 +175,7 @@ module.exports = (sequelize, DataTypes) => {
           unique: true,
           where: {
             burn_transaction_hash: {
-              [sequelize.Op.ne]: null
+              [Op.ne]: null
             }
           }
         },
@@ -182,7 +184,7 @@ module.exports = (sequelize, DataTypes) => {
           unique: true,
           where: {
             mint_transaction_hash: {
-              [sequelize.Op.ne]: null
+              [Op.ne]: null
             }
           }
         },

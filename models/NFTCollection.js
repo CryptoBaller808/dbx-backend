@@ -4,6 +4,8 @@
  */
 
 module.exports = (sequelize, DataTypes) => {
+  const { Op } = require('sequelize');
+  
   const NFTCollection = sequelize.define(
     "NFTCollection",
     {
@@ -269,7 +271,7 @@ module.exports = (sequelize, DataTypes) => {
           unique: true,
           where: {
             contract_address: {
-              [sequelize.Op.ne]: null
+              [Op.ne]: null
             }
           }
         },
