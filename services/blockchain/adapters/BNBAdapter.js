@@ -1,12 +1,12 @@
 const { ethers } = require('ethers');
-const BlockchainAdapter = require('../BaseEVMAdapter');
+const BaseEVMAdapter = require('../BaseEVMAdapter');
 const { BlockchainError, ErrorCodes } = require('../enhanced-error-handling');
 
 /**
  * Binance Smart Chain (BNB) Blockchain Adapter
  * Supports BSC (EVM-compatible)
  */
-class BNBAdapter extends BlockchainAdapter {
+class BNBAdapter extends BaseEVMAdapter {
   constructor(config) {
     super(config);
     this.provider = null;

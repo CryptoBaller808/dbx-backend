@@ -823,7 +823,5 @@ class BaseEVMAdapter extends EnhancedBlockchainAdapter {
   }
 }
 
-module.exports = {
-  BaseEVMAdapter
-};
+module.exports = BaseEVMAdapter;
 

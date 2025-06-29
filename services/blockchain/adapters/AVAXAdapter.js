@@ -1,12 +1,12 @@
 const { ethers } = require('ethers');
-const BlockchainAdapter = require('../BaseEVMAdapter');
+const BaseEVMAdapter = require('../BaseEVMAdapter');
 const { BlockchainError, ErrorCodes } = require('../enhanced-error-handling');
 
 /**
  * Avalanche (AVAX) Blockchain Adapter
  * Supports Avalanche C-Chain (EVM-compatible)
  */
-class AVAXAdapter extends BlockchainAdapter {
+class AVAXAdapter extends BaseEVMAdapter {
   constructor(config) {
     super(config);
     this.provider = null;

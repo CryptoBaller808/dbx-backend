@@ -1,11 +1,12 @@
-const { BlockchainAdapter, BlockchainError, ErrorCodes } = require('../blockchain-abstraction-layer');
 const { ethers } = require('ethers');
+const BaseEVMAdapter = require('../BaseEVMAdapter');
+const { BlockchainError, ErrorCodes } = require('../enhanced-error-handling');
 
 /**
  * Polygon (MATIC) Blockchain Adapter
  * Supports Polygon PoS Chain (EVM-compatible)
  */
-class MATICAdapter extends BlockchainAdapter {
+class MATICAdapter extends BaseEVMAdapter {
   constructor(config) {
     super(config);
     this.provider = null;

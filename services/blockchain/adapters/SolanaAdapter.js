@@ -1,4 +1,3 @@
-const { BlockchainAdapter, BlockchainError, ErrorCodes } = require('../blockchain-abstraction-layer');
 const {
   Connection,
   PublicKey,
@@ -9,6 +8,8 @@ const {
   Keypair,
   clusterApiUrl
 } = require('@solana/web3.js');
+
+const { BlockchainAdapter, BlockchainError, ErrorCodes } = require('../blockchain-abstraction-layer');
 
 /**
  * Solana Blockchain Adapter
