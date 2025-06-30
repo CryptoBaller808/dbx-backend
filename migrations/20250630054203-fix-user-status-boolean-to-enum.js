@@ -120,14 +120,60 @@ module.exports = {
         
         console.log('✅ [Migration] Boolean values converted to TEXT with proper mapping');
         
-        // Step 5: Create ENUM type safely
-        console.log('🔄 [Migration] Step 3: Creating ENUM type...');
+        // Step 5: Pre-clean the data - Convert any remaining invalid values to valid ENUM strings
+        console.log('🧼 [Migration] Step 3: Pre-cleaning data - converting any invalid values to valid ENUM strings...');
+        
+        // First, let's see what data we have after conversion
+        const [currentData] = await queryInterface.sequelize.query(`
+          SELECT "status", COUNT(*) as count 
+          FROM "users" 
+          GROUP BY "status" 
+          ORDER BY count DESC;
+        `, { transaction });
+        
+        if (currentData.length > 0) {
+          console.log('📊 [Migration] Current status values in database:');
+          currentData.forEach(row => {
+            console.log(`   - "${row.status}": ${row.count} users`);
+          });
+        } else {
+          console.log('📊 [Migration] No users found in database');
+        }
+        
+        // Pre-clean: Convert any invalid values to 'active' as safe default
+        await queryInterface.sequelize.query(`
+          UPDATE "users"
+          SET "status" = 'active'
+          WHERE "status" NOT IN ('active', 'pending', 'suspended', 'banned', 'deleted')
+             OR "status" IS NULL;
+        `, { transaction });
+        
+        console.log('✅ [Migration] Data pre-cleaning completed');
+        
+        // Verify data after cleaning
+        const [cleanedData] = await queryInterface.sequelize.query(`
+          SELECT "status", COUNT(*) as count 
+          FROM "users" 
+          GROUP BY "status" 
+          ORDER BY count DESC;
+        `, { transaction });
+        
+        if (cleanedData.length > 0) {
+          console.log('📊 [Migration] Status values after cleaning:');
+          cleanedData.forEach(row => {
+            console.log(`   - "${row.status}": ${row.count} users`);
+          });
+        }
+        
+        // Step 6: Create ENUM type safely with transaction-safe block
+        console.log('🧱 [Migration] Step 4: Creating ENUM type with transaction-safe block...');
         await queryInterface.sequelize.query(`
           DO $$
           BEGIN
             CREATE TYPE "public"."enum_users_status" AS ENUM (
               'active', 'pending', 'suspended', 'banned', 'deleted'
             );
+            RAISE NOTICE 'ENUM type enum_users_status created successfully';
           EXCEPTION
             WHEN duplicate_object THEN 
               RAISE NOTICE 'ENUM type enum_users_status already exists, skipping creation';
@@ -137,25 +183,46 @@ module.exports = {
         
         console.log('✅ [Migration] ENUM type created or already exists');
         
-        // Step 6: Convert column to ENUM
-        console.log('🔄 [Migration] Step 4: Converting column to ENUM...');
+        // Step 7: Verify all data is valid before conversion
+        console.log('🔍 [Migration] Step 5: Verifying all data is valid for ENUM conversion...');
+        const [invalidData] = await queryInterface.sequelize.query(`
+          SELECT "status", COUNT(*) as count 
+          FROM "users" 
+          WHERE "status" NOT IN ('active', 'pending', 'suspended', 'banned', 'deleted')
+          GROUP BY "status";
+        `, { transaction });
+        
+        if (invalidData.length > 0) {
+          console.log('⚠️ [Migration] Found invalid data that needs cleaning:');
+          invalidData.forEach(row => {
+            console.log(`   - "${row.status}": ${row.count} users`);
+          });
+          
+          // Final cleanup - convert any remaining invalid values
+          await queryInterface.sequelize.query(`
+            UPDATE "users"
+            SET "status" = 'active'
+            WHERE "status" NOT IN ('active', 'pending', 'suspended', 'banned', 'deleted');
+          `, { transaction });
+          
+          console.log('✅ [Migration] Final cleanup completed');
+        } else {
+          console.log('✅ [Migration] All data is valid for ENUM conversion');
+        }
+        
+        // Step 8: Convert column to ENUM (only after data is confirmed valid)
+        console.log('🔄 [Migration] Step 6: Converting column to ENUM...');
         await queryInterface.sequelize.query(`
           ALTER TABLE "users"
             ALTER COLUMN "status"
             TYPE "public"."enum_users_status"
-            USING (
-              CASE 
-                WHEN "status" IN ('active', 'pending', 'suspended', 'banned', 'deleted') 
-                THEN "status"::"public"."enum_users_status"
-                ELSE 'active'::"public"."enum_users_status"
-              END
-            );
+            USING ("status"::"public"."enum_users_status");
         `, { transaction });
         
         console.log('✅ [Migration] Column converted to ENUM');
         
-        // Step 7: Restore constraints
-        console.log('🔄 [Migration] Step 5: Restoring constraints...');
+        // Step 9: Restore constraints
+        console.log('🔄 [Migration] Step 7: Restoring constraints...');
         await queryInterface.sequelize.query(`
           ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';
         `, { transaction });
@@ -166,8 +233,8 @@ module.exports = {
         
         console.log('✅ [Migration] Constraints restored');
         
-        // Step 8: Verify the migration
-        console.log('🔍 [Migration] Step 6: Verifying migration...');
+        // Step 10: Verify the migration
+        console.log('🔍 [Migration] Step 8: Verifying migration...');
         const [verifyResults] = await queryInterface.sequelize.query(`
           SELECT COUNT(*) as total_users,
                  COUNT(CASE WHEN "status" = 'active' THEN 1 END) as active_users,
