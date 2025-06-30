@@ -134,6 +134,34 @@ class UserManagementService {
     }
   }
 
+  /**
+   * Perform sanctions check on users and transactions
+   * Stub implementation - deferred per project lead
+   */
+  async performSanctionsCheck() {
+    try {
+      console.log('[UserManagementService] Sanctions check executed (stub implementation)');
+      return Promise.resolve('Sanctions check skipped (stub)');
+    } catch (error) {
+      console.error('[UserManagementService] Error in sanctions check:', error);
+      return Promise.resolve('Sanctions check failed (stub)');
+    }
+  }
+
+  /**
+   * Generate AML (Anti-Money Laundering) alerts
+   * Stub implementation for compliance monitoring
+   */
+  async generateAMLAlerts() {
+    try {
+      console.log('[UserManagementService] AML alerts check executed (stub implementation)');
+      return Promise.resolve('AML alerts check completed (stub)');
+    } catch (error) {
+      console.error('[UserManagementService] Error generating AML alerts:', error);
+      return Promise.resolve('AML alerts check failed (stub)');
+    }
+  }
+
   // ... [Unchanged code omitted for brevity] ...
 }
 
