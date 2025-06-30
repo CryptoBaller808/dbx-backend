@@ -2,37 +2,40 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // Step 1: Temporarily convert status column to TEXT to avoid boolean casting error
-    console.log('🔧 [Migration] Step 1: Temporarily converting status column to TEXT...');
+    // Drop constraints first
+    console.log('🔧 [Migration] Step 1: Dropping constraints...');
     await queryInterface.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;`);
     await queryInterface.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;`);
+
+    // 🔧 Convert to TEXT
+    console.log('🔧 [Migration] Step 2: Converting to TEXT...');
     await queryInterface.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" TYPE TEXT;`);
 
-    // Step 2: Safely create the ENUM type if it doesn't exist
-    console.log('🔧 [Migration] Step 2: Safely creating ENUM type...');
+    // Safely create enum type
+    console.log('🔧 [Migration] Step 3: Creating ENUM type safely...');
     await queryInterface.sequelize.query(`
       DO $$
       BEGIN
-          CREATE TYPE "public"."enum_users_status" AS ENUM (
-              'active', 'pending', 'suspended', 'banned', 'deleted'
-          );
+        CREATE TYPE "public"."enum_users_status" AS ENUM (
+          'active', 'pending', 'suspended', 'banned', 'deleted'
+        );
       EXCEPTION
-          WHEN duplicate_object THEN NULL;
+        WHEN duplicate_object THEN NULL;
       END
       $$;
     `);
 
-    // Step 3: Convert the column to the ENUM using TEXT cast
-    console.log('🔧 [Migration] Step 3: Converting column to ENUM using TEXT cast...');
+    // 🔄 Convert from TEXT to ENUM
+    console.log('🔧 [Migration] Step 4: Converting from TEXT to ENUM...');
     await queryInterface.sequelize.query(`
       ALTER TABLE "users"
-          ALTER COLUMN "status"
-          TYPE "public"."enum_users_status"
-          USING ("status"::"public"."enum_users_status");
+        ALTER COLUMN "status"
+        TYPE "public"."enum_users_status"
+        USING ("status"::"public"."enum_users_status");
     `);
 
-    // Step 4: Reapply constraints
-    console.log('🔧 [Migration] Step 4: Reapplying constraints...');
+    // Reapply constraints
+    console.log('🔧 [Migration] Step 5: Reapplying constraints...');
     await queryInterface.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';`);
     await queryInterface.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET NOT NULL;`);
 

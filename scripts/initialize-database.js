@@ -28,10 +28,8 @@ async function updateUserStatusColumn() {
         console.log('🔄 [Database] Performing safe status column migration...');
         
         try {
-          // Step 1: Temporarily convert status column to TEXT to avoid boolean casting error
-          console.log('🔧 [Database] Step 1: Temporarily converting status column to TEXT...');
-          
-          // Drop constraints first (ignore errors if they don't exist)
+          // Drop constraints first
+          console.log('🔧 [Database] Step 1: Dropping constraints...');
           try {
             await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;`);
             console.log('✅ [Database] Dropped DEFAULT constraint');
@@ -46,49 +44,38 @@ async function updateUserStatusColumn() {
             console.log('ℹ️ [Database] No NOT NULL constraint to drop');
           }
           
-          // Convert to TEXT with proper handling of boolean values
-          await db.sequelize.query(`
-            ALTER TABLE "users" 
-            ALTER COLUMN "status" TYPE TEXT 
-            USING CASE 
-              WHEN "status"::text = 'true' OR "status"::text = '1' THEN 'active'
-              WHEN "status"::text = 'false' OR "status"::text = '0' THEN 'inactive'
-              ELSE COALESCE("status"::text, 'active')
-            END;
-          `);
+          // 🔧 Convert to TEXT (simple conversion without CASE)
+          console.log('🔧 [Database] Step 2: Converting to TEXT...');
+          await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" TYPE TEXT;`);
           console.log('✅ [Database] Status column converted to TEXT');
           
-          // Step 2: Safely create the ENUM type if it doesn't exist
-          console.log('🔧 [Database] Step 2: Safely creating ENUM type...');
+          // Safely create enum type
+          console.log('🔧 [Database] Step 3: Creating ENUM type safely...');
           await db.sequelize.query(`
             DO $$
             BEGIN
-                CREATE TYPE "public"."enum_users_status" AS ENUM (
-                    'active', 'pending', 'suspended', 'banned', 'deleted'
-                );
+              CREATE TYPE "public"."enum_users_status" AS ENUM (
+                'active', 'pending', 'suspended', 'banned', 'deleted'
+              );
             EXCEPTION
-                WHEN duplicate_object THEN NULL;
+              WHEN duplicate_object THEN NULL;
             END
             $$;
           `);
           console.log('✅ [Database] ENUM type created or already exists');
           
-          // Step 3: Convert the column to the ENUM using TEXT cast
-          console.log('🔧 [Database] Step 3: Converting column to ENUM using TEXT cast...');
+          // 🔄 Convert from TEXT to ENUM
+          console.log('🔧 [Database] Step 4: Converting from TEXT to ENUM...');
           await db.sequelize.query(`
             ALTER TABLE "users"
-                ALTER COLUMN "status"
-                TYPE "public"."enum_users_status"
-                USING (CASE 
-                  WHEN "status" IN ('active', 'pending', 'suspended', 'banned', 'deleted') 
-                  THEN "status"::"public"."enum_users_status"
-                  ELSE 'active'::"public"."enum_users_status"
-                END);
+              ALTER COLUMN "status"
+              TYPE "public"."enum_users_status"
+              USING ("status"::"public"."enum_users_status");
           `);
           console.log('✅ [Database] Status column converted to ENUM');
           
-          // Step 4: Reapply constraints
-          console.log('🔧 [Database] Step 4: Reapplying constraints...');
+          // Reapply constraints
+          console.log('🔧 [Database] Step 5: Reapplying constraints...');
           await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';`);
           await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET NOT NULL;`);
           console.log('✅ [Database] Constraints reapplied successfully');
@@ -105,6 +92,7 @@ async function updateUserStatusColumn() {
         } catch (migrationError) {
           console.error('❌ [Database] Migration failed:', migrationError.message);
           console.log('ℹ️ [Database] You may need to run the fix-status-column.sql script manually');
+          console.log('ℹ️ [Database] Error details:', migrationError);
           return false;
         }
         

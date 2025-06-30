@@ -1,29 +1,31 @@
 -- Fix users.status column from BOOLEAN to ENUM
 -- Run this script directly on your PostgreSQL database
 
--- Step 1: Drop constraints and convert to TEXT
+-- Drop constraints first
 ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;
 ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
+
+-- 🔧 Convert to TEXT
 ALTER TABLE "users" ALTER COLUMN "status" TYPE TEXT;
 
--- Step 2: Create ENUM type safely
+-- Safely create enum type
 DO $$
 BEGIN
-    CREATE TYPE "public"."enum_users_status" AS ENUM (
-        'active', 'pending', 'suspended', 'banned', 'deleted'
-    );
+  CREATE TYPE "public"."enum_users_status" AS ENUM (
+    'active', 'pending', 'suspended', 'banned', 'deleted'
+  );
 EXCEPTION
-    WHEN duplicate_object THEN NULL;
+  WHEN duplicate_object THEN NULL;
 END
 $$;
 
--- Step 3: Convert column to ENUM
+-- 🔄 Convert from TEXT to ENUM
 ALTER TABLE "users"
-    ALTER COLUMN "status"
-    TYPE "public"."enum_users_status"
-    USING ("status"::"public"."enum_users_status");
+  ALTER COLUMN "status"
+  TYPE "public"."enum_users_status"
+  USING ("status"::"public"."enum_users_status");
 
--- Step 4: Restore constraints
+-- Reapply constraints
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';
 ALTER TABLE "users" ALTER COLUMN "status" SET NOT NULL;
 
@@ -39,4 +41,3 @@ WHERE table_name = 'users' AND column_name = 'status';
 
 -- Test query to ensure it works
 SELECT COUNT(*) as active_users FROM "users" WHERE "status" = 'active';
-
