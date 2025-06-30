@@ -2,23 +2,20 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // Step 1: Pre-convert status to strings (if still boolean or any other type)
-    console.log('🔄 [Migration] Step 1: Pre-converting status column to TEXT...');
+    // Step 1: Convert status column to TEXT, preserving existing values
+    console.log('🔧 [Migration] Step 1: Converting status column to TEXT, preserving existing values...');
     await queryInterface.sequelize.query(`
       ALTER TABLE "users"
-      ALTER COLUMN "status" TYPE TEXT USING CASE
+      ALTER COLUMN "status" TYPE TEXT
+      USING CASE
         WHEN "status" IS TRUE THEN 'active'
         WHEN "status" IS FALSE THEN 'inactive'
-        WHEN "status"::text = 'true' THEN 'active'
-        WHEN "status"::text = 'false' THEN 'inactive'
-        WHEN "status"::text = '1' THEN 'active'
-        WHEN "status"::text = '0' THEN 'inactive'
-        ELSE COALESCE("status"::text, 'active')
+        ELSE "status"
       END;
     `);
 
-    // Step 2: Create the ENUM type safely
-    console.log('🔄 [Migration] Step 2: Creating ENUM type safely...');
+    // Step 2: Create ENUM (safely)
+    console.log('🔧 [Migration] Step 2: Creating ENUM type safely...');
     await queryInterface.sequelize.query(`
       DO $$
       BEGIN
@@ -29,13 +26,21 @@ module.exports = {
       $$;
     `);
 
-    // Step 3: Convert status to ENUM
-    console.log('🔄 [Migration] Step 3: Converting status column to ENUM...');
-    await queryInterface.changeColumn('users', 'status', {
-      type: Sequelize.ENUM('active', 'pending', 'suspended', 'banned', 'deleted'),
-      allowNull: false,
-      defaultValue: 'active'
-    });
+    // Step 3: Change column to use the ENUM
+    console.log('🔧 [Migration] Step 3: Changing column to use the ENUM...');
+    await queryInterface.sequelize.query(`
+      ALTER TABLE "users"
+      ALTER COLUMN "status" TYPE "public"."enum_users_status"
+      USING ("status"::"public"."enum_users_status");
+    `);
+
+    // Step 4: Set NOT NULL and DEFAULT
+    console.log('🔧 [Migration] Step 4: Setting NOT NULL and DEFAULT constraints...');
+    await queryInterface.sequelize.query(`
+      ALTER TABLE "users"
+      ALTER COLUMN "status" SET NOT NULL,
+      ALTER COLUMN "status" SET DEFAULT 'active';
+    `);
 
     // Verify the migration worked
     console.log('🔄 [Migration] Verifying migration...');

@@ -27,24 +27,21 @@ async function updateUserStatusColumn() {
       if (statusColumn.udt_name !== 'enum_users_status') {
         console.log('🔄 [Database] Performing safe status column migration...');
         
-        // Step 1: Pre-convert status to strings (if still boolean or any other type)
-        console.log('🔄 [Database] Step 1: Pre-converting status column to TEXT...');
+        // Step 1: Convert status column to TEXT, preserving existing values
+        console.log('🔧 [Database] Step 1: Converting status column to TEXT, preserving existing values...');
         await db.sequelize.query(`
           ALTER TABLE "users"
-          ALTER COLUMN "status" TYPE TEXT USING CASE
+          ALTER COLUMN "status" TYPE TEXT
+          USING CASE
             WHEN "status" IS TRUE THEN 'active'
             WHEN "status" IS FALSE THEN 'inactive'
-            WHEN "status"::text = 'true' THEN 'active'
-            WHEN "status"::text = 'false' THEN 'inactive'
-            WHEN "status"::text = '1' THEN 'active'
-            WHEN "status"::text = '0' THEN 'inactive'
-            ELSE COALESCE("status"::text, 'active')
+            ELSE "status"
           END;
         `);
         console.log('✅ [Database] Status column converted to TEXT');
         
-        // Step 2: Create the ENUM type safely
-        console.log('🔄 [Database] Step 2: Creating ENUM type safely...');
+        // Step 2: Create ENUM (safely)
+        console.log('🔧 [Database] Step 2: Creating ENUM type safely...');
         await db.sequelize.query(`
           DO $$
           BEGIN
@@ -56,25 +53,23 @@ async function updateUserStatusColumn() {
         `);
         console.log('✅ [Database] ENUM type created or already exists');
         
-        // Step 3: Convert status to ENUM
-        console.log('🔄 [Database] Step 3: Converting status column to ENUM...');
+        // Step 3: Change column to use the ENUM
+        console.log('🔧 [Database] Step 3: Changing column to use the ENUM...');
         await db.sequelize.query(`
           ALTER TABLE "users"
           ALTER COLUMN "status" TYPE "public"."enum_users_status"
           USING ("status"::"public"."enum_users_status");
         `);
+        console.log('✅ [Database] Status column converted to ENUM');
         
-        // Step 4: Set default value and NOT NULL constraint
-        console.log('🔄 [Database] Step 4: Setting default value and constraints...');
+        // Step 4: Set NOT NULL and DEFAULT
+        console.log('🔧 [Database] Step 4: Setting NOT NULL and DEFAULT constraints...');
         await db.sequelize.query(`
           ALTER TABLE "users"
+          ALTER COLUMN "status" SET NOT NULL,
           ALTER COLUMN "status" SET DEFAULT 'active';
         `);
-        
-        await db.sequelize.query(`
-          ALTER TABLE "users"
-          ALTER COLUMN "status" SET NOT NULL;
-        `);
+        console.log('✅ [Database] Constraints set successfully');
         
         console.log('✅ [Database] Status column migration completed successfully');
         
