@@ -7,11 +7,18 @@ module.exports = {
      * Add updated_at column to currency_list table
      * This enables full timestamp support (created_at + updated_at)
      */
-    await queryInterface.addColumn('currency_list', 'updated_at', {
-      type: Sequelize.DATE,
-      allowNull: false,
-      defaultValue: Sequelize.literal("CURRENT_TIMESTAMP")
-    });
+    const tableDescription = await queryInterface.describeTable('currency_list');
+    
+    if (!tableDescription.updated_at) {
+      await queryInterface.addColumn('currency_list', 'updated_at', {
+        type: Sequelize.DATE,
+        allowNull: false,
+        defaultValue: Sequelize.literal("CURRENT_TIMESTAMP")
+      });
+      console.log('✅ Added updated_at column to currency_list table');
+    } else {
+      console.log('✅ updated_at column already exists in currency_list table');
+    }
   },
 
   async down(queryInterface, Sequelize) {
