@@ -6,11 +6,84 @@ const db = require('../models');
 const config = require('../config');
 
 /**
+ * Update user status column to ENUM if needed
+ */
+async function updateUserStatusColumn() {
+  try {
+    console.log('🔄 [Database] Checking user status column...');
+    
+    // Check if the status column exists and what type it is
+    const [results] = await db.sequelize.query(`
+      SELECT column_name, data_type, udt_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'status';
+    `);
+    
+    if (results.length > 0) {
+      const statusColumn = results[0];
+      console.log(`📋 [Database] Current status column type: ${statusColumn.data_type} (${statusColumn.udt_name})`);
+      
+      // If it's boolean, convert to ENUM
+      if (statusColumn.data_type === 'boolean' || statusColumn.udt_name === 'bool') {
+        console.log('🔄 [Database] Converting status column from BOOLEAN to ENUM...');
+        
+        // First, create the ENUM type if it doesn't exist
+        await db.sequelize.query(`
+          DO $$ 
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_users_status') THEN
+              CREATE TYPE enum_users_status AS ENUM('active', 'pending', 'suspended', 'banned', 'deleted');
+            END IF;
+          END $$;
+        `);
+        
+        // Update existing boolean values to string equivalents
+        await db.sequelize.query(`
+          UPDATE users 
+          SET status = CASE 
+            WHEN status::boolean = true THEN 'active'::text
+            WHEN status::boolean = false THEN 'suspended'::text
+            ELSE 'active'::text
+          END;
+        `);
+        
+        // Change the column type to ENUM
+        await db.sequelize.query(`
+          ALTER TABLE users 
+          ALTER COLUMN status TYPE enum_users_status 
+          USING status::text::enum_users_status;
+        `);
+        
+        // Set default value
+        await db.sequelize.query(`
+          ALTER TABLE users 
+          ALTER COLUMN status SET DEFAULT 'active'::enum_users_status;
+        `);
+        
+        console.log('✅ [Database] Status column converted to ENUM successfully');
+      } else if (statusColumn.udt_name === 'enum_users_status') {
+        console.log('✅ [Database] Status column is already ENUM type');
+      }
+    } else {
+      console.log('⚠️ [Database] Status column not found in users table');
+    }
+    
+    return true;
+  } catch (error) {
+    console.warn('⚠️ [Database] Failed to update status column:', error.message);
+    return false;
+  }
+}
+
+/**
  * Initialize database with default data
  */
 async function initializeDatabase() {
   try {
     console.log('🔄 [Database] Starting database initialization...');
+    
+    // Update user status column to ENUM if needed
+    await updateUserStatusColumn();
     
     // Sync all models with database - create missing tables (safe mode)
     try {

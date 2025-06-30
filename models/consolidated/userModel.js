@@ -66,8 +66,9 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: 2, // Default to regular user role
       },
       status: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
+        type: DataTypes.ENUM('active', 'pending', 'suspended', 'banned', 'deleted'),
+        allowNull: false,
+        defaultValue: 'active'
       },
       email_verified: {
         type: DataTypes.BOOLEAN,
