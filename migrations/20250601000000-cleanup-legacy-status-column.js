@@ -5,7 +5,7 @@ module.exports = {
     const transaction = await queryInterface.sequelize.transaction();
 
     try {
-      console.log('🚀 [Start] Ultimate fix: cast to text before ENUM assignment');
+      console.log('🚀 [Start] Final fix: explicit cast to enum');
 
       // Step 1: Rename original column to preserve legacy data
       console.log('🪄 [Step 1] Rename users.status → users.status_legacy...');
@@ -30,16 +30,18 @@ module.exports = {
         ALTER TABLE users ADD COLUMN status public.enum_users_status DEFAULT 'active';
       `, { transaction });
 
-      // Step 4: Copy over cleaned values with safe casting
+      // Step 4: Copy over cleaned values and cast result
       console.log('🔄 [Step 4] Copy cleaned values into new ENUM column...');
       await queryInterface.sequelize.query(`
         UPDATE users
-        SET status = CASE
-          WHEN status_legacy::text = 'true' THEN 'active'
-          WHEN status_legacy::text = 'false' THEN 'suspended'
-          WHEN status_legacy::text IN ('active', 'pending', 'suspended', 'banned', 'deleted') THEN status_legacy::text
-          ELSE 'active'
-        END;
+        SET status = (
+          CASE
+            WHEN status_legacy::text = 'true' THEN 'active'
+            WHEN status_legacy::text = 'false' THEN 'suspended'
+            WHEN status_legacy::text IN ('active', 'pending', 'suspended', 'banned', 'deleted') THEN status_legacy::text
+            ELSE 'active'
+          END
+        )::public.enum_users_status;
       `, { transaction });
 
       // Step 5: Remove old column
@@ -57,7 +59,7 @@ module.exports = {
       `, { transaction });
 
       await transaction.commit();
-      console.log('✅ [Complete] ENUM migration finalized successfully');
+      console.log('✅ [Complete] ENUM migration finalized');
 
     } catch (err) {
       await transaction.rollback();
@@ -72,12 +74,10 @@ module.exports = {
     try {
       console.log('↩️ [Rollback] Reverting ENUM migration...');
 
-      // Drop ENUM column
       await queryInterface.sequelize.query(`
         ALTER TABLE users DROP COLUMN status;
       `, { transaction });
 
-      // Recreate TEXT column (assumes original was text or boolean)
       await queryInterface.sequelize.query(`
         ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active' NOT NULL;
       `, { transaction });
