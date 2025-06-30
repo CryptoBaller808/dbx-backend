@@ -14,65 +14,99 @@ async function updateUserStatusColumn() {
     
     // Check if the status column exists and what type it is
     const [results] = await db.sequelize.query(`
-      SELECT column_name, data_type, udt_name 
+      SELECT column_name, data_type, udt_name, is_nullable, column_default
       FROM information_schema.columns 
       WHERE table_name = 'users' AND column_name = 'status';
     `);
     
     if (results.length > 0) {
       const statusColumn = results[0];
-      console.log(`📋 [Database] Current status column type: ${statusColumn.data_type} (${statusColumn.udt_name})`);
+      console.log(`📋 [Database] Current status column: type=${statusColumn.data_type}, udt=${statusColumn.udt_name}, nullable=${statusColumn.is_nullable}, default=${statusColumn.column_default}`);
       
       // If it's not already the correct ENUM, perform safe migration
       if (statusColumn.udt_name !== 'enum_users_status') {
         console.log('🔄 [Database] Performing safe status column migration...');
         
-        // Step 1: Temporarily convert status column to TEXT to avoid boolean casting error
-        console.log('🔧 [Database] Step 1: Temporarily converting status column to TEXT...');
-        await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;`);
-        await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;`);
-        await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" TYPE TEXT;`);
-        console.log('✅ [Database] Status column converted to TEXT with constraints dropped');
-        
-        // Step 2: Safely create the ENUM type if it doesn't exist
-        console.log('🔧 [Database] Step 2: Safely creating ENUM type...');
-        await db.sequelize.query(`
-          DO $$
-          BEGIN
-              CREATE TYPE "public"."enum_users_status" AS ENUM (
-                  'active', 'pending', 'suspended', 'banned', 'deleted'
-              );
-          EXCEPTION
-              WHEN duplicate_object THEN NULL;
-          END
-          $$;
-        `);
-        console.log('✅ [Database] ENUM type created or already exists');
-        
-        // Step 3: Convert the column to the ENUM using TEXT cast
-        console.log('🔧 [Database] Step 3: Converting column to ENUM using TEXT cast...');
-        await db.sequelize.query(`
-          ALTER TABLE "users"
-              ALTER COLUMN "status"
-              TYPE "public"."enum_users_status"
-              USING ("status"::"public"."enum_users_status");
-        `);
-        console.log('✅ [Database] Status column converted to ENUM');
-        
-        // Step 4: Reapply constraints
-        console.log('🔧 [Database] Step 4: Reapplying constraints...');
-        await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';`);
-        await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET NOT NULL;`);
-        console.log('✅ [Database] Constraints reapplied successfully');
-        
-        console.log('✅ [Database] Status column migration completed successfully');
-        
-        // Verify the migration worked
-        console.log('🔄 [Database] Verifying migration...');
-        const [verifyResults] = await db.sequelize.query(`
-          SELECT COUNT(*) as count FROM "users" WHERE "status" = 'active';
-        `);
-        console.log(`✅ [Database] Verification: Found ${verifyResults[0].count} users with 'active' status`);
+        try {
+          // Step 1: Temporarily convert status column to TEXT to avoid boolean casting error
+          console.log('🔧 [Database] Step 1: Temporarily converting status column to TEXT...');
+          
+          // Drop constraints first (ignore errors if they don't exist)
+          try {
+            await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;`);
+            console.log('✅ [Database] Dropped DEFAULT constraint');
+          } catch (error) {
+            console.log('ℹ️ [Database] No DEFAULT constraint to drop');
+          }
+          
+          try {
+            await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;`);
+            console.log('✅ [Database] Dropped NOT NULL constraint');
+          } catch (error) {
+            console.log('ℹ️ [Database] No NOT NULL constraint to drop');
+          }
+          
+          // Convert to TEXT with proper handling of boolean values
+          await db.sequelize.query(`
+            ALTER TABLE "users" 
+            ALTER COLUMN "status" TYPE TEXT 
+            USING CASE 
+              WHEN "status"::text = 'true' OR "status"::text = '1' THEN 'active'
+              WHEN "status"::text = 'false' OR "status"::text = '0' THEN 'inactive'
+              ELSE COALESCE("status"::text, 'active')
+            END;
+          `);
+          console.log('✅ [Database] Status column converted to TEXT');
+          
+          // Step 2: Safely create the ENUM type if it doesn't exist
+          console.log('🔧 [Database] Step 2: Safely creating ENUM type...');
+          await db.sequelize.query(`
+            DO $$
+            BEGIN
+                CREATE TYPE "public"."enum_users_status" AS ENUM (
+                    'active', 'pending', 'suspended', 'banned', 'deleted'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END
+            $$;
+          `);
+          console.log('✅ [Database] ENUM type created or already exists');
+          
+          // Step 3: Convert the column to the ENUM using TEXT cast
+          console.log('🔧 [Database] Step 3: Converting column to ENUM using TEXT cast...');
+          await db.sequelize.query(`
+            ALTER TABLE "users"
+                ALTER COLUMN "status"
+                TYPE "public"."enum_users_status"
+                USING (CASE 
+                  WHEN "status" IN ('active', 'pending', 'suspended', 'banned', 'deleted') 
+                  THEN "status"::"public"."enum_users_status"
+                  ELSE 'active'::"public"."enum_users_status"
+                END);
+          `);
+          console.log('✅ [Database] Status column converted to ENUM');
+          
+          // Step 4: Reapply constraints
+          console.log('🔧 [Database] Step 4: Reapplying constraints...');
+          await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';`);
+          await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET NOT NULL;`);
+          console.log('✅ [Database] Constraints reapplied successfully');
+          
+          console.log('✅ [Database] Status column migration completed successfully');
+          
+          // Verify the migration worked
+          console.log('🔄 [Database] Verifying migration...');
+          const [verifyResults] = await db.sequelize.query(`
+            SELECT COUNT(*) as count FROM "users" WHERE "status" = 'active';
+          `);
+          console.log(`✅ [Database] Verification: Found ${verifyResults[0].count} users with 'active' status`);
+          
+        } catch (migrationError) {
+          console.error('❌ [Database] Migration failed:', migrationError.message);
+          console.log('ℹ️ [Database] You may need to run the fix-status-column.sql script manually');
+          return false;
+        }
         
       } else {
         console.log('✅ [Database] Status column is already ENUM type');
@@ -85,6 +119,7 @@ async function updateUserStatusColumn() {
   } catch (error) {
     console.warn('⚠️ [Database] Failed to update status column:', error.message);
     console.warn('⚠️ [Database] Error details:', error);
+    console.log('ℹ️ [Database] Please run scripts/fix-status-column.sql manually on your database');
     return false;
   }
 }
