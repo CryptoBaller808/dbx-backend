@@ -23,45 +23,69 @@ async function updateUserStatusColumn() {
       const statusColumn = results[0];
       console.log(`📋 [Database] Current status column type: ${statusColumn.data_type} (${statusColumn.udt_name})`);
       
-      // If it's boolean, convert to ENUM
-      if (statusColumn.data_type === 'boolean' || statusColumn.udt_name === 'bool') {
-        console.log('🔄 [Database] Converting status column from BOOLEAN to ENUM...');
+      // If it's not already the correct ENUM, perform safe migration
+      if (statusColumn.udt_name !== 'enum_users_status') {
+        console.log('🔄 [Database] Performing safe status column migration...');
         
-        // First, create the ENUM type if it doesn't exist
+        // Step 1: Pre-convert status to strings (if still boolean or any other type)
+        console.log('🔄 [Database] Step 1: Pre-converting status column to TEXT...');
         await db.sequelize.query(`
-          DO $$ 
-          BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_users_status') THEN
-              CREATE TYPE enum_users_status AS ENUM('active', 'pending', 'suspended', 'banned', 'deleted');
-            END IF;
-          END $$;
-        `);
-        
-        // Update existing boolean values to string equivalents
-        await db.sequelize.query(`
-          UPDATE users 
-          SET status = CASE 
-            WHEN status::boolean = true THEN 'active'::text
-            WHEN status::boolean = false THEN 'suspended'::text
-            ELSE 'active'::text
+          ALTER TABLE "users"
+          ALTER COLUMN "status" TYPE TEXT USING CASE
+            WHEN "status" IS TRUE THEN 'active'
+            WHEN "status" IS FALSE THEN 'inactive'
+            WHEN "status"::text = 'true' THEN 'active'
+            WHEN "status"::text = 'false' THEN 'inactive'
+            WHEN "status"::text = '1' THEN 'active'
+            WHEN "status"::text = '0' THEN 'inactive'
+            ELSE COALESCE("status"::text, 'active')
           END;
         `);
+        console.log('✅ [Database] Status column converted to TEXT');
         
-        // Change the column type to ENUM
+        // Step 2: Create the ENUM type safely
+        console.log('🔄 [Database] Step 2: Creating ENUM type safely...');
         await db.sequelize.query(`
-          ALTER TABLE users 
-          ALTER COLUMN status TYPE enum_users_status 
-          USING status::text::enum_users_status;
+          DO $$
+          BEGIN
+            CREATE TYPE "public"."enum_users_status" AS ENUM ('active', 'pending', 'suspended', 'banned', 'deleted');
+          EXCEPTION
+            WHEN duplicate_object THEN NULL;
+          END;
+          $$;
+        `);
+        console.log('✅ [Database] ENUM type created or already exists');
+        
+        // Step 3: Convert status to ENUM
+        console.log('🔄 [Database] Step 3: Converting status column to ENUM...');
+        await db.sequelize.query(`
+          ALTER TABLE "users"
+          ALTER COLUMN "status" TYPE "public"."enum_users_status"
+          USING ("status"::"public"."enum_users_status");
         `);
         
-        // Set default value
+        // Step 4: Set default value and NOT NULL constraint
+        console.log('🔄 [Database] Step 4: Setting default value and constraints...');
         await db.sequelize.query(`
-          ALTER TABLE users 
-          ALTER COLUMN status SET DEFAULT 'active'::enum_users_status;
+          ALTER TABLE "users"
+          ALTER COLUMN "status" SET DEFAULT 'active';
         `);
         
-        console.log('✅ [Database] Status column converted to ENUM successfully');
-      } else if (statusColumn.udt_name === 'enum_users_status') {
+        await db.sequelize.query(`
+          ALTER TABLE "users"
+          ALTER COLUMN "status" SET NOT NULL;
+        `);
+        
+        console.log('✅ [Database] Status column migration completed successfully');
+        
+        // Verify the migration worked
+        console.log('🔄 [Database] Verifying migration...');
+        const [verifyResults] = await db.sequelize.query(`
+          SELECT COUNT(*) as count FROM "users" WHERE "status" = 'active';
+        `);
+        console.log(`✅ [Database] Verification: Found ${verifyResults[0].count} users with 'active' status`);
+        
+      } else {
         console.log('✅ [Database] Status column is already ENUM type');
       }
     } else {
@@ -71,6 +95,7 @@ async function updateUserStatusColumn() {
     return true;
   } catch (error) {
     console.warn('⚠️ [Database] Failed to update status column:', error.message);
+    console.warn('⚠️ [Database] Error details:', error);
     return false;
   }
 }
