@@ -2,6 +2,13 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // 🛑 DISABLED: This legacy migration conflicts with the smart migration
+    // 🛑 The smart migration (20250630070000-legacy-status-data-cleanup.js) handles this properly
+    console.log('🛑 [DISABLED MIGRATION] This migration has been disabled to prevent conflicts');
+    console.log('🛑 The smart migration handles BOOLEAN to ENUM conversion properly');
+    return; // Exit early to prevent execution
+    
+    /* DISABLED CODE - CAUSES POSTGRESQL ERROR 22P02
     const transaction = await queryInterface.sequelize.transaction();
     
     try {

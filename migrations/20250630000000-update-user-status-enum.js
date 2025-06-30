@@ -2,6 +2,13 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // 🛑 DISABLED: This legacy migration conflicts with the smart migration
+    // 🛑 The smart migration (20250630070000-legacy-status-data-cleanup.js) handles this properly
+    console.log('🛑 [DISABLED MIGRATION] This migration has been disabled to prevent conflicts');
+    console.log('🛑 The smart migration handles BOOLEAN to ENUM conversion properly');
+    return; // Exit early to prevent execution
+    
+    /* DISABLED CODE - CAUSES POSTGRESQL ERROR 22P02
     // Drop constraints first
     console.log('🔧 [Migration] Step 1: Dropping constraints...');
     await queryInterface.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;`);
@@ -45,7 +52,7 @@ module.exports = {
       SELECT COUNT(*) as count FROM "users" WHERE "status" = 'active';
     `);
     console.log(`✅ [Migration] Verification: Found ${verifyResults[0].count} users with 'active' status`);
-  },
+    */
 
   async down(queryInterface, Sequelize) {
     // Revert back to boolean

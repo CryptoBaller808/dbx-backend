@@ -2,6 +2,13 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
+    // 🛑 DISABLED: This legacy migration conflicts with the smart migration
+    // 🛑 The smart migration (20250630070000-legacy-status-data-cleanup.js) handles this properly
+    console.log('🛑 [DISABLED MIGRATION] This migration has been disabled to prevent conflicts');
+    console.log('🛑 The smart migration handles BOOLEAN to ENUM conversion properly');
+    return; // Exit early to prevent execution
+    
+    /* DISABLED CODE - CAUSES POSTGRESQL ERROR 22P02
     // Step 1: Create ENUM type (with try/catch logic in SQL to avoid conflict)
     await queryInterface.sequelize.query(`
       DO $$
@@ -31,7 +38,7 @@ module.exports = {
       ALTER COLUMN "status" SET DEFAULT 'active',
       ALTER COLUMN "status" SET NOT NULL;
     `);
-  },
+    */
 
   down: async (queryInterface, Sequelize) => {
     // Optional: Reverse enum change back to TEXT if needed
