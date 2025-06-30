@@ -5,7 +5,7 @@ module.exports = {
     const transaction = await queryInterface.sequelize.transaction();
 
     try {
-      console.log('🚀 [Start] Ultimate fix: drop casting, directly assign ENUM');
+      console.log('🚀 [Start] Ultimate fix: cast to text before ENUM assignment');
 
       // Step 1: Rename original column to preserve legacy data
       console.log('🪄 [Step 1] Rename users.status → users.status_legacy...');
@@ -30,14 +30,14 @@ module.exports = {
         ALTER TABLE users ADD COLUMN status public.enum_users_status DEFAULT 'active';
       `, { transaction });
 
-      // Step 4: Copy over cleaned values
+      // Step 4: Copy over cleaned values with safe casting
       console.log('🔄 [Step 4] Copy cleaned values into new ENUM column...');
       await queryInterface.sequelize.query(`
         UPDATE users
         SET status = CASE
-          WHEN status_legacy = 'true' THEN 'active'
-          WHEN status_legacy = 'false' THEN 'suspended'
-          WHEN status_legacy IN ('active', 'pending', 'suspended', 'banned', 'deleted') THEN status_legacy
+          WHEN status_legacy::text = 'true' THEN 'active'
+          WHEN status_legacy::text = 'false' THEN 'suspended'
+          WHEN status_legacy::text IN ('active', 'pending', 'suspended', 'banned', 'deleted') THEN status_legacy::text
           ELSE 'active'
         END;
       `, { transaction });
@@ -57,7 +57,7 @@ module.exports = {
       `, { transaction });
 
       await transaction.commit();
-      console.log('✅ [Complete] ENUM migration finalized with direct assignment');
+      console.log('✅ [Complete] ENUM migration finalized successfully');
 
     } catch (err) {
       await transaction.rollback();
