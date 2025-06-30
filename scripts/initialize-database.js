@@ -4,110 +4,52 @@
  */
 const db = require('../models');
 const config = require('../config');
+const { Umzug, SequelizeStorage } = require('umzug');
+const path = require('path');
 
 /**
- * Update user status column to ENUM if needed
+ * Run pending migrations
  */
-async function updateUserStatusColumn() {
+async function runMigrations() {
   try {
-    console.log('🔄 [Database] Checking user status column...');
+    console.log('🔄 [Database] Running pending migrations...');
     
-    // Check if the status column exists and what type it is
-    const [results] = await db.sequelize.query(`
-      SELECT column_name, data_type, udt_name, is_nullable, column_default
-      FROM information_schema.columns 
-      WHERE table_name = 'users' AND column_name = 'status';
-    `);
-    
-    if (results.length > 0) {
-      const statusColumn = results[0];
-      console.log(`📋 [Database] Current status column: type=${statusColumn.data_type}, udt=${statusColumn.udt_name}, nullable=${statusColumn.is_nullable}, default=${statusColumn.column_default}`);
-      
-      // If it's not already the correct ENUM, perform safe migration
-      if (statusColumn.udt_name !== 'enum_users_status') {
-        console.log('🔄 [Database] Performing safe status column migration...');
-        
-        try {
-          // Drop constraints first
-          console.log('🔧 [Database] Step 1: Dropping constraints...');
-          try {
-            await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP DEFAULT;`);
-            console.log('✅ [Database] Dropped DEFAULT constraint');
-          } catch (error) {
-            console.log('ℹ️ [Database] No DEFAULT constraint to drop');
-          }
-          
-          try {
-            await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;`);
-            console.log('✅ [Database] Dropped NOT NULL constraint');
-          } catch (error) {
-            console.log('ℹ️ [Database] No NOT NULL constraint to drop');
-          }
-          
-          // 🔧 Convert to TEXT (simple conversion without CASE)
-          console.log('🔧 [Database] Step 2: Converting to TEXT...');
-          await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" TYPE TEXT;`);
-          console.log('✅ [Database] Status column converted to TEXT');
-          
-          // Safely create enum type
-          console.log('🔧 [Database] Step 3: Creating ENUM type safely...');
-          await db.sequelize.query(`
-            DO $$
-            BEGIN
-              CREATE TYPE "public"."enum_users_status" AS ENUM (
-                'active', 'pending', 'suspended', 'banned', 'deleted'
-              );
-            EXCEPTION
-              WHEN duplicate_object THEN NULL;
-            END
-            $$;
-          `);
-          console.log('✅ [Database] ENUM type created or already exists');
-          
-          // 🔄 Convert from TEXT to ENUM
-          console.log('🔧 [Database] Step 4: Converting from TEXT to ENUM...');
-          await db.sequelize.query(`
-            ALTER TABLE "users"
-              ALTER COLUMN "status"
-              TYPE "public"."enum_users_status"
-              USING ("status"::"public"."enum_users_status");
-          `);
-          console.log('✅ [Database] Status column converted to ENUM');
-          
-          // Reapply constraints
-          console.log('🔧 [Database] Step 5: Reapplying constraints...');
-          await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active';`);
-          await db.sequelize.query(`ALTER TABLE "users" ALTER COLUMN "status" SET NOT NULL;`);
-          console.log('✅ [Database] Constraints reapplied successfully');
-          
-          console.log('✅ [Database] Status column migration completed successfully');
-          
-          // Verify the migration worked
-          console.log('🔄 [Database] Verifying migration...');
-          const [verifyResults] = await db.sequelize.query(`
-            SELECT COUNT(*) as count FROM "users" WHERE "status" = 'active';
-          `);
-          console.log(`✅ [Database] Verification: Found ${verifyResults[0].count} users with 'active' status`);
-          
-        } catch (migrationError) {
-          console.error('❌ [Database] Migration failed:', migrationError.message);
-          console.log('ℹ️ [Database] You may need to run the fix-status-column.sql script manually');
-          console.log('ℹ️ [Database] Error details:', migrationError);
-          return false;
-        }
-        
-      } else {
-        console.log('✅ [Database] Status column is already ENUM type');
-      }
+    const umzug = new Umzug({
+      migrations: {
+        glob: path.join(__dirname, '../migrations/*.js'),
+        resolve: ({ name, path, context }) => {
+          const migration = require(path);
+          return {
+            name,
+            up: async () => migration.up(context.queryInterface, context.Sequelize),
+            down: async () => migration.down(context.queryInterface, context.Sequelize),
+          };
+        },
+      },
+      context: {
+        queryInterface: db.sequelize.getQueryInterface(),
+        Sequelize: db.Sequelize,
+      },
+      storage: new SequelizeStorage({
+        sequelize: db.sequelize,
+        tableName: 'SequelizeMeta',
+      }),
+      logger: console,
+    });
+
+    const pendingMigrations = await umzug.pending();
+    if (pendingMigrations.length > 0) {
+      console.log(`📋 [Database] Found ${pendingMigrations.length} pending migrations`);
+      await umzug.up();
+      console.log('✅ [Database] All migrations completed successfully');
     } else {
-      console.log('⚠️ [Database] Status column not found in users table');
+      console.log('✅ [Database] No pending migrations found');
     }
     
     return true;
   } catch (error) {
-    console.warn('⚠️ [Database] Failed to update status column:', error.message);
-    console.warn('⚠️ [Database] Error details:', error);
-    console.log('ℹ️ [Database] Please run scripts/fix-status-column.sql manually on your database');
+    console.error('❌ [Database] Migration failed:', error.message);
+    console.error('❌ [Database] Error details:', error);
     return false;
   }
 }
@@ -119,8 +61,11 @@ async function initializeDatabase() {
   try {
     console.log('🔄 [Database] Starting database initialization...');
     
-    // Update user status column to ENUM if needed
-    await updateUserStatusColumn();
+    // Run migrations first
+    const migrationSuccess = await runMigrations();
+    if (!migrationSuccess) {
+      console.warn('⚠️ [Database] Migrations failed, but continuing with initialization...');
+    }
     
     // Sync all models with database - create missing tables (safe mode)
     try {
@@ -172,32 +117,34 @@ async function initializeDatabase() {
 
     // Check if roles exist, create default roles if not (with error handling)
     try {
-      const roleCount = await db.roles.count();
-      if (roleCount === 0) {
-        console.log('Creating default roles...');
-        await db.roles.bulkCreate([
-          {
-          name: 'admin',
-          description: 'Administrator with full access',
-          permissions: JSON.stringify({
-            users: ['read', 'write', 'delete'],
-            items: ['read', 'write', 'delete'],
-            collections: ['read', 'write', 'delete'],
-            settings: ['read', 'write']
-          })
-        },
-        {
-          name: 'user',
-          description: 'Regular user',
-          permissions: JSON.stringify({
-            users: ['read'],
-            items: ['read', 'write'],
-            collections: ['read', 'write'],
-            settings: ['read']
-          })
+      if (db.roles) {
+        const roleCount = await db.roles.count();
+        if (roleCount === 0) {
+          console.log('🔄 [Database] Creating default roles...');
+          await db.roles.bulkCreate([
+            {
+              name: 'admin',
+              description: 'Administrator with full access',
+              permissions: JSON.stringify({
+                users: ['read', 'write', 'delete'],
+                items: ['read', 'write', 'delete'],
+                collections: ['read', 'write', 'delete'],
+                settings: ['read', 'write']
+              })
+            },
+            {
+              name: 'user',
+              description: 'Regular user',
+              permissions: JSON.stringify({
+                users: ['read'],
+                items: ['read', 'write'],
+                collections: ['read', 'write'],
+                settings: ['read']
+              })
+            }
+          ]);
+          console.log('✅ [Database] Default roles created');
         }
-      ]);
-      console.log('Default roles created');
       }
     } catch (rolesError) {
       console.warn('⚠️ [Database] Could not create default roles:', rolesError.message);
@@ -206,73 +153,77 @@ async function initializeDatabase() {
 
     // Check if blockchains exist, create default blockchains if not
     try {
-      const blockchainCount = await db.blockchain_list.count();
-      if (blockchainCount === 0) {
-        console.log('Creating default blockchains...');
-        await db.blockchain_list.bulkCreate([
-        {
-          name: 'XRP Ledger',
-          symbol: 'XRP',
-          chainId: 'xrp',
-          nodeUrl: 'wss://s1.ripple.com',
-          explorerUrl: 'https://livenet.xrpl.org/transactions/',
-          nativeCurrency: 'XRP',
-          decimals: 6,
-          adapterType: 'xrp',
-          isActive: true,
-          logo: '/images/blockchains/xrp.png'
-        },
-        {
-          name: 'Stellar',
-          symbol: 'XLM',
-          chainId: 'xlm',
-          nodeUrl: 'https://horizon.stellar.org',
-          explorerUrl: 'https://stellar.expert/explorer/public/tx/',
-          nativeCurrency: 'XLM',
-          decimals: 7,
-          adapterType: 'stellar',
-          isActive: true,
-          logo: '/images/blockchains/xlm.png'
+      if (db.blockchain_list) {
+        const blockchainCount = await db.blockchain_list.count();
+        if (blockchainCount === 0) {
+          console.log('🔄 [Database] Creating default blockchains...');
+          await db.blockchain_list.bulkCreate([
+            {
+              name: 'XRP Ledger',
+              symbol: 'XRP',
+              chainId: 'xrp',
+              nodeUrl: 'wss://s1.ripple.com',
+              explorerUrl: 'https://livenet.xrpl.org/transactions/',
+              nativeCurrency: 'XRP',
+              decimals: 6,
+              adapterType: 'xrp',
+              isActive: true,
+              logo: '/images/blockchains/xrp.png'
+            },
+            {
+              name: 'Stellar',
+              symbol: 'XLM',
+              chainId: 'xlm',
+              nodeUrl: 'https://horizon.stellar.org',
+              explorerUrl: 'https://stellar.expert/explorer/public/tx/',
+              nativeCurrency: 'XLM',
+              decimals: 7,
+              adapterType: 'stellar',
+              isActive: true,
+              logo: '/images/blockchains/xlm.png'
+            }
+          ]);
+          console.log('✅ [Database] Default blockchains created');
         }
-      ]);
-      console.log('Default blockchains created');
-    }
+      }
 
-    // Check if currencies exist, create default currencies if not
-    const currencyCount = await db.currency_list.count();
-    if (currencyCount === 0) {
-      console.log('Creating default currencies...');
-      await db.currency_list.bulkCreate([
-        {
-          name: 'XRP',
-          symbol: 'XRP',
-          decimals: 6,
-          chainId: 'xrp',
-          isNative: true,
-          logo: '/images/currencies/xrp.png',
-          isActive: true
-        },
-        {
-          name: 'Stellar Lumens',
-          symbol: 'XLM',
-          decimals: 7,
-          chainId: 'xlm',
-          isNative: true,
-          logo: '/images/currencies/xlm.png',
-          isActive: true
+      // Check if currencies exist, create default currencies if not
+      if (db.currency_list) {
+        const currencyCount = await db.currency_list.count();
+        if (currencyCount === 0) {
+          console.log('🔄 [Database] Creating default currencies...');
+          await db.currency_list.bulkCreate([
+            {
+              name: 'XRP',
+              symbol: 'XRP',
+              decimals: 6,
+              chainId: 'xrp',
+              isNative: true,
+              logo: '/images/currencies/xrp.png',
+              isActive: true
+            },
+            {
+              name: 'Stellar Lumens',
+              symbol: 'XLM',
+              decimals: 7,
+              chainId: 'xlm',
+              isNative: true,
+              logo: '/images/currencies/xlm.png',
+              isActive: true
+            }
+          ]);
+          console.log('✅ [Database] Default currencies created');
         }
-      ]);
-      console.log('Default currencies created');
       }
     } catch (blockchainError) {
       console.warn('⚠️ [Database] Could not create default blockchains/currencies:', blockchainError.message);
       // Continue with initialization even if blockchain setup fails
     }
 
-    console.log('Database initialization completed successfully');
+    console.log('✅ [Database] Database initialization completed successfully');
     return true;
   } catch (error) {
-    console.error('Database initialization failed:', error);
+    console.error('❌ [Database] Database initialization failed:', error);
     return false;
   }
 }
@@ -284,4 +235,5 @@ if (require.main === module) {
     .catch(() => process.exit(1));
 }
 
-module.exports = { initializeDatabase };
+module.exports = { initializeDatabase, runMigrations };
+

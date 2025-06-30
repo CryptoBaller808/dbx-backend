@@ -10,6 +10,10 @@
     "test": "mocha tests/**/*.test.js --timeout 10000",
     "test:mfa": "mocha tests/mfa/*.test.js --timeout 10000",
     "migrate": "node scripts/migrate.js",
+    "migrate:up": "node scripts/run-migrations.js",
+    "migrate:down": "node scripts/run-migrations.js down",
+    "migrate:status": "node scripts/run-migrations.js status",
+    "db:init": "node scripts/initialize-database.js",
     "seed": "node scripts/seed.js",
     "postinstall": "npm prune --production",
     "health-check": "curl -f http://localhost:${PORT:-3000}/health || exit 1"
