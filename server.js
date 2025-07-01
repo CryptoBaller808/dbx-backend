@@ -139,9 +139,14 @@ app.get('/api/health/database', healthCheck);
 // Comprehensive Health Check Endpoint
 app.use('/health-check', createHealthCheckEndpoint());
 
-// Health Check
+// Safe root route handler
 app.get('/', (req, res) => {
-  res.send('DigitalBlockExchangeBE is running with enhanced database security!');
+  res.json({
+    success: true,
+    message: 'Welcome to the DBX Backend API 🎉',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Mount Admin Routes
