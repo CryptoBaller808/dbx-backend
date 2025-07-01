@@ -50,9 +50,81 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
-// Simple health check route for Render deployment
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+// Enhanced health check route for Render deployment
+app.get('/health', async (req, res) => {
+  try {
+    const startTime = Date.now();
+    const healthStatus = {
+      success: true,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      db: 'unknown',
+      adapters: {},
+      services: 'running'
+    };
+
+    // Check database connection
+    try {
+      const db = require('./models');
+      if (db && db.sequelize) {
+        await db.sequelize.authenticate();
+        // Test a simple query
+        await db.sequelize.query('SELECT 1+1 as result');
+        healthStatus.db = 'connected';
+      } else {
+        healthStatus.db = 'unavailable';
+      }
+    } catch (dbError) {
+      console.error('[Health] Database check failed:', dbError.message);
+      healthStatus.db = 'error';
+      healthStatus.dbError = dbError.message;
+    }
+
+    // Check blockchain adapters status
+    const adapters = ['AVAX', 'BNB', 'XRP', 'XLM', 'ETH'];
+    for (const adapter of adapters) {
+      try {
+        // Check if adapter file exists
+        require.resolve(`./services/blockchain/adapters/${adapter}Adapter.js`);
+        // For now, mark AVAX and BNB as offline (disabled), others as available
+        if (adapter === 'AVAX' || adapter === 'BNB') {
+          healthStatus.adapters[adapter] = 'offline';
+        } else {
+          healthStatus.adapters[adapter] = 'available';
+        }
+      } catch (error) {
+        healthStatus.adapters[adapter] = 'unavailable';
+      }
+    }
+
+    const responseTime = Date.now() - startTime;
+    healthStatus.responseTime = `${responseTime}ms`;
+
+    // Format uptime
+    const uptimeSeconds = Math.floor(healthStatus.uptime);
+    const uptimeMinutes = Math.floor(uptimeSeconds / 60);
+    const uptimeHours = Math.floor(uptimeMinutes / 60);
+    
+    if (uptimeHours > 0) {
+      healthStatus.uptime = `${uptimeHours}h ${uptimeMinutes % 60}m`;
+    } else if (uptimeMinutes > 0) {
+      healthStatus.uptime = `${uptimeMinutes}m`;
+    } else {
+      healthStatus.uptime = `${uptimeSeconds}s`;
+    }
+
+    // Return appropriate status code
+    const statusCode = healthStatus.db === 'connected' ? 200 : 503;
+    res.status(statusCode).json(healthStatus);
+  } catch (error) {
+    console.error('[Health] Health check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  }
 });
 
 // Enhanced Database Security Middleware
@@ -228,6 +300,16 @@ const initializeServices = async () => {
     
     // Initialize enhanced database manager
     const db = await initializeDatabase();
+    
+    // Add explicit Sequelize authentication check
+    console.log('[Server] Verifying database connection...');
+    try {
+      await db.authenticate();
+      console.log('✅ DB connection established');
+    } catch (err) {
+      console.error('❌ DB connection failed', err);
+      throw err;
+    }
     
     console.log('[Server] Initializing blockchain services...');
     

@@ -7,13 +7,61 @@ module.exports = {
     try {
       console.log('🚀 [Start] Final fix: explicit cast to enum');
 
+      // Check if users table exists
+      const tableExists = await queryInterface.sequelize.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users'
+        );
+      `, { type: queryInterface.sequelize.QueryTypes.SELECT, transaction });
+      
+      if (!tableExists[0].exists) {
+        console.log('⚠️ [Skip] Users table does not exist yet, skipping migration');
+        await transaction.commit();
+        return;
+      }
+
+      // Check if status column exists
+      const columnExists = await queryInterface.sequelize.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users' 
+          AND column_name = 'status'
+        );
+      `, { type: queryInterface.sequelize.QueryTypes.SELECT, transaction });
+      
+      if (!columnExists[0].exists) {
+        console.log('⚠️ [Skip] Status column does not exist yet, creating it as ENUM');
+        
+        // Create ENUM type if it doesn't exist
+        await queryInterface.sequelize.query(`
+          DO $$
+          BEGIN
+            CREATE TYPE public.enum_users_status AS ENUM ('active', 'pending', 'suspended', 'banned', 'deleted');
+          EXCEPTION
+            WHEN duplicate_object THEN null;
+          END$$;
+        `, { transaction });
+        
+        // Add status column as ENUM
+        await queryInterface.sequelize.query(`
+          ALTER TABLE users ADD COLUMN status public.enum_users_status DEFAULT 'active' NOT NULL;
+        `, { transaction });
+        
+        await transaction.commit();
+        console.log('✅ [Complete] Added status column as ENUM');
+        return;
+      }
+
       // Step 1: Rename original column to preserve legacy data
       console.log('🪄 [Step 1] Rename users.status → users.status_legacy...');
       await queryInterface.sequelize.query(`
         ALTER TABLE users RENAME COLUMN status TO status_legacy;
       `, { transaction });
 
-      // Step 2: Create ENUM type (if it doesn’t exist)
+      // Step 2: Create ENUM type (if it doesn't exist)
       console.log('📦 [Step 2] Create ENUM type...');
       await queryInterface.sequelize.query(`
         DO $$
@@ -73,6 +121,37 @@ module.exports = {
 
     try {
       console.log('↩️ [Rollback] Reverting ENUM migration...');
+
+      // Check if users table exists
+      const tableExists = await queryInterface.sequelize.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users'
+        );
+      `, { type: queryInterface.sequelize.QueryTypes.SELECT, transaction });
+      
+      if (!tableExists[0].exists) {
+        console.log('⚠️ [Skip] Users table does not exist, skipping rollback');
+        await transaction.commit();
+        return;
+      }
+
+      // Check if status column exists
+      const columnExists = await queryInterface.sequelize.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'users' 
+          AND column_name = 'status'
+        );
+      `, { type: queryInterface.sequelize.QueryTypes.SELECT, transaction });
+      
+      if (!columnExists[0].exists) {
+        console.log('⚠️ [Skip] Status column does not exist, nothing to roll back');
+        await transaction.commit();
+        return;
+      }
 
       await queryInterface.sequelize.query(`
         ALTER TABLE users DROP COLUMN status;

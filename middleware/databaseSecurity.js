@@ -12,13 +12,42 @@ const config = require('../data/config');
  */
 const secureConnection = async (req, res, next) => {
   try {
-    // Check if database manager is initialized
+    // Import Sequelize models for fallback
+    const db = require('../models');
+    
+    // Check if database manager is initialized, fallback to Sequelize models
     if (!databaseManager.isInitialized) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database service unavailable',
-        code: 'DB_NOT_INITIALIZED'
-      });
+      // Try to use Sequelize models as fallback
+      if (db && db.sequelize) {
+        try {
+          await db.sequelize.authenticate();
+          console.log('[DB Security] Using Sequelize models as database connection');
+          
+          // Add Sequelize connection to request
+          req.db = {
+            primary: db.sequelize,
+            readReplica: db.sequelize,
+            sequelize: db.sequelize,
+            models: db
+          };
+          
+          return next();
+        } catch (sequelizeError) {
+          console.error('[DB Security] Sequelize connection failed:', sequelizeError);
+          return res.status(503).json({
+            success: false,
+            error: 'Database service unavailable',
+            code: 'DB_NOT_INITIALIZED',
+            details: 'Both databaseManager and Sequelize unavailable'
+          });
+        }
+      } else {
+        return res.status(503).json({
+          success: false,
+          error: 'Database service unavailable',
+          code: 'DB_NOT_INITIALIZED'
+        });
+      }
     }
 
     // Check database health
