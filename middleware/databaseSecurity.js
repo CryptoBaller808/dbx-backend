@@ -12,6 +12,13 @@ const config = require('../data/config');
  */
 const secureConnection = async (req, res, next) => {
   try {
+    // Skip database checks for simple routes that don't need database access
+    const skipRoutes = ['/', '/health', '/ping'];
+    if (skipRoutes.includes(req.path)) {
+      console.log(`[DB Security] Skipping database check for route: ${req.path}`);
+      return next();
+    }
+    
     // Import Sequelize models for fallback
     const db = require('../models');
     

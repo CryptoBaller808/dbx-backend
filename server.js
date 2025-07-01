@@ -139,14 +139,25 @@ app.get('/api/health/database', healthCheck);
 // Comprehensive Health Check Endpoint
 app.use('/health-check', createHealthCheckEndpoint());
 
-// Safe root route handler
+// Safe root route handler with error handling
 app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Welcome to the DBX Backend API 🎉',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    res.json({
+      success: true,
+      message: 'Welcome to the DBX Backend API 🎉',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      status: 'running'
+    });
+  } catch (error) {
+    console.error('[Root Route] Error in root route handler:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Root route error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Mount Admin Routes
@@ -297,6 +308,24 @@ io.on('connection', (socket) => {
 
 // Make io available globally for transaction updates
 global.io = io;
+
+// Global Express error handler to catch unhandled errors
+app.use((err, req, res, next) => {
+  console.error('Global Error:', err);
+  console.error('Request URL:', req.url);
+  console.error('Request Method:', req.method);
+  console.error('Stack trace:', err.stack);
+  
+  // Don't send error details in production for security
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  res.status(500).json({ 
+    success: false, 
+    message: 'Server error', 
+    error: isDevelopment ? err.message : 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Enhanced Initialization with Database and Blockchain Services
 const initializeServices = async () => {
