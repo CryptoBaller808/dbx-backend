@@ -50,6 +50,11 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
+// Simple health check route for Render deployment
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Enhanced Database Security Middleware
 app.use(secureConnection);
 app.use(validateQuery());
@@ -60,7 +65,7 @@ app.use(monitorConnectionPool);
 app.get('/api/health/database', healthCheck);
 
 // Comprehensive Health Check Endpoint
-app.use('/health', createHealthCheckEndpoint());
+app.use('/health-check', createHealthCheckEndpoint());
 
 // Health Check
 app.get('/', (req, res) => {

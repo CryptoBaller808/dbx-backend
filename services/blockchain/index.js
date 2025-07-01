@@ -148,10 +148,11 @@ const createAdapterRegistry = async (configManager) => {
     try {
       const avaxConfig = configs.get('avalanche') || defaultConfigs.avalanche;
       if (avaxConfig && avaxConfig.isActive) {
-        const avaxAdapter = new AVAXAdapter(avaxConfig);
-        registry.registerAdapter('AVALANCHE', avaxAdapter);
-        registry.registerAdapter('avax', avaxAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ Avalanche adapter registered successfully');
+        // Disabled due to stability issues
+        // const avaxAdapter = new AVAXAdapter(avaxConfig);
+        // registry.registerAdapter('AVALANCHE', avaxAdapter);
+        // registry.registerAdapter('avax', avaxAdapter); // Alias
+        console.log('[Blockchain Registry] ⚠️ Avalanche adapter disabled for stability');
       }
     } catch (error) {
       console.error('[Blockchain Registry] ❌ Failed to register Avalanche adapter:', error.message);
@@ -174,10 +175,11 @@ const createAdapterRegistry = async (configManager) => {
     try {
       const bscConfig = configs.get('bsc') || defaultConfigs.bsc;
       if (bscConfig && bscConfig.isActive) {
-        const bnbAdapter = new BNBAdapter(bscConfig);
-        registry.registerAdapter('BSC', bnbAdapter);
-        registry.registerAdapter('bnb', bnbAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ BSC adapter registered successfully');
+        // Disabled due to stability issues
+        // const bnbAdapter = new BNBAdapter(bscConfig);
+        // registry.registerAdapter('BSC', bnbAdapter);
+        // registry.registerAdapter('bnb', bnbAdapter); // Alias
+        console.log('[Blockchain Registry] ⚠️ BSC adapter disabled for stability');
       }
     } catch (error) {
       console.error('[Blockchain Registry] ❌ Failed to register BSC adapter:', error.message);
@@ -191,13 +193,18 @@ const createAdapterRegistry = async (configManager) => {
     // Fallback: Register adapters with default configurations
     const defaultConfigs = getDefaultConfigurations();
     
-    registry.registerAdapter('XRP', new XRPAdapter(defaultConfigs.xrp));
-    registry.registerAdapter('STELLAR', new XLMAdapter(defaultConfigs.xlm));
-    registry.registerAdapter('XDC', new XDCAdapter(defaultConfigs.xdc));
-    registry.registerAdapter('SOLANA', new SolanaAdapter(defaultConfigs.solana));
-    registry.registerAdapter('AVALANCHE', new AVAXAdapter(defaultConfigs.avalanche));
-    registry.registerAdapter('POLYGON', new MATICAdapter(defaultConfigs.polygon));
-    registry.registerAdapter('BSC', new BNBAdapter(defaultConfigs.bsc));
+    // Define enabled adapters list (excluding problematic ones)
+    const enabledAdapters = ['XRP', 'STELLAR', 'XDC', 'SOLANA', 'POLYGON'];
+    
+    if (enabledAdapters.includes('XRP')) registry.registerAdapter('XRP', new XRPAdapter(defaultConfigs.xrp));
+    if (enabledAdapters.includes('STELLAR')) registry.registerAdapter('STELLAR', new XLMAdapter(defaultConfigs.xlm));
+    if (enabledAdapters.includes('XDC')) registry.registerAdapter('XDC', new XDCAdapter(defaultConfigs.xdc));
+    if (enabledAdapters.includes('SOLANA')) registry.registerAdapter('SOLANA', new SolanaAdapter(defaultConfigs.solana));
+    // AVAX adapter disabled for stability
+    // if (enabledAdapters.includes('AVALANCHE')) registry.registerAdapter('AVALANCHE', new AVAXAdapter(defaultConfigs.avalanche));
+    if (enabledAdapters.includes('POLYGON')) registry.registerAdapter('POLYGON', new MATICAdapter(defaultConfigs.polygon));
+    // BNB adapter disabled for stability
+    // if (enabledAdapters.includes('BSC')) registry.registerAdapter('BSC', new BNBAdapter(defaultConfigs.bsc));
     
     console.log('[Blockchain Registry] Registered adapters with default configurations');
   }
