@@ -209,15 +209,31 @@ const healthCheck = {
   
   // Check connection pool status
   checkPool: (sequelize) => {
-    const pool = sequelize.connectionManager.pool;
-    return {
-      total: pool.size,
-      active: pool.borrowed,
-      idle: pool.available,
-      pending: pool.pending,
-      max: pool.max,
-      min: pool.min
-    };
+    if (!sequelize || !sequelize.connectionManager) {
+      console.warn('[Database Monitor] Sequelize instance not initialized.');
+      return { healthy: false, error: 'DB not initialized' };
+    }
+    
+    try {
+      const pool = sequelize.connectionManager.pool;
+      if (!pool) {
+        console.warn('[Database Monitor] Connection pool not available.');
+        return { healthy: false, error: 'Pool not available' };
+      }
+      
+      return {
+        total: pool.size || 0,
+        active: pool.borrowed || 0,
+        idle: pool.available || 0,
+        pending: pool.pending || 0,
+        max: pool.max || 0,
+        min: pool.min || 0,
+        healthy: true
+      };
+    } catch (error) {
+      console.error('[Database Monitor] Error checking pool status:', error);
+      return { healthy: false, error: error.message };
+    }
   }
 };
 

@@ -248,15 +248,44 @@ class DatabaseManager {
    * Get connection pool status
    */
   getPoolStatus() {
-    const primaryPool = config.healthCheck.checkPool(this.primaryConnection);
-    const replicaPool = this.readReplicaConnection !== this.primaryConnection ? 
-      config.healthCheck.checkPool(this.readReplicaConnection) : null;
+    try {
+      // Check if database manager is initialized
+      if (!this.isInitialized) {
+        console.warn('[DB Manager] Database manager not initialized');
+        return {
+          primary: { healthy: false, error: 'DB manager not initialized' },
+          readReplica: null,
+          timestamp: new Date().toISOString()
+        };
+      }
 
-    return {
-      primary: primaryPool,
-      readReplica: replicaPool,
-      timestamp: new Date().toISOString()
-    };
+      // Check if primary connection exists
+      if (!this.primaryConnection) {
+        console.warn('[DB Manager] Primary connection not available');
+        return {
+          primary: { healthy: false, error: 'Primary connection not available' },
+          readReplica: null,
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      const primaryPool = config.healthCheck.checkPool(this.primaryConnection);
+      const replicaPool = this.readReplicaConnection !== this.primaryConnection ? 
+        config.healthCheck.checkPool(this.readReplicaConnection) : null;
+
+      return {
+        primary: primaryPool,
+        readReplica: replicaPool,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('[DB Manager] Error getting pool status:', error);
+      return {
+        primary: { healthy: false, error: error.message },
+        readReplica: null,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 
   /**

@@ -131,7 +131,7 @@ app.get('/health', async (req, res) => {
 app.use(secureConnection);
 app.use(validateQuery());
 app.use(monitorPerformance);
-app.use(monitorConnectionPool);
+// Note: monitorConnectionPool will be added after database initialization
 
 // Database Health Check Endpoint
 app.get('/api/health/database', healthCheck);
@@ -139,16 +139,33 @@ app.get('/api/health/database', healthCheck);
 // Comprehensive Health Check Endpoint
 app.use('/health-check', createHealthCheckEndpoint());
 
-// Safe root route handler with error handling
+// Safe root route handler with error handling and database readiness checks
 app.get('/', (req, res) => {
   try {
-    res.json({
+    const response = {
       success: true,
       message: 'Welcome to the DBX Backend API 🎉',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
       status: 'running'
-    });
+    };
+
+    // Safely check database status if available
+    try {
+      const db = require('./models');
+      if (db && db.sequelize && db.sequelize.connectionManager) {
+        // Only add database status if connection manager is available
+        response.database = 'connected';
+      } else {
+        response.database = 'initializing';
+      }
+    } catch (dbError) {
+      // Don't fail the route if database check fails
+      console.warn('[Root Route] Database status check failed:', dbError.message);
+      response.database = 'unknown';
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('[Root Route] Error in root route handler:', error);
     res.status(500).json({
@@ -340,6 +357,11 @@ const initializeServices = async () => {
     try {
       await db.authenticate();
       console.log('✅ DB connection established');
+      
+      // Now that database is connected, add connection pool monitoring middleware
+      console.log('[Server] Adding connection pool monitoring middleware...');
+      app.use(monitorConnectionPool);
+      console.log('✅ Connection pool monitoring enabled');
     } catch (err) {
       console.error('❌ DB connection failed', err);
       throw err;
