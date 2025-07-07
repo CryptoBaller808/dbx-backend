@@ -568,6 +568,62 @@ router.get('/user/dashboardSummary', authMiddleware.authenticateToken, userContr
 // Route Definition
 router.get('/user/getNFTSalesLists', authMiddleware.authenticateToken, userController.getNFTSalesLists);
 
+// TEMPORARY: Create Default Admin
+router.post('/user/createDefaultAdmin', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    const { User, Role } = require('../models'); // Import models
+
+    // Check if admin already exists
+    const existing = await User.findOne({ where: { email: 'admin@dbx.com' } });
+    if (existing) {
+      return res.json({ success: false, message: 'Admin already exists' });
+    }
+
+    // Find or create admin role
+    let adminRole = await Role.findOne({ where: { name: 'admin' } });
+    if (!adminRole) {
+      adminRole = await Role.create({
+        name: 'admin',
+        description: 'Administrator role with full access',
+        permissions: { all: true }
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash('dbxsupersecure', 10);
+    
+    // Create admin user
+    const newAdmin = await User.create({
+      username: 'admin',
+      email: 'admin@dbx.com',
+      password: hashedPassword,
+      first_name: 'Admin',
+      last_name: 'User',
+      role_id: adminRole.id,
+      status: 'active',
+      email_verified: true
+    });
+
+    return res.json({ 
+      success: true, 
+      message: 'Default admin created successfully',
+      admin: {
+        id: newAdmin.id,
+        email: newAdmin.email,
+        username: newAdmin.username
+      }
+    });
+  } catch (err) {
+    console.error('Error creating admin:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error creating admin',
+      error: err.message 
+    });
+  }
+});
+
 // Add a dummy handler for any undefined routes to prevent the "Route.get() requires a callback function" error
 const dummyHandler = (req, res) => {
   res.status(404).json({ error: "Route not implemented" });
