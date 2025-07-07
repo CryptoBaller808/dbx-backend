@@ -568,6 +568,29 @@ router.get('/user/dashboardSummary', authMiddleware.authenticateToken, userContr
 // Route Definition
 router.get('/user/getNFTSalesLists', authMiddleware.authenticateToken, userController.getNFTSalesLists);
 
+// TEMPORARY: Test endpoint
+router.get('/user/test', async (req, res) => {
+  try {
+    const db = require('../models');
+    
+    // Test database connection
+    await db.sequelize.authenticate();
+    
+    return res.json({ 
+      success: true, 
+      message: 'Database connection successful',
+      models: Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase')
+    });
+  } catch (err) {
+    console.error('Test error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Test failed',
+      error: err.message 
+    });
+  }
+});
+
 // TEMPORARY: Create Default Admin
 router.post('/user/createDefaultAdmin', async (req, res) => {
   try {
