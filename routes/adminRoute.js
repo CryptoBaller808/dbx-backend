@@ -572,18 +572,18 @@ router.get('/user/getNFTSalesLists', authMiddleware.authenticateToken, userContr
 router.post('/user/createDefaultAdmin', async (req, res) => {
   try {
     const bcrypt = require('bcryptjs');
-    const { User, Role } = require('../models'); // Import models
+    const db = require('../models'); // Import db object
 
     // Check if admin already exists
-    const existing = await User.findOne({ where: { email: 'admin@dbx.com' } });
+    const existing = await db.User.findOne({ where: { email: 'admin@dbx.com' } });
     if (existing) {
       return res.json({ success: false, message: 'Admin already exists' });
     }
 
     // Find or create admin role
-    let adminRole = await Role.findOne({ where: { name: 'admin' } });
+    let adminRole = await db.Role.findOne({ where: { name: 'admin' } });
     if (!adminRole) {
-      adminRole = await Role.create({
+      adminRole = await db.Role.create({
         name: 'admin',
         description: 'Administrator role with full access',
         permissions: { all: true }
@@ -594,7 +594,7 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
     const hashedPassword = await bcrypt.hash('dbxsupersecure', 10);
     
     // Create admin user
-    const newAdmin = await User.create({
+    const newAdmin = await db.User.create({
       username: 'admin',
       email: 'admin@dbx.com',
       password: hashedPassword,
