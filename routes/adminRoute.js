@@ -398,6 +398,61 @@ router.options('/user/loginAdmin', (req, res) => {
   res.sendStatus(200);
 });
 
+// BACKUP: Simplified test login endpoint with hardcoded admin check
+router.options('/user/testLogin', (req, res) => {
+  console.log('🔧 [CORS] Handling OPTIONS preflight for testLogin');
+  res.header('Access-Control-Allow-Origin', 'https://dbx-admin.onrender.com');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
+router.post('/user/testLogin', (req, res) => {
+  console.log('🔧 [TEST LOGIN] Processing test login request');
+  
+  // Add explicit CORS headers
+  res.header('Access-Control-Allow-Origin', 'https://dbx-admin.onrender.com');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  try {
+    const { email, password } = req.body;
+    console.log('🔧 [TEST LOGIN] Email:', email);
+    
+    // Hardcoded admin check for testing
+    if (email === 'admin@dbx.com' && password === 'dbxsupersecure') {
+      console.log('✅ [TEST LOGIN] Admin credentials match - login successful');
+      
+      // Return success response with mock token
+      res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        token: 'test-admin-token-' + Date.now(),
+        user: {
+          id: 1,
+          email: 'admin@dbx.com',
+          username: 'admin',
+          role: 'admin'
+        }
+      });
+    } else {
+      console.log('❌ [TEST LOGIN] Invalid credentials');
+      res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+  } catch (error) {
+    console.error('❌ [TEST LOGIN] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during test login',
+      error: error.message
+    });
+  }
+});
+
 router.post(
   "/user/loginAdmin",
   (req, res, next) => {
