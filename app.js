@@ -215,6 +215,29 @@ app.get("/db-diagnostics", async (req, res) => {
   }
 });
 
+// Ultra-simple database test endpoint
+app.get("/db-test-simple", async (req, res) => {
+  try {
+    const report = {
+      success: true,
+      timestamp: new Date().toISOString(),
+      environment: {
+        database_url_exists: !!process.env.DATABASE_URL,
+        database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'not found'
+      },
+      message: 'Simple database test endpoint working'
+    };
+    
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Working database diagnostics endpoint
 app.get("/db-diagnostics-working", async (req, res) => {
   console.log('🔍 Database Diagnostics requested...');
