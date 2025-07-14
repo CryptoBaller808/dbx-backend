@@ -388,9 +388,26 @@ router.post('/user/addWallet',  userController.addWalletDetails);
 // Route for handling the login request
 // router.post('/login', loginUser);
 
+// CORS FIX: Add explicit CORS handling for admin login
+router.options('/user/loginAdmin', (req, res) => {
+  console.log('🔧 [CORS] Handling OPTIONS preflight for loginAdmin');
+  res.header('Access-Control-Allow-Origin', 'https://dbx-admin.onrender.com');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 router.post(
   "/user/loginAdmin",
+  (req, res, next) => {
+    // Add explicit CORS headers for the login endpoint
+    console.log('🔧 [CORS] Adding CORS headers for loginAdmin POST');
+    res.header('Access-Control-Allow-Origin', 'https://dbx-admin.onrender.com');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    next();
+  },
   userController.loginAdmin
 );
 
