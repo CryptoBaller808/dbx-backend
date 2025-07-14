@@ -44,9 +44,9 @@ const io = socketIo(server, {
 });
 const PORT = process.env.PORT || 3000;
 
-// CORS and Middleware - WILDCARD TEST
+// CORS and Middleware - SECURE PRODUCTION CONFIG
 app.use(cors({
-  origin: "*",  // TEMPORARY WILDCARD FOR TESTING
+  origin: "https://dbx-admin.onrender.com",  // SECURE: Specific admin domain only
   credentials: true
 }));
 app.use(bodyParser.json());
