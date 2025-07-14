@@ -30,6 +30,7 @@ const simpleDiagnosticsRouter = require("./routes/simpleDiagnostics.js");
 const safeSchemaRouter = require("./routes/safeSchemaCheck.js");
 const simpleDatabaseTestRouter = require("./routes/simpleDatabaseTest.js");
 const healthRouter = require("./routes/healthWithDiagnostics.js");
+const schemaDiagnosticsRouter = require("./routes/schemaDiagnosticsEndpoint.js");
 
 //merge code
 // import path from "path";
@@ -167,6 +168,9 @@ app.get("/cors-test", (req, res) => {
 
 // Health endpoint with database schema diagnostics
 app.use("/health", healthRouter);
+
+// Schema diagnostics endpoint
+app.use("/schema-diagnostics", schemaDiagnosticsRouter);
 
 // Register version router early to avoid conflicts
 app.use("/version", versionRouter);
