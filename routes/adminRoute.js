@@ -753,4 +753,27 @@ const dummyHandler = (req, res) => {
 };
 
 // Export the router
+// MANUAL: Create Admin User Directly
+router.post('/user/createAdminManual', async (req, res) => {
+  try {
+    console.log('🔄 [Manual] Starting manual admin creation...');
+    
+    const createAdminUserManually = require('../scripts/createAdminManually');
+    const result = await createAdminUserManually();
+    
+    console.log('✅ [Manual] Manual admin creation completed:', result);
+    return res.json(result);
+  } catch (err) {
+    console.error('❌ [Manual] Manual admin creation failed:', err);
+    console.error('🔧 [Manual] Error message:', err.message);
+    console.error('📋 [Manual] Stack trace:', err.stack);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Manual admin creation failed',
+      error: err.message,
+      stack: err.stack
+    });
+  }
+});
+
 module.exports = router;
