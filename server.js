@@ -46,7 +46,12 @@ const PORT = process.env.PORT || 3000;
 
 // CORS and Middleware
 app.use(cors({
-  origin: ['https://digitalblockexchange-fe.vercel.app', 'https://digitalblockexchange-admin.vercel.app'],
+  origin: [
+    'https://digitalblockexchange-fe.vercel.app', 
+    'https://digitalblockexchange-admin.vercel.app',
+    'https://dbx-frontend.onrender.com',
+    'https://dbx-admin.onrender.com'  // ADD CURRENT ADMIN DOMAIN
+  ],
   credentials: true
 }));
 app.use(bodyParser.json());
