@@ -118,10 +118,10 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // FIXED: Use safest sync strategy - no destructive changes
+    // FIXED: Use alter: false to prevent conflicting ALTER queries
     if (env === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('✅ [Database] Database models synchronized (development)');
+      await sequelize.sync({ alter: false });
+      console.log('✅ [Database] Database models synchronized (development - no alter)');
     } else if (env === 'production') {
       // PRODUCTION: Use safest possible sync - no alter, no force
       // This will only create tables if they don't exist, no modifications to existing tables
