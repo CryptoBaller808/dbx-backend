@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// Simple test endpoint
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Health router is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health endpoint with database schema diagnostics
 router.get('/', async (req, res) => {
   const healthResponse = {
