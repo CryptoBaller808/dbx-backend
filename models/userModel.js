@@ -63,13 +63,13 @@ module.exports = (sequelize, DataTypes) => {
       role_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 2, // fallback default role
+        defaultValue: 2,
         references: {
           model: 'roles',
           key: 'id'
         },
         onUpdate: 'CASCADE',
-        onDelete: 'NO ACTION',
+        onDelete: 'NO ACTION'
       },
       status: {
         type: DataTypes.STRING,
