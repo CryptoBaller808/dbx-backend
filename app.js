@@ -190,6 +190,9 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Register version router early to avoid conflicts
+app.use("/version", versionRouter);
+
 // Simple test endpoint
 app.get("/simple-test", (req, res) => {
   res.json({
@@ -437,7 +440,6 @@ app.use("/admindashboard", (req, res, next) => {
 app.use("/admindashboard", adminRouter);
 app.use("/mail", mailingRouter);
 app.use("/temp-admin", tempAdminRouter);
-app.use("/version", versionRouter);
 app.use("/simple-admin", simpleAdminRouter);
 app.use("/debug-admin", debugAdminRouter);
 app.use("/simple-diagnostics", simpleDiagnosticsRouter);
