@@ -1,130 +1,149 @@
-const { Client } = require('pg');
-const bcrypt = require('bcryptjs');
+/**
+ * Manual Admin User Creation Script
+ * Creates admin user directly in the database
+ */
+
+const bcrypt = require('bcrypt');
 
 async function createAdminUserManually() {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
-  });
-
   try {
-    console.log('🔄 [Manual Setup] Connecting to PostgreSQL database...');
-    await client.connect();
-    console.log('✅ [Manual Setup] Connected to database successfully');
-
-    // Create roles table if it doesn't exist
-    console.log('🔄 [Manual Setup] Creating roles table...');
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS roles (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) UNIQUE NOT NULL,
-        description TEXT,
-        permissions JSONB DEFAULT '{}',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ [Manual Setup] Roles table created/verified');
-
-    // Create users table if it doesn't exist
-    console.log('🔄 [Manual Setup] Creating users table...');
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) UNIQUE,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        first_name VARCHAR(255),
-        last_name VARCHAR(255),
-        role_id INTEGER REFERENCES roles(id),
-        status VARCHAR(50) DEFAULT 'active',
-        email_verified BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ [Manual Setup] Users table created/verified');
-
-    // Check if admin role exists
-    console.log('🔄 [Manual Setup] Checking for admin role...');
-    const roleResult = await client.query('SELECT id FROM roles WHERE name = $1', ['admin']);
+    console.log('🔄 [Manual Admin] Starting manual admin creation process...');
     
-    let adminRoleId;
-    if (roleResult.rows.length === 0) {
-      console.log('🔄 [Manual Setup] Creating admin role...');
-      const roleInsert = await client.query(`
-        INSERT INTO roles (name, description, permissions) 
-        VALUES ($1, $2, $3) 
-        RETURNING id
-      `, ['admin', 'Administrator role with full access', JSON.stringify({ all: true })]);
-      adminRoleId = roleInsert.rows[0].id;
-      console.log('✅ [Manual Setup] Admin role created with ID:', adminRoleId);
-    } else {
-      adminRoleId = roleResult.rows[0].id;
-      console.log('✅ [Manual Setup] Admin role found with ID:', adminRoleId);
+    // Import database models
+    const db = require('../models');
+    
+    console.log('🔄 [Manual Admin] Testing database connection...');
+    
+    // Test database connection
+    await db.sequelize.authenticate();
+    console.log('✅ [Manual Admin] Database connection successful');
+    
+    console.log('🔄 [Manual Admin] Syncing database tables...');
+    
+    // Sync database to ensure tables exist
+    await db.sequelize.sync({ alter: true });
+    console.log('✅ [Manual Admin] Database sync completed');
+    
+    console.log('🔄 [Manual Admin] Checking available models...');
+    const availableModels = Object.keys(db).filter(key => 
+      key !== 'Sequelize' && 
+      key !== 'sequelize' && 
+      key !== 'initializeDatabase'
+    );
+    console.log('📋 [Manual Admin] Available models:', availableModels);
+    
+    // Check if User and Role models exist
+    if (!db.User && !db.users) {
+      throw new Error('User model not found in database models');
     }
-
-    // Check if admin user exists
-    console.log('🔄 [Manual Setup] Checking for admin user...');
-    const userResult = await client.query('SELECT id FROM users WHERE email = $1', ['admin@dbx.com']);
     
-    if (userResult.rows.length === 0) {
-      console.log('🔄 [Manual Setup] Creating admin user...');
-      
-      // Hash the password
-      const hashedPassword = await bcrypt.hash('dbxsupersecure', 10);
-      console.log('✅ [Manual Setup] Password hashed successfully');
-      
-      // Insert admin user
-      const userInsert = await client.query(`
-        INSERT INTO users (username, email, password, first_name, last_name, role_id, status, email_verified)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, email, username
-      `, ['admin', 'admin@dbx.com', hashedPassword, 'Admin', 'User', adminRoleId, 'active', true]);
-      
-      const newAdmin = userInsert.rows[0];
-      console.log('✅ [Manual Setup] Admin user created successfully:');
-      console.log('   ID:', newAdmin.id);
-      console.log('   Email:', newAdmin.email);
-      console.log('   Username:', newAdmin.username);
-      
+    if (!db.Role && !db.roles) {
+      throw new Error('Role model not found in database models');
+    }
+    
+    // Use the correct model references
+    const UserModel = db.User || db.users;
+    const RoleModel = db.Role || db.roles;
+    
+    console.log('✅ [Manual Admin] User and Role models found');
+    
+    console.log('🔄 [Manual Admin] Checking if admin user already exists...');
+    
+    // Check if admin user already exists
+    const existingAdmin = await UserModel.findOne({
+      where: { email: 'admin@dbx.com' }
+    });
+    
+    if (existingAdmin) {
+      console.log('⚠️  [Manual Admin] Admin user already exists');
       return {
         success: true,
-        message: 'Admin user created successfully',
-        admin: newAdmin
-      };
-    } else {
-      console.log('⚠️  [Manual Setup] Admin user already exists with ID:', userResult.rows[0].id);
-      return {
-        success: false,
         message: 'Admin user already exists',
-        admin_id: userResult.rows[0].id
+        admin_exists: true,
+        admin_id: existingAdmin.id,
+        admin_email: existingAdmin.email
       };
     }
-
+    
+    console.log('🔄 [Manual Admin] Creating admin role...');
+    
+    // Find or create admin role
+    let adminRole = await RoleModel.findOne({
+      where: { name: 'admin' }
+    });
+    
+    if (!adminRole) {
+      adminRole = await RoleModel.create({
+        name: 'admin',
+        description: 'Administrator role with full access',
+        permissions: { all: true }
+      });
+      console.log('✅ [Manual Admin] Admin role created');
+    } else {
+      console.log('✅ [Manual Admin] Admin role already exists');
+    }
+    
+    console.log('🔄 [Manual Admin] Hashing password...');
+    
+    // Hash the password using bcrypt
+    const hashedPassword = await bcrypt.hash('dbxsupersecure', 10);
+    console.log('✅ [Manual Admin] Password hashed successfully');
+    
+    console.log('🔄 [Manual Admin] Creating admin user...');
+    
+    // Create admin user
+    const adminUser = await UserModel.create({
+      username: 'admin',
+      email: 'admin@dbx.com',
+      password: hashedPassword,
+      first_name: 'Admin',
+      last_name: 'User',
+      role_id: adminRole.id,
+      status: 'active',
+      email_verified: true
+    });
+    
+    console.log('✅ [Manual Admin] Admin user created successfully');
+    
+    return {
+      success: true,
+      message: 'Admin user created successfully',
+      admin_creation: {
+        success: true,
+        user_created: true,
+        admin_id: adminUser.id,
+        admin_email: adminUser.email,
+        admin_username: adminUser.username,
+        role_id: adminUser.role_id,
+        role_name: adminRole.name
+      }
+    };
+    
   } catch (error) {
-    console.error('❌ [Manual Setup] Error:', error);
-    throw error;
-  } finally {
-    await client.end();
-    console.log('🔄 [Manual Setup] Database connection closed');
+    console.error('❌ [Manual Admin] Error creating admin user:', error);
+    console.error('🔧 [Manual Admin] Error message:', error.message);
+    console.error('📋 [Manual Admin] Stack trace:', error.stack);
+    
+    return {
+      success: false,
+      message: 'Failed to create admin user',
+      error: error.message,
+      stack: error.stack
+    };
   }
 }
 
-// Export for use in routes or run directly
 module.exports = createAdminUserManually;
 
-// If run directly
+// If this script is run directly
 if (require.main === module) {
   createAdminUserManually()
     .then(result => {
-      console.log('🎉 [Manual Setup] Result:', result);
-      process.exit(0);
+      console.log('🎯 [Manual Admin] Final result:', JSON.stringify(result, null, 2));
+      process.exit(result.success ? 0 : 1);
     })
     .catch(error => {
-      console.error('💥 [Manual Setup] Failed:', error);
+      console.error('💥 [Manual Admin] Unhandled error:', error);
       process.exit(1);
     });
 }

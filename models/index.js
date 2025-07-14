@@ -343,11 +343,63 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // Sync models to create missing tables
-    // TEMPORARY: Enable sync in production to create missing NFT tables
-    if (env === 'development' || env === 'production') {
+    // FIXED: Use safer sync strategy to handle existing data
+    if (env === 'development') {
       await sequelize.sync({ alter: true });
-      console.log('✅ [Database] Database models synchronized');
+      console.log('✅ [Database] Database models synchronized (development)');
+    } else if (env === 'production') {
+      // PRODUCTION: Use force: false to avoid destructive changes
+      // This will create tables if they don't exist but won't alter existing ones
+      await sequelize.sync({ force: false });
+      console.log('✅ [Database] Database models synchronized (production - safe mode)');
+      
+      // Handle timestamp columns manually for existing tables
+      try {
+        console.log('🔄 [Database] Checking and updating timestamp columns...');
+        
+        // Add createdAt and updatedAt columns with default values if they don't exist
+        await sequelize.query(`
+          DO $$
+          BEGIN
+            -- Add createdAt column if it doesn't exist
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'users' AND column_name = 'createdAt') THEN
+              ALTER TABLE users ADD COLUMN "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+              UPDATE users SET "createdAt" = NOW() WHERE "createdAt" IS NULL;
+              ALTER TABLE users ALTER COLUMN "createdAt" SET NOT NULL;
+            END IF;
+            
+            -- Add updatedAt column if it doesn't exist
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'users' AND column_name = 'updatedAt') THEN
+              ALTER TABLE users ADD COLUMN "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+              UPDATE users SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL;
+              ALTER TABLE users ALTER COLUMN "updatedAt" SET NOT NULL;
+            END IF;
+            
+            -- Add timestamp columns to roles table if needed
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'roles' AND column_name = 'createdAt') THEN
+              ALTER TABLE roles ADD COLUMN "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+              UPDATE roles SET "createdAt" = NOW() WHERE "createdAt" IS NULL;
+              ALTER TABLE roles ALTER COLUMN "createdAt" SET NOT NULL;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'roles' AND column_name = 'updatedAt') THEN
+              ALTER TABLE roles ADD COLUMN "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+              UPDATE roles SET "updatedAt" = NOW() WHERE "updatedAt" IS NULL;
+              ALTER TABLE roles ALTER COLUMN "updatedAt" SET NOT NULL;
+            END IF;
+          END
+          $$;
+        `);
+        
+        console.log('✅ [Database] Timestamp columns updated successfully');
+      } catch (timestampError) {
+        console.warn('⚠️  [Database] Warning: Could not update timestamp columns:', timestampError.message);
+        // Continue anyway - this is not critical for basic functionality
+      }
     }
     
     console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
