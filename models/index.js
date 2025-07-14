@@ -61,7 +61,36 @@ const basename = path.basename(__filename);
 // Define models manually to avoid file system issues
 const models = [
   'userModel.js',
-  'roleModel.js'
+  'roleModel.js',
+  'NFT.js',
+  'NFTAuction.js',
+  'NFTBid.js',
+  'NFTBridgeTransaction.js',
+  'NFTCollection.js',
+  'NFTRoyalty.js',
+  'NFTTransaction.js',
+  'AuditLog.js',
+  'CreatorVerification.js',
+  'CurrencyList.js',
+  'SystemAlert.js',
+  'SystemHealthLog.js',
+  'UserMFA.js',
+  'accountOffers.js',
+  'bannerModel.js',
+  'blockchainModel.js',
+  'calcolModel.js',
+  'categoriesModel.js',
+  'collectionItemModel.js',
+  'collectionsModel.js',
+  'currenciesModel.js',
+  'itemActivityModel.js',
+  'itemBidsModel.js',
+  'itemModel.js',
+  'itemPropertiesModel.js',
+  'itemSaleInfoModel.js',
+  'settingsModel.js',
+  'transactionsModel.js',
+  'wishlistModel.js'
 ];
 
 models.forEach(file => {
