@@ -190,61 +190,32 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Simple test endpoint
+app.get("/simple-test", (req, res) => {
+  res.json({
+    success: true,
+    message: "Simple test endpoint working",
+    timestamp: new Date().toISOString(),
+    database_url_exists: !!process.env.DATABASE_URL
+  });
+});
+
 // Database diagnostics endpoint
 app.get("/db-diagnostics", async (req, res) => {
-  console.log('🔍 Database Diagnostics requested via main app...');
-  
-  const report = {
-    success: false,
-    timestamp: new Date().toISOString(),
-    environment: {
-      database_url_exists: !!process.env.DATABASE_URL,
-      database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'not found'
-    },
-    connection: {},
-    tables: {},
-    errors: []
-  };
-  
+  const { testDatabase } = require('./simple-db-test');
   try {
-    // Try to load Sequelize and connect
-    const { Sequelize } = require('sequelize');
-    
-    const sequelize = new Sequelize(process.env.DATABASE_URL, {
-      dialect: 'postgres',
-      logging: false,
-      dialectOptions: {
-        ssl: {
-          require: true,
-          rejectUnauthorized: false
-        }
-      }
+    const report = await testDatabase();
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
-    
-    // Test connection
-    await sequelize.authenticate();
-    report.connection.status = 'successful';
-    report.connection.dialect = 'postgres';
-    
-    const queryInterface = sequelize.getQueryInterface();
-    
-    // Check users table using raw SQL
-    try {
-      // Check if users table exists
-      const [tableCheck] = await sequelize.query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name = 'users'
-      `);
-      
-      if (tableCheck.length > 0) {
-        report.tables.users = { exists: true };
-        
-        // Get column information
-        const [columnInfo] = await sequelize.query(`
-          SELECT column_name, data_type, is_nullable, column_default
-          FROM information_schema.columns 
-          WHERE table_schema = 'public' AND table_name = 'users'
+  }
+});
+
+app.use("/api/v1", routes);
           ORDER BY ordinal_position
         `);
         
