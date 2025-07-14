@@ -100,7 +100,7 @@ app.get('/health', async (req, res) => {
           password: { type: DataTypes.STRING(255), allowNull: false },
           first_name: { type: DataTypes.STRING(255) },
           last_name: { type: DataTypes.STRING(255) },
-          role_id: { type: DataTypes.INTEGER, references: { model: Role, key: 'id' } },
+          role_id: { type: DataTypes.INTEGER },
           status: { type: DataTypes.STRING(50), defaultValue: 'active' },
           email_verified: { type: DataTypes.BOOLEAN, defaultValue: false }
         }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
@@ -108,7 +108,7 @@ app.get('/health', async (req, res) => {
         User.belongsTo(Role, { foreignKey: 'role_id' });
         Role.hasMany(User, { foreignKey: 'role_id' });
         
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({ alter: false });
         console.log('✅ [Emergency] Tables synced');
         
         const [adminRole] = await Role.findOrCreate({
@@ -449,7 +449,7 @@ const initializeServices = async () => {
       
       // Sync database tables - create if they don't exist
       console.log('[Server] Synchronizing database tables...');
-      await db.sync({ alter: true });
+      await db.sync({ alter: false });
       console.log('✅ Database tables synchronized successfully');
       
       // Now that database is connected, add connection pool monitoring middleware
