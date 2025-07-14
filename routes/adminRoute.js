@@ -591,6 +591,42 @@ router.get('/user/test', async (req, res) => {
   }
 });
 
+// TEMPORARY: Simple Database Connection Test
+router.get('/user/testConnection', async (req, res) => {
+  try {
+    const { Sequelize } = require('sequelize');
+    
+    // Test basic connection without models
+    const sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: false
+    });
+    
+    await sequelize.authenticate();
+    
+    return res.json({ 
+      success: true, 
+      message: 'Direct database connection successful',
+      database_url_exists: !!process.env.DATABASE_URL,
+      database_url_length: process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0
+    });
+  } catch (err) {
+    console.error('Direct connection test error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Direct connection test failed',
+      error: err.message,
+      database_url_exists: !!process.env.DATABASE_URL
+    });
+  }
+});
+
 // TEMPORARY: Database Sync - Create Tables
 router.post('/user/syncDatabase', async (req, res) => {
   try {
