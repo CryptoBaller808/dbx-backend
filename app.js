@@ -27,6 +27,7 @@ const versionRouter = require("./routes/versionCheck.js");
 const simpleAdminRouter = require("./routes/simpleAdminCreation.js");
 const debugAdminRouter = require("./routes/debugAdmin.js");
 const simpleDiagnosticsRouter = require("./routes/simpleDiagnostics.js");
+const safeSchemaRouter = require("./routes/safeSchemaCheck.js");
 
 //merge code
 // import path from "path";
@@ -236,6 +237,7 @@ app.use("/version", versionRouter);
 app.use("/simple-admin", simpleAdminRouter);
 app.use("/debug-admin", debugAdminRouter);
 app.use("/simple-diagnostics", simpleDiagnosticsRouter);
+app.use("/safe-schema", safeSchemaRouter);
 
 // const server = https.createServer(app).listen(PORT, function() {
 //     console.log('Https App started');
