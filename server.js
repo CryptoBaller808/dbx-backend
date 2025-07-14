@@ -64,6 +64,91 @@ app.get('/health', async (req, res) => {
       services: 'running'
     };
 
+    // EMERGENCY: Admin creation via health route
+    if (req.query.createAdmin === 'emergency') {
+      try {
+        console.log('🚨 [Emergency] Creating admin via health route...');
+        const { Sequelize, DataTypes } = require('sequelize');
+        
+        // Create direct Sequelize connection
+        const sequelize = new Sequelize(process.env.DATABASE_URL, {
+          dialect: 'postgres',
+          dialectOptions: {
+            ssl: {
+              require: true,
+              rejectUnauthorized: false
+            }
+          },
+          logging: false
+        });
+        
+        await sequelize.authenticate();
+        console.log('✅ [Emergency] Database connected');
+        
+        // Define models
+        const Role = sequelize.define('Role', {
+          id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+          name: { type: DataTypes.STRING(255), unique: true, allowNull: false },
+          description: { type: DataTypes.TEXT },
+          permissions: { type: DataTypes.JSONB, defaultValue: {} }
+        }, { tableName: 'roles', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+        
+        const User = sequelize.define('User', {
+          id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+          username: { type: DataTypes.STRING(255), unique: true },
+          email: { type: DataTypes.STRING(255), unique: true, allowNull: false },
+          password: { type: DataTypes.STRING(255), allowNull: false },
+          first_name: { type: DataTypes.STRING(255) },
+          last_name: { type: DataTypes.STRING(255) },
+          role_id: { type: DataTypes.INTEGER, references: { model: Role, key: 'id' } },
+          status: { type: DataTypes.STRING(50), defaultValue: 'active' },
+          email_verified: { type: DataTypes.BOOLEAN, defaultValue: false }
+        }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+        
+        User.belongsTo(Role, { foreignKey: 'role_id' });
+        Role.hasMany(User, { foreignKey: 'role_id' });
+        
+        await sequelize.sync({ alter: true });
+        console.log('✅ [Emergency] Tables synced');
+        
+        const [adminRole] = await Role.findOrCreate({
+          where: { name: 'admin' },
+          defaults: { name: 'admin', description: 'Administrator role with full access', permissions: { all: true } }
+        });
+        
+        const [adminUser, userCreated] = await User.findOrCreate({
+          where: { email: 'admin@dbx.com' },
+          defaults: {
+            username: 'admin',
+            email: 'admin@dbx.com',
+            password: '$2a$10$rOvHjHcw/c1q.Aq8Q2FdUeJ8H7ScqXxqWxG7tJ9kGqE8mNvZxQK4G',
+            first_name: 'Admin',
+            last_name: 'User',
+            role_id: adminRole.id,
+            status: 'active',
+            email_verified: true
+          }
+        });
+        
+        await sequelize.close();
+        
+        healthStatus.admin_creation = {
+          success: true,
+          user_created: userCreated,
+          admin_id: adminUser.id,
+          message: userCreated ? 'Admin user created successfully' : 'Admin user already exists'
+        };
+        
+        console.log('✅ [Emergency] Admin creation completed:', healthStatus.admin_creation);
+      } catch (adminError) {
+        console.error('❌ [Emergency] Admin creation failed:', adminError);
+        healthStatus.admin_creation = {
+          success: false,
+          error: adminError.message
+        };
+      }
+    }
+
     // Check database connection
     try {
       const db = require('./models');
