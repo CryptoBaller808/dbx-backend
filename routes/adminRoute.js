@@ -571,22 +571,34 @@ router.get('/user/getNFTSalesLists', authMiddleware.authenticateToken, userContr
 // TEMPORARY: Test endpoint
 router.get('/user/test', async (req, res) => {
   try {
+    console.log('🔄 [Test] Starting database test...');
     const db = require('../models');
     
+    console.log('🔄 [Test] Testing database connection...');
     // Test database connection
     await db.sequelize.authenticate();
+    console.log('✅ [Test] Database authentication successful');
+    
+    console.log('🔄 [Test] Checking available models...');
+    const availableModels = Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase');
+    console.log('📋 [Test] Available models:', availableModels);
     
     return res.json({ 
       success: true, 
       message: 'Database connection successful',
-      models: Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase')
+      models: availableModels,
+      user_model_exists: !!db.User,
+      role_model_exists: !!db.Role
     });
   } catch (err) {
-    console.error('Test error:', err);
+    console.error('❌ [Test] Test error:', err);
+    console.error('🔧 [Test] Error message:', err.message);
+    console.error('📋 [Test] Stack trace:', err.stack);
     return res.status(500).json({ 
       success: false, 
       message: 'Test failed',
-      error: err.message 
+      error: err.message,
+      stack: err.stack
     });
   }
 });

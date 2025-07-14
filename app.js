@@ -269,9 +269,54 @@ const socket = new Server(server, {
  * Normalize a port into a number, string, or false.
  */
 
-server.listen(PORT, () => console.log(`The server is running on port ${PORT}`));
-server.on("error", onError);
-server.on("listening", onListening);
+// Initialize database and sync tables
+const initializeDatabase = async () => {
+  try {
+    console.log('🔄 [Database] Starting database initialization...');
+    
+    // Import database models
+    const { sequelize } = require('./models');
+    
+    // Test connection
+    await sequelize.authenticate();
+    console.log('✅ [Database] Connection authenticated successfully');
+    
+    // Sync database - create tables if they don't exist
+    await sequelize.sync({ alter: true });
+    console.log('✅ [Database] Database synced successfully - tables created/updated');
+    
+    return true;
+  } catch (error) {
+    console.error('❌ [Database] Failed to initialize database:', error);
+    console.error('🔧 [Database] Full error details:', error.message);
+    console.error('📋 [Database] Stack trace:', error.stack);
+    throw error;
+  }
+};
+
+// Start server after database initialization
+const startServer = async () => {
+  try {
+    // Initialize database first
+    await initializeDatabase();
+    
+    // Start the server
+    server.listen(PORT, () => {
+      console.log(`✅ [Server] The server is running on port ${PORT}`);
+      console.log('🎯 [Server] Database initialized and server ready!');
+    });
+    
+    server.on("error", onError);
+    server.on("listening", onListening);
+    
+  } catch (error) {
+    console.error('❌ [Server] Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the application
+startServer();
 
 function normalizePort(val) {
   var port = parseInt(val, 10);
