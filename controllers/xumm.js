@@ -1,5 +1,4 @@
-express = require("express");
-// import express from "express";
+const express = require("express");
 xumm = require("../services/xumm.js");
 // import xumm from "../services/xumm.js";
 xrplHelper = require("../services/xrpl.js");
