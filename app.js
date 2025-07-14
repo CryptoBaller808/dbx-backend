@@ -26,6 +26,7 @@ const tempAdminRouter = require("./routes/tempAdminSetup.js");
 const versionRouter = require("./routes/versionCheck.js");
 const simpleAdminRouter = require("./routes/simpleAdminCreation.js");
 const debugAdminRouter = require("./routes/debugAdmin.js");
+const simpleDiagnosticsRouter = require("./routes/simpleDiagnostics.js");
 
 //merge code
 // import path from "path";
@@ -234,6 +235,7 @@ app.use("/temp-admin", tempAdminRouter);
 app.use("/version", versionRouter);
 app.use("/simple-admin", simpleAdminRouter);
 app.use("/debug-admin", debugAdminRouter);
+app.use("/simple-diagnostics", simpleDiagnosticsRouter);
 
 // const server = https.createServer(app).listen(PORT, function() {
 //     console.log('Https App started');
