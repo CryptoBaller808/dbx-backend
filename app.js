@@ -190,6 +190,109 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Database diagnostics endpoint
+app.get("/db-diagnostics", async (req, res) => {
+  console.log('🔍 Database Diagnostics requested via main app...');
+  
+  const report = {
+    success: false,
+    timestamp: new Date().toISOString(),
+    environment: {
+      database_url_exists: !!process.env.DATABASE_URL,
+      database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'not found'
+    },
+    connection: {},
+    tables: {},
+    errors: []
+  };
+  
+  try {
+    // Try to load Sequelize and connect
+    const { Sequelize } = require('sequelize');
+    
+    const sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      logging: false,
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      }
+    });
+    
+    // Test connection
+    await sequelize.authenticate();
+    report.connection.status = 'successful';
+    report.connection.dialect = 'postgres';
+    
+    const queryInterface = sequelize.getQueryInterface();
+    
+    // Check users table
+    try {
+      const usersStructure = await queryInterface.describeTable('users');
+      report.tables.users = {
+        exists: true,
+        columns: Object.keys(usersStructure),
+        required_columns: {
+          id: 'id' in usersStructure,
+          email: 'email' in usersStructure,
+          password: 'password' in usersStructure,
+          role_id: 'role_id' in usersStructure
+        },
+        column_details: usersStructure
+      };
+      
+      // Get user count
+      const [userCount] = await sequelize.query('SELECT COUNT(*) as count FROM users');
+      report.tables.users.count = parseInt(userCount[0].count);
+      
+      // Check for admin user
+      const [adminCheck] = await sequelize.query("SELECT id, email FROM users WHERE email = 'admin@dbx.com'");
+      report.tables.users.admin_exists = adminCheck.length > 0;
+      if (adminCheck.length > 0) {
+        report.tables.users.admin_user = adminCheck[0];
+      }
+      
+    } catch (error) {
+      report.tables.users = { exists: false, error: error.message };
+    }
+    
+    // Check roles table
+    try {
+      const rolesStructure = await queryInterface.describeTable('roles');
+      report.tables.roles = {
+        exists: true,
+        columns: Object.keys(rolesStructure),
+        required_columns: {
+          id: 'id' in rolesStructure,
+          name: 'name' in rolesStructure
+        },
+        column_details: rolesStructure
+      };
+      
+      // Get roles data
+      const [rolesData] = await sequelize.query('SELECT id, name FROM roles ORDER BY id');
+      report.tables.roles.data = rolesData;
+      report.tables.roles.admin_role_exists = rolesData.some(role => role.name === 'admin');
+      report.tables.roles.role_id_2_exists = rolesData.some(role => role.id === 2);
+      
+    } catch (error) {
+      report.tables.roles = { exists: false, error: error.message };
+    }
+    
+    await sequelize.close();
+    report.success = true;
+    
+  } catch (error) {
+    report.errors.push(`Connection error: ${error.message}`);
+    report.connection.status = 'failed';
+    console.error('❌ Database diagnostics failed:', error);
+  }
+  
+  res.json(report);
+});
+
 app.use("/api/v1", routes);
 
 // app.use("/*", (req, res) => {
