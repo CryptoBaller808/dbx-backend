@@ -99,26 +99,7 @@ const app = express();
 
 // Apply CORS middleware FIRST - before any other middleware
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'https://dbx-frontend.onrender.com',
-      'https://dbx-admin.onrender.com',
-      'https://manusai-x-dbx-fe.vercel.app',
-      'https://manusai-x-dbx-admin.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:5173'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
-    
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: "*", // Temporarily allow all origins for testing
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
@@ -226,6 +207,23 @@ app.use("/category", categoryRouter);
 app.use("/mint", minter);
 app.use("/sale", saleRouter);
 app.use("/userdashboard", dashRouter);
+
+// Add explicit CORS headers for admin routes
+app.use("/admindashboard", (req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://dbx-admin.onrender.com");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Credentials", "true");
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
+
 app.use("/admindashboard", adminRouter);
 app.use("/mail", mailingRouter);
 
