@@ -358,6 +358,11 @@ const initializeServices = async () => {
       await db.authenticate();
       console.log('✅ DB connection established');
       
+      // Sync database tables - create if they don't exist
+      console.log('[Server] Synchronizing database tables...');
+      await db.sync({ alter: true });
+      console.log('✅ Database tables synchronized successfully');
+      
       // Now that database is connected, add connection pool monitoring middleware
       console.log('[Server] Adding connection pool monitoring middleware...');
       app.use(monitorConnectionPool);
