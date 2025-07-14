@@ -66,5 +66,27 @@ router.get('/test-db', async (req, res) => {
   }
 });
 
+// Comprehensive database diagnostics endpoint
+router.get('/diagnostics', async (req, res) => {
+  try {
+    console.log('🔍 [Debug] Running comprehensive database diagnostics...');
+    
+    const runDatabaseDiagnostics = require('../scripts/databaseDiagnostics');
+    const result = await runDatabaseDiagnostics();
+    
+    console.log('✅ [Debug] Database diagnostics completed');
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ [Debug] Database diagnostics failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database diagnostics failed',
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 module.exports = router;
 
