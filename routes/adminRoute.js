@@ -848,22 +848,19 @@ router.get('/user/ping', (req, res) => {
 // MANUAL: Create Admin User Directly
 router.post('/user/createAdminManual', async (req, res) => {
   try {
-    console.log('🔄 [Manual] Starting manual admin creation...');
+    console.log('🔄 [Manual] Starting safe admin creation...');
     
-    const createAdminUserManually = require('../scripts/createAdminManually');
-    const result = await createAdminUserManually();
+    const createAdminSafe = require('../scripts/createAdminSafe');
+    const result = await createAdminSafe();
     
-    console.log('✅ [Manual] Manual admin creation completed:', result);
+    console.log('✅ [Manual] Safe admin creation completed:', result);
     return res.json(result);
   } catch (err) {
-    console.error('❌ [Manual] Manual admin creation failed:', err);
-    console.error('🔧 [Manual] Error message:', err.message);
-    console.error('📋 [Manual] Stack trace:', err.stack);
+    console.error('❌ [Manual] Safe admin creation failed:', err);
     return res.status(500).json({ 
       success: false, 
-      message: 'Manual admin creation failed',
-      error: err.message,
-      stack: err.stack
+      message: 'Safe admin creation failed',
+      error: err.message
     });
   }
 });
