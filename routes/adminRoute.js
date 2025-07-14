@@ -753,6 +753,26 @@ const dummyHandler = (req, res) => {
 };
 
 // Export the router
+// SIMPLE: Test if admin routes are working at all
+router.get('/user/ping', (req, res) => {
+  try {
+    console.log('🔄 [Ping] Simple ping test endpoint called');
+    return res.json({ 
+      success: true, 
+      message: 'Admin routes are working!', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  } catch (err) {
+    console.error('❌ [Ping] Even ping failed:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Ping failed',
+      error: err.message 
+    });
+  }
+});
+
 // MANUAL: Create Admin User Directly
 router.post('/user/createAdminManual', async (req, res) => {
   try {
