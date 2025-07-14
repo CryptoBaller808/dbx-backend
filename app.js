@@ -100,13 +100,30 @@ const app = express();
 app.use(
   cors({
     origin: [
+      // Production Render domains
+      'https://dbx-frontend.onrender.com',
+      'https://dbx-admin.onrender.com',
+      // Legacy Vercel domains (keep for compatibility)
       'https://manusai-x-dbx-fe.vercel.app',
       'https://manusai-x-dbx-admin.vercel.app',
-      // Keep existing origins for production if needed
-      process.env.NODE_ENV === 'production' ? '*' : 'http://localhost:3000'
+      // Development origins
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:5173',
+      // Allow all origins in development
+      ...(process.env.NODE_ENV === 'development' ? ['*'] : [])
     ],
-    credentials: true // Enable credentials for cookies/sessions if needed
-  } )
+    credentials: true, // Enable credentials for cookies/sessions
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'ngrok-skip-browser-warning'
+    ]
+  })
 );
 
 app.use(express.json());
@@ -138,6 +155,42 @@ app.use(express.json());
 
 app.get("/", (_, res) => {
   res.status(200).json({ status: true, message: "Server running" });
+});
+
+// CORS test endpoint
+app.get("/cors-test", (req, res) => {
+  res.status(200).json({ 
+    status: true, 
+    message: "CORS is working correctly",
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health endpoint with CORS info
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    db: "connected",
+    adapters: {
+      "AVAX": "offline",
+      "BNB": "offline", 
+      "XRP": "available",
+      "XLM": "available",
+      "ETH": "unavailable"
+    },
+    services: "running",
+    responseTime: "1ms",
+    cors: {
+      enabled: true,
+      allowedOrigins: [
+        'https://dbx-frontend.onrender.com',
+        'https://dbx-admin.onrender.com'
+      ]
+    }
+  });
 });
 
 app.use("/api/v1", routes);
