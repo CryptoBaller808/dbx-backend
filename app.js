@@ -215,6 +215,20 @@ app.get("/db-diagnostics", async (req, res) => {
   }
 });
 
+// Database diagnostics endpoint (synchronous like health)
+app.get("/db-diagnostics-sync", (req, res) => {
+  res.status(200).json({
+    success: true,
+    timestamp: new Date().toISOString(),
+    message: "Database diagnostics endpoint working",
+    environment: {
+      database_url_exists: !!process.env.DATABASE_URL,
+      database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'not found'
+    },
+    note: "This is a synchronous test - async database queries will be added once this works"
+  });
+});
+
 // Ultra-simple database test endpoint
 app.get("/db-test-simple", async (req, res) => {
   try {
