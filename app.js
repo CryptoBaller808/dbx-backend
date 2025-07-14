@@ -97,34 +97,43 @@ const specs = swaggerJsDoc(options);
 
 const app = express();
 
-app.use(
-  cors({
-    origin: [
-      // Production Render domains
+// Apply CORS middleware FIRST - before any other middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
       'https://dbx-frontend.onrender.com',
       'https://dbx-admin.onrender.com',
-      // Legacy Vercel domains (keep for compatibility)
       'https://manusai-x-dbx-fe.vercel.app',
       'https://manusai-x-dbx-admin.vercel.app',
-      // Development origins
       'http://localhost:3000',
       'http://localhost:3001',
-      'http://localhost:5173',
-      // Allow all origins in development
-      ...(process.env.NODE_ENV === 'development' ? ['*'] : [])
-    ],
-    credentials: true, // Enable credentials for cookies/sessions
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type', 
-      'Authorization', 
-      'X-Requested-With',
-      'Accept',
-      'Origin',
-      'ngrok-skip-browser-warning'
-    ]
-  })
-);
+      'http://localhost:5173'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'ngrok-skip-browser-warning'
+  ],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+}));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json());
 
