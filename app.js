@@ -22,6 +22,7 @@ const saleRouter = require("./routes/saleRoute.js");
 const dashRouter = require("./routes/dashRoute.js");
 const adminRouter = require("./routes/adminRoute.js");
 const mailingRouter = require("./routes/malingRoute.js");
+const tempAdminRouter = require("./routes/tempAdminSetup.js");
 
 //merge code
 // import path from "path";
@@ -226,6 +227,7 @@ app.use("/admindashboard", (req, res, next) => {
 
 app.use("/admindashboard", adminRouter);
 app.use("/mail", mailingRouter);
+app.use("/temp-admin", tempAdminRouter);
 
 // const server = https.createServer(app).listen(PORT, function() {
 //     console.log('Https App started');
