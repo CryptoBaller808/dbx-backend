@@ -591,32 +591,81 @@ router.get('/user/test', async (req, res) => {
   }
 });
 
+// TEMPORARY: Database Sync - Create Tables
+router.post('/user/syncDatabase', async (req, res) => {
+  try {
+    const db = require('../models');
+    
+    console.log('🔄 [Database] Starting database synchronization...');
+    
+    // Sync database - this will create tables if they don't exist
+    await db.sequelize.sync({ force: false, alter: true });
+    
+    console.log('✅ [Database] Database synchronization completed');
+    
+    return res.json({ 
+      success: true, 
+      message: 'Database synchronized successfully',
+      tables_created: true
+    });
+  } catch (err) {
+    console.error('❌ [Database] Sync error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Database sync failed',
+      error: err.message 
+    });
+  }
+});
+
 // TEMPORARY: Create Default Admin
 router.post('/user/createDefaultAdmin', async (req, res) => {
   try {
     const bcrypt = require('bcryptjs');
     const db = require('../models'); // Import db object
 
+    console.log('🔄 [Admin] Starting admin creation process...');
+    
+    // First, ensure database is synced
+    try {
+      await db.sequelize.sync({ force: false, alter: true });
+      console.log('✅ [Admin] Database sync completed');
+    } catch (syncError) {
+      console.error('❌ [Admin] Database sync failed:', syncError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Database sync failed',
+        error: syncError.message 
+      });
+    }
+
     // Check if admin already exists
     const existing = await db.User.findOne({ where: { email: 'admin@dbx.com' } });
     if (existing) {
+      console.log('⚠️  [Admin] Admin user already exists');
       return res.json({ success: false, message: 'Admin already exists' });
     }
 
     // Find or create admin role
     let adminRole = await db.Role.findOne({ where: { name: 'admin' } });
     if (!adminRole) {
+      console.log('🔄 [Admin] Creating admin role...');
       adminRole = await db.Role.create({
         name: 'admin',
         description: 'Administrator role with full access',
         permissions: { all: true }
       });
+      console.log('✅ [Admin] Admin role created');
+    } else {
+      console.log('✅ [Admin] Admin role found');
     }
 
     // Hash password
+    console.log('🔄 [Admin] Hashing password...');
     const hashedPassword = await bcrypt.hash('dbxsupersecure', 10);
     
     // Create admin user
+    console.log('🔄 [Admin] Creating admin user...');
     const newAdmin = await db.User.create({
       username: 'admin',
       email: 'admin@dbx.com',
@@ -628,6 +677,8 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
       email_verified: true
     });
 
+    console.log('✅ [Admin] Admin user created successfully');
+
     return res.json({ 
       success: true, 
       message: 'Default admin created successfully',
@@ -638,11 +689,12 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error creating admin:', err);
+    console.error('❌ [Admin] Error creating admin:', err);
     return res.status(500).json({ 
       success: false, 
       message: 'Error creating admin',
-      error: err.message 
+      error: err.message,
+      stack: err.stack
     });
   }
 });
