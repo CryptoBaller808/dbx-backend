@@ -335,28 +335,20 @@ app.get("/version/db-diagnostics", async (req, res) => {
 });
 
 // Alternative database diagnostics endpoint with different path
-app.get("/db-schema-check", async (req, res) => {
+app.get("/db-schema-check", (req, res) => {
   console.log('🔍 Database Schema Check requested...');
   
-  try {
-    const report = {
-      success: true,
-      timestamp: new Date().toISOString(),
-      message: "Database schema check working",
-      environment: {
-        database_url_exists: !!process.env.DATABASE_URL,
-        database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'not found'
-      }
-    };
-    
-    res.json(report);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+  const report = {
+    success: true,
+    timestamp: new Date().toISOString(),
+    message: "Database schema check working (synchronous)",
+    environment: {
+      database_url_exists: !!process.env.DATABASE_URL,
+      database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'not found'
+    }
+  };
+  
+  res.status(200).json(report);
 });
 
 // Simple test endpoint
