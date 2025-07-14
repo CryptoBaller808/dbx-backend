@@ -182,5 +182,14 @@ router.get('/db-diagnostics', async (req, res) => {
   res.json(report);
 });
 
+// Simple test endpoint
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Version route test endpoint working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 module.exports = router;
 
