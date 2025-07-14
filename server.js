@@ -17,6 +17,7 @@ const { createHealthCheckEndpoint } = require('./health-check');
 
 // Import your route files
 const adminRoutes = require('./routes/adminRoute');
+const tempAdminSetup = require('./routes/tempAdminSetup');
 const mfaRoutes = require('./routes/mfaRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const { router: walletRoutes, initializeServices: initializeWalletServices } = require('./routes/walletRoutes');
@@ -209,6 +210,9 @@ app.use('/api/creator', creatorRoutes);
 
 // Mount Enhanced Admin Routes
 app.use('/admindashboard', enhancedAdminRoutes);
+
+// Mount Temporary Admin Setup Route (bypass problematic admin routes)
+app.use('/temp-admin', tempAdminSetup);
 
 // Mount Real-Time Analytics Routes
 app.use('/admindashboard', realTimeAnalyticsRoutes);
