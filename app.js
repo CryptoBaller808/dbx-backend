@@ -24,6 +24,7 @@ const adminRouter = require("./routes/adminRoute.js");
 const mailingRouter = require("./routes/malingRoute.js");
 const tempAdminRouter = require("./routes/tempAdminSetup.js");
 const versionRouter = require("./routes/versionCheck.js");
+const simpleAdminRouter = require("./routes/simpleAdminCreation.js");
 
 //merge code
 // import path from "path";
@@ -230,6 +231,7 @@ app.use("/admindashboard", adminRouter);
 app.use("/mail", mailingRouter);
 app.use("/temp-admin", tempAdminRouter);
 app.use("/version", versionRouter);
+app.use("/simple-admin", simpleAdminRouter);
 
 // const server = https.createServer(app).listen(PORT, function() {
 //     console.log('Https App started');
