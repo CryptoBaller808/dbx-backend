@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
-// Health endpoint with schema validation - v3.0
+// Health endpoint with schema validation - v3.1 FORCE REFRESH
 router.get('/', async (req, res) => {
-  console.log('🔍 Health endpoint with schema validation requested... [ACTIVE v3.0]');
+  console.log('🔍 Health endpoint with schema validation requested... [ACTIVE v3.1 FORCE REFRESH]');
   console.log('📅 Timestamp:', new Date().toISOString());
 
   // Base health response (matching working pattern)
