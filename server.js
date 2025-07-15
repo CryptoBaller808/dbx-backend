@@ -232,58 +232,83 @@ app.use(monitorPerformance);
 // Database Health Check Endpoint
 app.get('/api/health/database', healthCheck);
 
-// TEMPORARY: Admin password reset endpoint
+// TEMPORARY: Admin password reset endpoint using direct SQL
 app.get('/admin/reset-password', async (req, res) => {
   try {
     console.log('🔐 [ADMIN RESET] Password reset request received');
     
     const bcrypt = require('bcrypt');
+    const { Sequelize } = require('sequelize');
     const newPassword = 'Admin@2025';
     
     // Hash password with bcrypt (10 salt rounds)
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     console.log('🔒 [ADMIN RESET] Password hashed successfully');
     
-    // Initialize database models
-    const dbModels = require('./models');
-    await dbModels.sequelize.authenticate();
-    console.log('✅ [ADMIN RESET] Database connected');
-    
-    // Find and update admin user
-    const adminUser = await dbModels.users.findOne({
-      where: { email: 'admin@dbx.com' }
+    // Create direct database connection (same as health endpoint)
+    const sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: false
     });
     
-    if (!adminUser) {
-      console.log('❌ [ADMIN RESET] Admin user not found');
-      return res.status(404).json({
-        success: false,
-        message: 'Admin user not found'
-      });
-    }
+    await sequelize.authenticate();
+    console.log('✅ [ADMIN RESET] Database connected');
     
-    console.log('👤 [ADMIN RESET] Admin user found, updating password...');
-    
-    // Update password
-    adminUser.password = hashedPassword;
-    await adminUser.save();
+    // Update admin password using direct SQL
+    const [results] = await sequelize.query(`
+      UPDATE users 
+      SET password = $1, updated_at = NOW()
+      WHERE email = 'admin@dbx.com'
+    `, {
+      bind: [hashedPassword]
+    });
     
     console.log('✅ [ADMIN RESET] Password updated successfully');
     
     // Verify the update
-    const isValid = await bcrypt.compare(newPassword, adminUser.password);
-    console.log('🔍 [ADMIN RESET] Password verification:', isValid ? 'VALID' : 'INVALID');
+    const [adminUser] = await sequelize.query(`
+      SELECT id, email, password, role_id
+      FROM users 
+      WHERE email = 'admin@dbx.com'
+    `);
     
-    res.json({
-      success: true,
-      message: 'Admin password reset successfully',
-      credentials: {
-        email: 'admin@dbx.com',
-        password: newPassword
-      },
-      verification: isValid,
-      timestamp: new Date().toISOString()
-    });
+    if (adminUser.length > 0) {
+      const admin = adminUser[0];
+      
+      // Test password verification
+      const isValid = await bcrypt.compare(newPassword, admin.password);
+      console.log('🔍 [ADMIN RESET] Password verification:', isValid ? 'VALID' : 'INVALID');
+      
+      await sequelize.close();
+      
+      res.json({
+        success: true,
+        message: 'Admin password reset successfully using direct SQL',
+        credentials: {
+          email: 'admin@dbx.com',
+          password: newPassword
+        },
+        verification: isValid,
+        admin_details: {
+          id: admin.id,
+          email: admin.email,
+          role_id: admin.role_id
+        },
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      await sequelize.close();
+      res.status(404).json({
+        success: false,
+        message: 'Admin user not found'
+      });
+    }
     
   } catch (error) {
     console.error('❌ [ADMIN RESET] Error:', error.message);
