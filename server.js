@@ -200,7 +200,7 @@ app.get('/health', async (req, res) => {
       healthStatus.uptime = `${uptimeSeconds}s`;
     }
 
-    // SECURE TEMPORARY LOGIN: Admin authentication via health endpoint
+    // SECURE TEMPORARY LOGIN: Admin authentication via health endpoint - v3.0
     // Usage: /health?login=true&email=admin@dbx.com&password=Admin@2025
     // Security: Rate limiting, IP restrictions, secure flag requirement
     if (req.query.login === 'true') {
