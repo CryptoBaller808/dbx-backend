@@ -37,14 +37,13 @@ const { Op } = require("sequelize");
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 require('dotenv').config();
 const axios = require('axios');
-// require('dotenv').config();
 
-// main work
-
-// admin login - FIXED VERSION
 const loginAdmin = async (req, res) => {
   try {
-    console.log('🔍 [LOGIN DEBUG] Request received:', {
+    console.log('🔐 [ADMIN LOGIN] Login request received');
+    console.log('🔍 [ADMIN LOGIN] Request details:', {
+      method: req.method,
+      url: req.url,
       body: req.body,
       headers: {
         'content-type': req.headers['content-type'],
@@ -56,145 +55,143 @@ const loginAdmin = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
-      console.log('❌ [LOGIN DEBUG] Missing credentials:', { email: !!email, password: !!password });
+      console.log('❌ [ADMIN LOGIN] Missing credentials:', { email: !!email, password: !!password });
       return res.status(400).json({ 
         success: false, 
         message: "Email and password are required" 
       });
     }
 
-    console.log('🔍 [LOGIN DEBUG] Looking for user with email:', email);
+    console.log('🔍 [ADMIN LOGIN] Attempting login for email:', email);
 
-    // Find user in database
-    const user = await User.findOne({
-      where: { email: email }
-    });
-
-    if (!user) {
-      console.log('❌ [LOGIN DEBUG] User not found for email:', email);
-      return res.status(401).json({ 
-        success: false, 
-        message: "Invalid credentials" 
-      });
-    }
-
-    console.log('✅ [LOGIN DEBUG] User found:', {
-      id: user.id,
-      email: user.email,
-      hasPassword: !!user.password,
-      hasWalPassword: !!user.wal_password
-    });
-
-    // Check password using bcrypt
+    // Use direct SQL approach (same as working health endpoint logic)
     const bcrypt = require('bcrypt');
-    let isPasswordValid = false;
-
-    // Try bcrypt comparison first (for properly hashed passwords)
-    if (user.password) {
-      try {
-        isPasswordValid = await bcrypt.compare(password, user.password);
-        console.log('🔍 [LOGIN DEBUG] Bcrypt comparison result:', isPasswordValid);
-      } catch (bcryptError) {
-        console.log('⚠️ [LOGIN DEBUG] Bcrypt comparison failed:', bcryptError.message);
-      }
-    }
-
-    // Fallback: try SHA-256 comparison (for legacy passwords)
-    if (!isPasswordValid && user.wal_password) {
-      const hashedPassword = crypto
-        .createHash("sha256")
-        .update(password)
-        .digest("hex");
-      
-      isPasswordValid = hashedPassword === user.wal_password;
-      console.log('🔍 [LOGIN DEBUG] SHA-256 comparison result:', isPasswordValid);
-    }
-
-    if (!isPasswordValid) {
-      console.log('❌ [LOGIN DEBUG] Password validation failed');
+    const jwt = require('jsonwebtoken');
+    const { Sequelize } = require('sequelize');
+    
+    // Create direct database connection
+    const sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: false
+    });
+    
+    await sequelize.authenticate();
+    console.log('✅ [ADMIN LOGIN] Database connected');
+    
+    // Find admin user using direct SQL
+    const [adminUsers] = await sequelize.query(`
+      SELECT id, email, password, role_id
+      FROM users 
+      WHERE email = $1
+    `, {
+      bind: [email]
+    });
+    
+    if (adminUsers.length === 0) {
+      console.log('❌ [ADMIN LOGIN] User not found for email:', email);
+      await sequelize.close();
       return res.status(401).json({ 
         success: false, 
         message: "Invalid credentials" 
       });
     }
-
-    console.log('✅ [LOGIN DEBUG] Password validation successful');
-
-    // Generate JWT token
-    const accessToken = jwt.sign(
-      { 
-        id: user.id,
-        email: user.email 
-      },
-      process.env.ACCESS_TOKEN_SECRET || 'fallback-secret-key',
-      { expiresIn: "24h" }
-    );
-
-    console.log('✅ [LOGIN DEBUG] JWT token generated successfully');
-
-    // Update user's access token in database
-    try {
-      user.access_token = accessToken;
-      await user.save();
-      console.log('✅ [LOGIN DEBUG] User access token updated in database');
-    } catch (updateError) {
-      console.log('⚠️ [LOGIN DEBUG] Failed to update access token:', updateError.message);
-      // Continue anyway, token is still valid
+    
+    const admin = adminUsers[0];
+    console.log('✅ [ADMIN LOGIN] User found:', {
+      id: admin.id,
+      email: admin.email,
+      role_id: admin.role_id
+    });
+    
+    // Verify password using bcrypt
+    const isValidPassword = await bcrypt.compare(password, admin.password);
+    console.log('🔍 [ADMIN LOGIN] Password verification:', isValidPassword ? 'VALID' : 'INVALID');
+    
+    if (!isValidPassword) {
+      console.log('❌ [ADMIN LOGIN] Invalid password for email:', email);
+      await sequelize.close();
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid credentials" 
+      });
     }
-
-    // Return success response
-    console.log('🎉 [LOGIN DEBUG] Login successful for user:', email);
-    return res.status(200).json({ 
+    
+    // Generate JWT token
+    const jwtSecret = process.env.JWT_SECRET || 'dbx-temp-secret-2025';
+    const token = jwt.sign(
+      {
+        id: admin.id,
+        email: admin.email,
+        role_id: admin.role_id,
+        type: 'admin'
+      },
+      jwtSecret,
+      { expiresIn: '24h' }
+    );
+    
+    console.log('✅ [ADMIN LOGIN] Login successful - JWT token generated');
+    await sequelize.close();
+    
+    // Return successful login response
+    return res.status(200).json({
       success: true,
-      message: "Login successful", 
-      access_token: accessToken,
+      message: "Login successful",
+      token: token,
       user: {
-        id: user.id,
-        email: user.email
+        id: admin.id,
+        email: admin.email,
+        role_id: admin.role_id,
+        type: 'admin'
       }
     });
-
+    
   } catch (error) {
-    console.error('💥 [LOGIN DEBUG] Unexpected error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: "Internal server error",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    console.error('❌ [ADMIN LOGIN] Login error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: "Internal server error"
     });
   }
 };
 
-// change password
 const changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-  const userId = req.user.id;
-
-  // Retrieve the user from the database
-  const user = await User.findByPk(userId);
-
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id; // Assuming user ID is available from authentication middleware
+    
+    // Find user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    // Verify current password
+    const bcrypt = require('bcrypt');
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+    
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Update password in database
+    user.password = hashedNewPassword;
+    await user.save();
+    
+    res.status(200).json({ message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  // Check if the old password matches the stored password
-  const isPasswordMatched = compareHashedPasswords(
-    oldPassword,
-    user.wal_password
-  );
-
-  if (!isPasswordMatched) {
-    return res.status(401).json({ error: "Invalid old password" });
-  }
-
-  // Hash the new password using SHA-256
-  const hashedNewPassword = hashPassword(newPassword);
-
-  // Update the user's password in the database
-  user.wal_password = hashedNewPassword;
-  await user.save();
-
-  // Respond with a success message
-  res.status(200).json({ message: "Password changed successfully" });
 };
 
 // Utility function to hash the password using SHA-256
