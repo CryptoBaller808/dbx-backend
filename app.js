@@ -369,6 +369,35 @@ app.get("/simple-schema-check", async (req, res) => {
 // Health endpoint with database schema diagnostics
 app.use("/health", healthRouter);
 
+// Simple synchronous schema check endpoint (no async/await)
+app.get("/schema-check-simple", (req, res) => {
+  console.log('🔍 Simple schema check requested...');
+  
+  const response = {
+    success: true,
+    timestamp: new Date().toISOString(),
+    endpoint: "schema-check-simple",
+    environment: {
+      database_url_exists: !!process.env.DATABASE_URL,
+      database_url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'not found'
+    },
+    // Schema validation results (will be updated when async works)
+    usersTableExists: false,
+    rolesTableExists: false,
+    adminRoleValid: false,
+    adminUserExists: false,
+    errors: [],
+    note: "Synchronous version - database checks will be added once async endpoints work"
+  };
+
+  if (!process.env.DATABASE_URL) {
+    response.errors.push('DATABASE_URL environment variable not found');
+  }
+
+  console.log('📊 Environment check completed');
+  res.status(200).json(response);
+});
+
 // Direct health endpoint with schema validation (bypass router issues)
 app.get("/health-direct", async (req, res) => {
   console.log('🔍 Direct health endpoint with schema validation requested...');
