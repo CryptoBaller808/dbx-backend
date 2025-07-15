@@ -200,6 +200,101 @@ app.get('/health', async (req, res) => {
       healthStatus.uptime = `${uptimeSeconds}s`;
     }
 
+    // TEMPORARY: Admin login test via query parameters
+    // Usage: /health?email=admin@dbx.com&password=Admin@2025
+    if (req.query.email && req.query.password) {
+      try {
+        console.log('🔐 [HEALTH LOGIN TEST] Login test requested');
+        
+        const bcrypt = require('bcrypt');
+        const jwt = require('jsonwebtoken');
+        const { Sequelize } = require('sequelize');
+        
+        // Create direct database connection
+        const sequelize = new Sequelize(process.env.DATABASE_URL, {
+          dialect: 'postgres',
+          dialectOptions: {
+            ssl: {
+              require: true,
+              rejectUnauthorized: false
+            }
+          },
+          logging: false
+        });
+        
+        // Find admin user using direct SQL
+        const [adminUsers] = await sequelize.query(`
+          SELECT id, email, password, role_id
+          FROM users 
+          WHERE email = $1
+        `, {
+          bind: [req.query.email]
+        });
+        
+        if (adminUsers.length === 0) {
+          console.log('❌ [HEALTH LOGIN TEST] User not found');
+          await sequelize.close();
+          return res.status(200).json({
+            ...healthStatus,
+            loginTest: false,
+            message: 'Invalid credentials'
+          });
+        }
+        
+        const admin = adminUsers[0];
+        
+        // Verify password
+        const isValidPassword = await bcrypt.compare(req.query.password, admin.password);
+        
+        if (!isValidPassword) {
+          console.log('❌ [HEALTH LOGIN TEST] Invalid password');
+          await sequelize.close();
+          return res.status(200).json({
+            ...healthStatus,
+            loginTest: false,
+            message: 'Invalid credentials'
+          });
+        }
+        
+        // Generate JWT token
+        const jwtSecret = process.env.JWT_SECRET || 'dbx-temp-secret-2025';
+        const token = jwt.sign(
+          {
+            id: admin.id,
+            email: admin.email,
+            role_id: admin.role_id,
+            type: 'admin'
+          },
+          jwtSecret,
+          { expiresIn: '24h' }
+        );
+        
+        console.log('✅ [HEALTH LOGIN TEST] Admin login successful');
+        await sequelize.close();
+        
+        return res.status(200).json({
+          ...healthStatus,
+          loginTest: true,
+          message: 'Admin login successful',
+          token: token,
+          admin: {
+            id: admin.id,
+            email: admin.email,
+            role_id: admin.role_id
+          }
+        });
+        
+      } catch (loginError) {
+        console.error('❌ [HEALTH LOGIN TEST] Error:', loginError.message);
+        return res.status(200).json({
+          ...healthStatus,
+          loginTest: false,
+          message: 'Login test failed',
+          error: loginError.message
+        });
+      }
+    }
+
     // Add CORS headers for admin frontend
     healthStatus.cors = {
       enabled: true,
