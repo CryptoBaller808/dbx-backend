@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
-// Health endpoint with comprehensive database schema diagnostics
+// Health endpoint with comprehensive database schema diagnostics - v2.0
 router.get('/', async (req, res) => {
-  console.log('🔍 Health endpoint with schema diagnostics requested...');
+  console.log('🔍 Health endpoint with schema diagnostics requested... [DIAGNOSTICS ACTIVE]');
   console.log('📅 Timestamp:', new Date().toISOString());
 
   const healthResponse = {
