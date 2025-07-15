@@ -200,7 +200,7 @@ app.get('/health', async (req, res) => {
       healthStatus.uptime = `${uptimeSeconds}s`;
     }
 
-    // TEMPORARY: Admin login test via query parameters
+    // TEMPORARY: Admin login test via query parameters - v2.0
     // Usage: /health?email=admin@dbx.com&password=Admin@2025
     if (req.query.email && req.query.password) {
       try {
