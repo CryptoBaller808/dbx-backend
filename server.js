@@ -232,6 +232,72 @@ app.use(monitorPerformance);
 // Database Health Check Endpoint
 app.get('/api/health/database', healthCheck);
 
+// TEMPORARY: Admin password reset endpoint
+app.get('/admin/reset-password', async (req, res) => {
+  try {
+    console.log('🔐 [ADMIN RESET] Password reset request received');
+    
+    const bcrypt = require('bcrypt');
+    const newPassword = 'Admin@2025';
+    
+    // Hash password with bcrypt (10 salt rounds)
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    console.log('🔒 [ADMIN RESET] Password hashed successfully');
+    
+    // Initialize database if needed
+    if (!db || !db.users) {
+      const dbModels = require('./models');
+      await dbModels.sequelize.authenticate();
+      console.log('✅ [ADMIN RESET] Database connected');
+    }
+    
+    // Find and update admin user
+    const adminUser = await db.users.findOne({
+      where: { email: 'admin@dbx.com' }
+    });
+    
+    if (!adminUser) {
+      console.log('❌ [ADMIN RESET] Admin user not found');
+      return res.status(404).json({
+        success: false,
+        message: 'Admin user not found'
+      });
+    }
+    
+    console.log('👤 [ADMIN RESET] Admin user found, updating password...');
+    
+    // Update password
+    adminUser.password = hashedPassword;
+    await adminUser.save();
+    
+    console.log('✅ [ADMIN RESET] Password updated successfully');
+    
+    // Verify the update
+    const isValid = await bcrypt.compare(newPassword, adminUser.password);
+    console.log('🔍 [ADMIN RESET] Password verification:', isValid ? 'VALID' : 'INVALID');
+    
+    res.json({
+      success: true,
+      message: 'Admin password reset successfully',
+      credentials: {
+        email: 'admin@dbx.com',
+        password: newPassword
+      },
+      verification: isValid,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ [ADMIN RESET] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Password reset failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Comprehensive Health Check Endpoint
 app.use('/health-check', createHealthCheckEndpoint());
 
