@@ -166,6 +166,189 @@ app.get('/health', async (req, res) => {
       healthStatus.dbError = dbError.message;
     }
 
+    // ==========================================
+    // TEMPORARY SCHEMA VALIDATION EXTENSION
+    // TODO: Remove this section after schema validation is complete
+    // ==========================================
+    
+    // Add comprehensive schema validation to existing health endpoint
+    if (healthStatus.db === 'connected') {
+      console.log('🔍 [Health] Adding schema validation to health endpoint...');
+      
+      // Initialize schema validation results
+      healthStatus.usersTableExists = false;
+      healthStatus.rolesTableExists = false;
+      healthStatus.adminRoleValid = false;
+      healthStatus.adminUserExists = false;
+      healthStatus.schemaValidationErrors = [];
+      
+      try {
+        // Create direct Sequelize connection for schema validation
+        const { Sequelize } = require('sequelize');
+        const sequelize = new Sequelize(process.env.DATABASE_URL, {
+          dialect: 'postgres',
+          logging: false,
+          dialectOptions: {
+            ssl: {
+              require: true,
+              rejectUnauthorized: false
+            }
+          }
+        });
+
+        await sequelize.authenticate();
+        console.log('✅ [Schema] Database connection successful for validation');
+
+        // Check users table existence and structure
+        try {
+          const [usersTableCheck] = await sequelize.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'users'
+          `);
+
+          if (usersTableCheck.length > 0) {
+            healthStatus.usersTableExists = true;
+            console.log('✅ [Schema] Users table exists');
+
+            // Get users table column information
+            const [usersColumns] = await sequelize.query(`
+              SELECT column_name, data_type, is_nullable, column_default
+              FROM information_schema.columns 
+              WHERE table_schema = 'public' AND table_name = 'users'
+              ORDER BY ordinal_position
+            `);
+
+            healthStatus.usersTableColumns = usersColumns.map(col => col.column_name);
+            healthStatus.usersTableStructure = {
+              id: usersColumns.some(col => col.column_name === 'id'),
+              email: usersColumns.some(col => col.column_name === 'email'),
+              password: usersColumns.some(col => col.column_name === 'password'),
+              role_id: usersColumns.some(col => col.column_name === 'role_id')
+            };
+
+            console.log('📋 [Schema] Users table columns:', healthStatus.usersTableColumns.join(', '));
+
+            // Check for admin user existence
+            const [adminUserCheck] = await sequelize.query("SELECT id, email, role_id FROM users WHERE email = 'admin@dbx.com'");
+            healthStatus.adminUserExists = adminUserCheck.length > 0;
+            
+            if (adminUserCheck.length > 0) {
+              healthStatus.adminUserData = adminUserCheck[0];
+              console.log('✅ [Schema] Admin user (admin@dbx.com) exists with ID:', adminUserCheck[0].id);
+            } else {
+              console.log('❌ [Schema] Admin user (admin@dbx.com) does NOT exist');
+            }
+
+            // Get user count
+            const [userCount] = await sequelize.query('SELECT COUNT(*) as count FROM users');
+            healthStatus.totalUsers = parseInt(userCount[0].count);
+            console.log('👤 [Schema] Total users in database:', healthStatus.totalUsers);
+
+          } else {
+            console.log('❌ [Schema] Users table does NOT exist');
+          }
+
+        } catch (usersError) {
+          healthStatus.schemaValidationErrors.push(`Users table check error: ${usersError.message}`);
+          console.error('❌ [Schema] Error checking users table:', usersError.message);
+        }
+
+        // Check roles table existence and structure
+        try {
+          const [rolesTableCheck] = await sequelize.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'roles'
+          `);
+
+          if (rolesTableCheck.length > 0) {
+            healthStatus.rolesTableExists = true;
+            console.log('✅ [Schema] Roles table exists');
+
+            // Get roles table column information
+            const [rolesColumns] = await sequelize.query(`
+              SELECT column_name, data_type, is_nullable, column_default
+              FROM information_schema.columns 
+              WHERE table_schema = 'public' AND table_name = 'roles'
+              ORDER BY ordinal_position
+            `);
+
+            healthStatus.rolesTableColumns = rolesColumns.map(col => col.column_name);
+            healthStatus.rolesTableStructure = {
+              id: rolesColumns.some(col => col.column_name === 'id'),
+              name: rolesColumns.some(col => col.column_name === 'name')
+            };
+
+            console.log('📋 [Schema] Roles table columns:', healthStatus.rolesTableColumns.join(', '));
+
+            // Get all roles data
+            const [rolesData] = await sequelize.query('SELECT id, name FROM roles ORDER BY id');
+            healthStatus.rolesData = rolesData;
+            healthStatus.totalRoles = rolesData.length;
+            
+            console.log('🎭 [Schema] Total roles:', rolesData.length);
+            console.log('📋 [Schema] Roles data:');
+            rolesData.forEach(role => {
+              console.log(`   - ID: ${role.id}, Name: "${role.name}"`);
+            });
+
+            // Check for admin role by ID (2) or name ('admin')
+            const adminRoleById = rolesData.find(role => role.id === 2);
+            const adminRoleByName = rolesData.find(role => role.name === 'admin');
+            
+            healthStatus.adminRoleValid = !!(adminRoleById || adminRoleByName);
+            
+            if (adminRoleById) {
+              healthStatus.adminRoleData = adminRoleById;
+              console.log('✅ [Schema] Admin role with ID 2 exists:', adminRoleById.name);
+            } else if (adminRoleByName) {
+              healthStatus.adminRoleData = adminRoleByName;
+              console.log('✅ [Schema] Admin role by name exists: ID', adminRoleByName.id);
+            } else {
+              console.log('❌ [Schema] Admin role (ID 2 or name "admin") does NOT exist');
+            }
+
+          } else {
+            console.log('❌ [Schema] Roles table does NOT exist');
+          }
+
+        } catch (rolesError) {
+          healthStatus.schemaValidationErrors.push(`Roles table check error: ${rolesError.message}`);
+          console.error('❌ [Schema] Error checking roles table:', rolesError.message);
+        }
+
+        // Close schema validation connection
+        await sequelize.close();
+        console.log('🔌 [Schema] Schema validation connection closed');
+
+        // Log comprehensive schema validation summary
+        console.log('📊 [Schema] COMPREHENSIVE SCHEMA VALIDATION SUMMARY');
+        console.log('================================');
+        console.log('Database Connection:', healthStatus.db === 'connected' ? '✅ SUCCESS' : '❌ FAILED');
+        console.log('Users Table:', healthStatus.usersTableExists ? '✅ EXISTS' : '❌ MISSING');
+        console.log('Roles Table:', healthStatus.rolesTableExists ? '✅ EXISTS' : '❌ MISSING');
+        console.log('Admin User (admin@dbx.com):', healthStatus.adminUserExists ? '✅ EXISTS' : '❌ MISSING');
+        console.log('Admin Role (ID 2 or name "admin"):', healthStatus.adminRoleValid ? '✅ EXISTS' : '❌ MISSING');
+
+        if (healthStatus.usersTableExists && healthStatus.rolesTableExists) {
+          console.log('🎉 [Schema] DATABASE SCHEMA: READY FOR ADMIN OPERATIONS');
+        } else {
+          console.log('⚠️  [Schema] DATABASE SCHEMA: REQUIRES SETUP');
+        }
+
+        console.log('🔍 [Schema] Schema validation completed successfully!');
+
+      } catch (schemaError) {
+        healthStatus.schemaValidationErrors.push(`Schema validation error: ${schemaError.message}`);
+        console.error('❌ [Schema] Schema validation failed:', schemaError.message);
+      }
+    }
+    
+    // ==========================================
+    // END TEMPORARY SCHEMA VALIDATION EXTENSION
+    // ==========================================
+
     // Check blockchain adapters status
     const adapters = ['AVAX', 'BNB', 'XRP', 'XLM', 'ETH'];
     for (const adapter of adapters) {
@@ -198,6 +381,15 @@ app.get('/health', async (req, res) => {
     } else {
       healthStatus.uptime = `${uptimeSeconds}s`;
     }
+
+    // Add CORS headers for admin frontend
+    healthStatus.cors = {
+      enabled: true,
+      allowedOrigins: [
+        'https://dbx-frontend.onrender.com',
+        'https://dbx-admin.onrender.com'
+      ]
+    };
 
     // Return appropriate status code
     const statusCode = healthStatus.db === 'connected' ? 200 : 503;
