@@ -28,6 +28,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "roles",
       timestamps: true,
+      underscored: true, // Maps camelCase to snake_case (createdAt -> created_at)
     }
   );
 

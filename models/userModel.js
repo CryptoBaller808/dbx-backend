@@ -111,6 +111,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "users",
       timestamps: true,
+      underscored: true, // Maps camelCase to snake_case (createdAt -> created_at)
       indexes: [
         {
           fields: ['email']

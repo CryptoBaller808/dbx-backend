@@ -78,6 +78,7 @@ module.exports = (sequelize) => {
   }, {
     tableName: 'user_mfa',
     timestamps: true,
+    underscored: true, // Maps camelCase to snake_case (createdAt -> created_at)
     indexes: [
       {
         unique: true,

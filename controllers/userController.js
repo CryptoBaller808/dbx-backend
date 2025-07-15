@@ -15,7 +15,7 @@ const Sdk = new XummSdk(
 const sdk = require("api")("@xumm/v0.9#4r71r49l0zx90kh");
 const http = require("https");
 // create main Model
-const User = db.users;
+const User = db.User; // Fixed: Use capitalized User model
 const UserRole = db.userRole;
 const Categories = db.categories;
 const Review = db.reviews;
