@@ -244,15 +244,13 @@ app.get('/admin/reset-password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     console.log('🔒 [ADMIN RESET] Password hashed successfully');
     
-    // Initialize database if needed
-    if (!db || !db.users) {
-      const dbModels = require('./models');
-      await dbModels.sequelize.authenticate();
-      console.log('✅ [ADMIN RESET] Database connected');
-    }
+    // Initialize database models
+    const dbModels = require('./models');
+    await dbModels.sequelize.authenticate();
+    console.log('✅ [ADMIN RESET] Database connected');
     
     // Find and update admin user
-    const adminUser = await db.users.findOne({
+    const adminUser = await dbModels.users.findOne({
       where: { email: 'admin@dbx.com' }
     });
     
