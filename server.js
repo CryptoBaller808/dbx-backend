@@ -54,6 +54,11 @@ app.use(bodyParser.json());
 // Enhanced health check route for Render deployment
 app.get('/health', async (req, res) => {
   try {
+    console.log('🏥 [Health] Health endpoint called!');
+    console.log('🌐 [Health] Request origin:', req.headers.origin);
+    console.log('🔍 [Health] Request query:', req.query);
+    console.log('📡 [Health] Request method:', req.method);
+    
     const startTime = Date.now();
     const healthStatus = {
       success: true,
@@ -63,6 +68,8 @@ app.get('/health', async (req, res) => {
       adapters: {},
       services: 'running'
     };
+    
+    console.log('📋 [Health] Initial healthStatus.adapters:', JSON.stringify(healthStatus.adapters, null, 2));
 
     // EMERGENCY: Admin creation via health route
     if (req.query.createAdmin === 'emergency') {
@@ -167,19 +174,29 @@ app.get('/health', async (req, res) => {
     }
 
 
-    // Check blockchain adapters status - ALL 9 NETWORKS ENABLED
+    // Check blockchain adapters - Enhanced with debug logging
+    console.log('🔍 [Health] Starting adapter status check...');
     const adapters = ['ETH', 'BNB', 'AVAX', 'MATIC', 'SOL', 'BTC', 'XDC', 'XRP', 'XLM'];
+    console.log('📋 [Health] Checking adapters:', adapters);
+    
     for (const adapter of adapters) {
       try {
+        console.log(`🔧 [Health] Checking adapter: ${adapter}`);
         // Check if adapter file exists
-        require.resolve(`./services/blockchain/adapters/${adapter}Adapter.js`);
+        const adapterPath = `./services/blockchain/adapters/${adapter}Adapter.js`;
+        console.log(`📁 [Health] Looking for: ${adapterPath}`);
+        require.resolve(adapterPath);
         // All adapters are now available for wallet connections
         healthStatus.adapters[adapter] = 'available';
+        console.log(`✅ [Health] ${adapter} adapter: AVAILABLE`);
       } catch (error) {
-        console.warn(`[Health] Adapter ${adapter} not found:`, error.message);
+        console.warn(`❌ [Health] Adapter ${adapter} not found:`, error.message);
         healthStatus.adapters[adapter] = 'unavailable';
+        console.log(`❌ [Health] ${adapter} adapter: UNAVAILABLE`);
       }
     }
+    
+    console.log('📊 [Health] Final adapter status:', JSON.stringify(healthStatus.adapters, null, 2));
 
     const responseTime = Date.now() - startTime;
     healthStatus.responseTime = `${responseTime}ms`;
@@ -387,6 +404,13 @@ app.get('/health', async (req, res) => {
         'https://dbx-admin.onrender.com'
       ]
     };
+
+    // Debug: Log final response before sending
+    console.log('🚀 [Health] Sending response to frontend...');
+    console.log('📊 [Health] Response status code:', healthStatus.db === 'connected' ? 200 : 503);
+    console.log('📋 [Health] Response adapters:', JSON.stringify(healthStatus.adapters, null, 2));
+    console.log('🌐 [Health] Response CORS:', JSON.stringify(healthStatus.cors, null, 2));
+    console.log('⏱️ [Health] Response time:', healthStatus.responseTime);
 
     // Return appropriate status code
     const statusCode = healthStatus.db === 'connected' ? 200 : 503;
