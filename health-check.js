@@ -88,7 +88,7 @@ class HealthChecker {
    */
   async checkAdapters() {
     try {
-      const adapters = ['Solana', 'XRP', 'XLM', 'AVAX', 'BNB'];
+      const adapters = ['Ethereum', 'BNB', 'AVAX', 'MATIC', 'Solana', 'Bitcoin', 'XRP', 'XLM', 'XDC'];
       const adapterResults = {};
 
       for (const adapter of adapters) {

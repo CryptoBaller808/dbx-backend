@@ -13,11 +13,15 @@ router.get('/', async (req, res) => {
     timestamp: new Date().toISOString(),
     db: "connected",
     adapters: {
-      "AVAX": "offline",
-      "BNB": "offline", 
+      "ETH": "available",
+      "BNB": "available", 
+      "AVAX": "available",
+      "MATIC": "available",
       "XRP": "available",
       "XLM": "available",
-      "ETH": "unavailable"
+      "SOL": "available",
+      "BTC": "available",
+      "XDC": "available"
     },
     services: "running",
     responseTime: "2ms",

@@ -167,19 +167,16 @@ app.get('/health', async (req, res) => {
     }
 
 
-    // Check blockchain adapters status
-    const adapters = ['AVAX', 'BNB', 'XRP', 'XLM', 'ETH'];
+    // Check blockchain adapters status - ALL 9 NETWORKS ENABLED
+    const adapters = ['ETH', 'BNB', 'AVAX', 'MATIC', 'SOL', 'BTC', 'XDC', 'XRP', 'XLM'];
     for (const adapter of adapters) {
       try {
         // Check if adapter file exists
         require.resolve(`./services/blockchain/adapters/${adapter}Adapter.js`);
-        // For now, mark AVAX and BNB as offline (disabled), others as available
-        if (adapter === 'AVAX' || adapter === 'BNB') {
-          healthStatus.adapters[adapter] = 'offline';
-        } else {
-          healthStatus.adapters[adapter] = 'available';
-        }
+        // All adapters are now available for wallet connections
+        healthStatus.adapters[adapter] = 'available';
       } catch (error) {
+        console.warn(`[Health] Adapter ${adapter} not found:`, error.message);
         healthStatus.adapters[adapter] = 'unavailable';
       }
     }
