@@ -46,7 +46,7 @@ const PORT = process.env.PORT || 3000;
 
 // CORS and Middleware - SECURE PRODUCTION CONFIG
 app.use(cors({
-  origin: "https://dbx-admin.onrender.com",  // SECURE: Specific admin domain only
+  origin: ["https://dbx-admin.onrender.com", "https://dbx-frontend.onrender.com"],  // SECURE: Allow both admin and frontend domains
   credentials: true
 }));
 app.use(bodyParser.json());
