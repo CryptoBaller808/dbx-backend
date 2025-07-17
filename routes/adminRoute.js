@@ -88,6 +88,33 @@ router.get('/test-env', (req, res) => {
     });
   }
 });
+
+// ENV CHECK ENDPOINT - As requested by user
+router.get('/env-check', (req, res) => {
+  try {
+    console.log('🔄 [ENV CHECK] Checking environment configuration...');
+    
+    const envCheck = {
+      success: true,
+      message: 'Environment check completed',
+      timestamp: new Date().toISOString(),
+      jwt: process.env.JWT_SECRET ? '✅' : '❌',
+      db: process.env.DATABASE_URL ? '✅' : '❌',
+      env: process.env.NODE_ENV || 'undefined'
+    };
+    
+    console.log('✅ [ENV CHECK] Environment check completed:', envCheck);
+    res.json(envCheck);
+  } catch (err) {
+    console.error('❌ [ENV CHECK] Environment check failed:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Environment check failed',
+      message: err.message 
+    });
+  }
+});
+
 const authMiddleware = require('../services/authMiddleware.js')
 const saleController = require('../controllers/saleController.js')
 const collectionController = require('../controllers/collectionController.js')
@@ -731,34 +758,44 @@ router.get('/user/getNFTSalesLists', authMiddleware.authenticateToken, userContr
 // TEMPORARY: Test endpoint
 router.get('/user/test', async (req, res) => {
   try {
-    console.log('🔄 [Test] Starting database test...');
-    const db = require('../models');
+    console.log('🔄 [USER TEST] Starting database test...');
     
-    console.log('🔄 [Test] Testing database connection...');
+    const db = require('../models');
+    console.log('🔄 [USER TEST] Models imported successfully');
+    console.log('🔄 [USER TEST] DB object type:', typeof db);
+    console.log('🔄 [USER TEST] DB sequelize exists:', !!db.sequelize);
+    
+    if (!db || !db.sequelize) {
+      throw new Error('Database connection not available - db.sequelize is undefined');
+    }
+    
+    console.log('🔄 [USER TEST] Testing database connection...');
     // Test database connection
     await db.sequelize.authenticate();
-    console.log('✅ [Test] Database authentication successful');
+    console.log('✅ [USER TEST] Database authentication successful');
     
-    console.log('🔄 [Test] Checking available models...');
+    console.log('🔄 [USER TEST] Checking available models...');
     const availableModels = Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase');
-    console.log('📋 [Test] Available models:', availableModels);
+    console.log('📋 [USER TEST] Available models:', availableModels);
     
     return res.json({ 
       success: true, 
       message: 'Database connection successful',
       models: availableModels,
       user_model_exists: !!db.User,
-      role_model_exists: !!db.Role
+      role_model_exists: !!db.Role,
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('❌ [Test] Test error:', err);
-    console.error('🔧 [Test] Error message:', err.message);
-    console.error('📋 [Test] Stack trace:', err.stack);
+    console.error('🔥 [USER TEST] Test error:', err);
+    console.error('🔥 [USER TEST] Error message:', err.message);
+    console.error('🔥 [USER TEST] Stack trace:', err.stack);
     return res.status(500).json({ 
       success: false, 
       message: 'Test failed',
-      error: err.message,
-      stack: err.stack
+      error: err.message || 'Unknown error',
+      stack: err.stack,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -766,6 +803,9 @@ router.get('/user/test', async (req, res) => {
 // TEMPORARY: Simple Database Connection Test
 router.get('/user/testConnection', async (req, res) => {
   try {
+    console.log('🔄 [TEST CONNECTION] Starting database connection test...');
+    console.log('🔄 [TEST CONNECTION] DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    
     const { Sequelize } = require('sequelize');
     
     // Test basic connection without models
@@ -780,21 +820,27 @@ router.get('/user/testConnection', async (req, res) => {
       logging: false
     });
     
+    console.log('🔄 [TEST CONNECTION] Testing authentication...');
     await sequelize.authenticate();
+    console.log('✅ [TEST CONNECTION] Direct database connection successful');
     
     return res.json({ 
       success: true, 
       message: 'Direct database connection successful',
       database_url_exists: !!process.env.DATABASE_URL,
-      database_url_length: process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0
+      database_url_length: process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0,
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('Direct connection test error:', err);
+    console.error('🔥 [TEST CONNECTION] Direct connection test error:', err);
+    console.error('🔥 [TEST CONNECTION] Error message:', err.message);
+    console.error('🔥 [TEST CONNECTION] Error stack:', err.stack);
     return res.status(500).json({ 
       success: false, 
       message: 'Direct connection test failed',
-      error: err.message,
-      database_url_exists: !!process.env.DATABASE_URL
+      error: err.message || 'Unknown error',
+      database_url_exists: !!process.env.DATABASE_URL,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -802,26 +848,42 @@ router.get('/user/testConnection', async (req, res) => {
 // TEMPORARY: Database Sync - Create Tables
 router.post('/user/syncDatabase', async (req, res) => {
   try {
+    console.log('🔄 [SYNC DATABASE] Starting database synchronization...');
+    
     const db = require('../models');
+    console.log('🔄 [SYNC DATABASE] Models imported successfully');
+    console.log('🔄 [SYNC DATABASE] DB object type:', typeof db);
+    console.log('🔄 [SYNC DATABASE] DB sequelize exists:', !!db.sequelize);
     
-    console.log('🔄 [Database] Starting database synchronization...');
+    if (!db || !db.sequelize) {
+      throw new Error('Database connection not available - db.sequelize is undefined');
+    }
     
+    console.log('🔄 [SYNC DATABASE] Testing database connection...');
+    await db.sequelize.authenticate();
+    console.log('✅ [SYNC DATABASE] Database authentication successful');
+    
+    console.log('🔄 [SYNC DATABASE] Starting sync operation...');
     // Sync database - this will create tables if they don't exist
     await db.sequelize.sync({ force: false, alter: true });
     
-    console.log('✅ [Database] Database synchronization completed');
+    console.log('✅ [SYNC DATABASE] Database synchronization completed');
     
     return res.json({ 
       success: true, 
       message: 'Database synchronized successfully',
-      tables_created: true
+      tables_created: true,
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('❌ [Database] Sync error:', err);
+    console.error('🔥 [SYNC DATABASE] Sync error:', err);
+    console.error('🔥 [SYNC DATABASE] Error message:', err.message);
+    console.error('🔥 [SYNC DATABASE] Error stack:', err.stack);
     return res.status(500).json({ 
       success: false, 
       message: 'Database sync failed',
-      error: err.message 
+      error: err.message || 'Unknown error',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -829,31 +891,53 @@ router.post('/user/syncDatabase', async (req, res) => {
 // TEMPORARY: Create Default Admin
 router.post('/user/createDefaultAdmin', async (req, res) => {
   try {
+    console.log('🔄 [CREATE ADMIN] Starting admin creation process...');
+    
     const bcrypt = require('bcryptjs');
     const db = require('../models'); // Import db object
-
-    console.log('🔄 [Admin] Starting admin creation process...');
+    
+    console.log('🔄 [CREATE ADMIN] Models imported successfully');
+    console.log('🔄 [CREATE ADMIN] DB object type:', typeof db);
+    console.log('🔄 [CREATE ADMIN] DB sequelize exists:', !!db.sequelize);
+    
+    if (!db || !db.sequelize) {
+      throw new Error('Database connection not available - db.sequelize is undefined');
+    }
     
     // First, ensure database is synced
     try {
+      console.log('🔄 [CREATE ADMIN] Testing database connection...');
+      await db.sequelize.authenticate();
+      console.log('✅ [CREATE ADMIN] Database authentication successful');
+      
+      console.log('🔄 [CREATE ADMIN] Starting database sync...');
       await db.sequelize.sync({ force: false, alter: true });
-      console.log('✅ [Admin] Database sync completed');
+      console.log('✅ [CREATE ADMIN] Database sync completed');
     } catch (syncError) {
-      console.error('❌ [Admin] Database sync failed:', syncError);
+      console.error('🔥 [CREATE ADMIN] Database sync failed:', syncError);
+      console.error('🔥 [CREATE ADMIN] Sync error message:', syncError.message);
+      console.error('🔥 [CREATE ADMIN] Sync error stack:', syncError.stack);
       return res.status(500).json({ 
         success: false, 
         message: 'Database sync failed',
-        error: syncError.message 
+        error: syncError.message || 'Unknown sync error',
+        timestamp: new Date().toISOString()
       });
     }
 
+    console.log('🔄 [CREATE ADMIN] Checking for existing admin...');
     // Check if admin already exists
     const existing = await db.User.findOne({ where: { email: 'admin@dbx.com' } });
     if (existing) {
-      console.log('⚠️  [Admin] Admin user already exists');
-      return res.json({ success: false, message: 'Admin already exists' });
+      console.log('⚠️  [CREATE ADMIN] Admin user already exists');
+      return res.json({ 
+        success: false, 
+        message: 'Admin already exists',
+        timestamp: new Date().toISOString()
+      });
     }
 
+    console.log('🔄 [CREATE ADMIN] Finding or creating admin role...');
     // Find or create admin role
     let adminRole = await db.Role.findOne({ where: { name: 'admin' } });
     if (!adminRole) {
