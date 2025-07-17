@@ -819,6 +819,249 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
   }
 });
 
+// COMPREHENSIVE DEBUG ENDPOINTS FOR PRODUCTION TROUBLESHOOTING
+
+// 1. Environment Variables Debug
+router.get('/debug/env', (req, res) => {
+  try {
+    console.log('🔍 [DEBUG ENV] Environment variables check started');
+    
+    const envCheck = {
+      success: true,
+      message: 'Environment variables check',
+      timestamp: new Date().toISOString(),
+      environment: {
+        NODE_ENV: process.env.NODE_ENV || 'undefined',
+        JWT_SECRET: process.env.JWT_SECRET ? 'SET (length: ' + process.env.JWT_SECRET.length + ')' : 'NOT SET',
+        DATABASE_URL: process.env.DATABASE_URL ? 'SET (length: ' + process.env.DATABASE_URL.length + ')' : 'NOT SET',
+        XUMM_API_KEY: process.env.XUMM_API_KEY ? 'SET' : 'NOT SET',
+        XUMM_API_SECRET: process.env.XUMM_API_SECRET ? 'SET' : 'NOT SET',
+        XRPL_NETWORK: process.env.XRPL_NETWORK || 'undefined'
+      },
+      critical_missing: []
+    };
+    
+    // Check for critical missing variables
+    if (!process.env.JWT_SECRET) envCheck.critical_missing.push('JWT_SECRET');
+    if (!process.env.DATABASE_URL) envCheck.critical_missing.push('DATABASE_URL');
+    
+    if (envCheck.critical_missing.length > 0) {
+      envCheck.success = false;
+      envCheck.message = 'Critical environment variables missing';
+    }
+    
+    console.log('✅ [DEBUG ENV] Environment check completed:', envCheck);
+    return res.json(envCheck);
+  } catch (err) {
+    console.error('❌ [DEBUG ENV] Environment check failed:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Environment check failed',
+      error: err.message,
+      stack: err.stack
+    });
+  }
+});
+
+// 2. Database Connection Test (Detailed)
+router.get('/debug/database', async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG DB] Database connection test started');
+    
+    const { Sequelize } = require('sequelize');
+    
+    if (!process.env.DATABASE_URL) {
+      console.error('❌ [DEBUG DB] DATABASE_URL not found');
+      return res.status(500).json({
+        success: false,
+        message: 'DATABASE_URL environment variable not set',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    console.log('🔄 [DEBUG DB] Creating Sequelize connection...');
+    const sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: (msg) => console.log('📋 [DB LOG]', msg)
+    });
+    
+    console.log('🔄 [DEBUG DB] Testing authentication...');
+    await sequelize.authenticate();
+    
+    console.log('🔄 [DEBUG DB] Testing query...');
+    const [results] = await sequelize.query('SELECT version() as version, current_database() as database');
+    
+    await sequelize.close();
+    
+    const response = {
+      success: true,
+      message: 'Database connection successful',
+      timestamp: new Date().toISOString(),
+      database_info: results[0],
+      connection_test: 'PASSED'
+    };
+    
+    console.log('✅ [DEBUG DB] Database test completed:', response);
+    return res.json(response);
+  } catch (err) {
+    console.error('❌ [DEBUG DB] Database test failed:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Database connection failed',
+      error: err.message,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// 3. Models Loading Test
+router.get('/debug/models', async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG MODELS] Models loading test started');
+    
+    console.log('🔄 [DEBUG MODELS] Requiring models...');
+    const db = require('../models');
+    
+    console.log('🔄 [DEBUG MODELS] Checking sequelize instance...');
+    if (!db.sequelize) {
+      throw new Error('Sequelize instance not found in models');
+    }
+    
+    console.log('🔄 [DEBUG MODELS] Testing database authentication...');
+    await db.sequelize.authenticate();
+    
+    console.log('🔄 [DEBUG MODELS] Checking available models...');
+    const availableModels = Object.keys(db).filter(key => 
+      key !== 'Sequelize' && 
+      key !== 'sequelize' && 
+      key !== 'initializeDatabase' &&
+      typeof db[key] === 'object' &&
+      db[key].name
+    );
+    
+    console.log('🔄 [DEBUG MODELS] Testing specific models...');
+    const modelTests = {};
+    
+    // Test User model
+    if (db.User) {
+      try {
+        const userCount = await db.User.count();
+        modelTests.User = { status: 'OK', count: userCount };
+      } catch (err) {
+        modelTests.User = { status: 'ERROR', error: err.message };
+      }
+    } else {
+      modelTests.User = { status: 'NOT_FOUND' };
+    }
+    
+    // Test CurrencyList model
+    if (db.CurrencyList) {
+      try {
+        const currencyCount = await db.CurrencyList.count();
+        modelTests.CurrencyList = { status: 'OK', count: currencyCount };
+      } catch (err) {
+        modelTests.CurrencyList = { status: 'ERROR', error: err.message };
+      }
+    } else {
+      modelTests.CurrencyList = { status: 'NOT_FOUND' };
+    }
+    
+    const response = {
+      success: true,
+      message: 'Models loading test completed',
+      timestamp: new Date().toISOString(),
+      available_models: availableModels,
+      model_tests: modelTests,
+      sequelize_connected: true
+    };
+    
+    console.log('✅ [DEBUG MODELS] Models test completed:', response);
+    return res.json(response);
+  } catch (err) {
+    console.error('❌ [DEBUG MODELS] Models test failed:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Models loading failed',
+      error: err.message,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// 4. Complete System Health Check
+router.get('/debug/health', async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG HEALTH] Complete system health check started');
+    
+    const healthCheck = {
+      success: true,
+      message: 'System health check',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      checks: {}
+    };
+    
+    // Environment check
+    try {
+      healthCheck.checks.environment = {
+        status: 'OK',
+        jwt_secret: !!process.env.JWT_SECRET,
+        database_url: !!process.env.DATABASE_URL,
+        node_env: process.env.NODE_ENV
+      };
+    } catch (err) {
+      healthCheck.checks.environment = { status: 'ERROR', error: err.message };
+      healthCheck.success = false;
+    }
+    
+    // Database check
+    try {
+      const db = require('../models');
+      await db.sequelize.authenticate();
+      healthCheck.checks.database = { status: 'OK', connected: true };
+    } catch (err) {
+      healthCheck.checks.database = { status: 'ERROR', error: err.message };
+      healthCheck.success = false;
+    }
+    
+    // Models check
+    try {
+      const db = require('../models');
+      const modelCount = Object.keys(db).filter(key => 
+        key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'
+      ).length;
+      healthCheck.checks.models = { status: 'OK', count: modelCount };
+    } catch (err) {
+      healthCheck.checks.models = { status: 'ERROR', error: err.message };
+      healthCheck.success = false;
+    }
+    
+    if (!healthCheck.success) {
+      healthCheck.message = 'System health check failed';
+    }
+    
+    console.log('✅ [DEBUG HEALTH] Health check completed:', healthCheck);
+    return res.json(healthCheck);
+  } catch (err) {
+    console.error('❌ [DEBUG HEALTH] Health check failed:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Health check failed',
+      error: err.message,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Add a dummy handler for any undefined routes to prevent the "Route.get() requires a callback function" error
 const dummyHandler = (req, res) => {
   res.status(404).json({ error: "Route not implemented" });
