@@ -1,5 +1,93 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
+
+// Add global error handler for admin routes
+router.use((err, req, res, next) => {
+  console.error('❌ [ADMIN ROUTE ERROR]', err);
+  res.status(500).json({ 
+    success: false,
+    error: 'Admin route error', 
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// MINIMAL TEST ROUTE - No dependencies
+router.get('/minimal', (req, res) => {
+  try {
+    console.log('✅ [MINIMAL] Minimal test route called successfully');
+    res.json({ 
+      success: true, 
+      message: 'Minimal admin route working!',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  } catch (err) {
+    console.error('❌ [MINIMAL] Even minimal route failed:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Minimal route failed',
+      message: err.message 
+    });
+  }
+});
+
+// TEST MODELS IMPORT
+router.get('/test-models', (req, res) => {
+  try {
+    console.log('🔄 [TEST MODELS] Testing models import...');
+    const db = require('../models');
+    console.log('✅ [TEST MODELS] Models imported successfully');
+    
+    const modelKeys = Object.keys(db).filter(key => 
+      key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'Models import successful',
+      models: modelKeys,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('❌ [TEST MODELS] Models import failed:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Models import failed',
+      message: err.message,
+      stack: err.stack
+    });
+  }
+});
+
+// TEST ENVIRONMENT VARIABLES
+router.get('/test-env', (req, res) => {
+  try {
+    console.log('🔄 [TEST ENV] Testing environment variables...');
+    
+    const envStatus = {
+      success: true,
+      message: 'Environment variables test',
+      timestamp: new Date().toISOString(),
+      variables: {
+        NODE_ENV: process.env.NODE_ENV || 'undefined',
+        JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT SET',
+        DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
+      }
+    };
+    
+    console.log('✅ [TEST ENV] Environment test completed');
+    res.json(envStatus);
+  } catch (err) {
+    console.error('❌ [TEST ENV] Environment test failed:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Environment test failed',
+      message: err.message 
+    });
+  }
+});
 const authMiddleware = require('../services/authMiddleware.js')
 const saleController = require('../controllers/saleController.js')
 const collectionController = require('../controllers/collectionController.js')
