@@ -1,5 +1,5 @@
 const { DATE } = require("sequelize");
-const db = require("../util/database.js");
+const db = require("../models");  // Use models instead of util/database
 const jwt = require("jsonwebtoken");
 const multer = require("multer"); // multer will be used to handle the form data.
 const Aws = require("aws-sdk"); // aws-sdk library will used to upload image to s3 bucket.
@@ -21,12 +21,12 @@ const Categories = db.categories;
 const Review = db.reviews;
 const Wishlist = db.wishlist;
 const Items = db.items;
-const CurrencyList = db.currency_list;
+const CurrencyList = db.CurrencyList; // Fixed: Use correct model name
 const BlockchainList = db.blockchain_list;
 const settingBanner = db.settings;
 const transactions = db.transactions;
-const account_offers = db.account_offers; // to get total sales
-const ItemActivity = db.item_activity;
+const account_offers = db.AccountOffer; // Fixed: Use correct model name
+const ItemActivity = db.ItemActivity; // Fixed: Use correct model name
 const WAValidator = require("wallet-address-validator");
 const { json } = require("body-parser");
 const { create } = require("domain");
@@ -555,7 +555,7 @@ async function callAwait(wallet, usertoken, firstname = null, lastname = null, e
           retwallet = true;
           const username = wallet;
           const user = { wallet_address: username };
-          const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "24h" });
+          const accessToken = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "24h" });
           const xumm_token = usertoken;
 
           var obj = users.get();

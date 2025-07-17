@@ -1,8 +1,8 @@
 require('dotenv').config()
 const { DATE } = require('sequelize')
-const db = require("../util/database.js");
+const db = require("../models");  // Use models instead of util/database
 const jwt = require('jsonwebtoken')
-const User = db.users;
+const User = db.User;  // Use capitalized User model
 const { user_mfa } = require('../models');
 
 //  11. Login User
@@ -10,7 +10,7 @@ const loginUser = async (req, res) => {
     // authenticate user
     const username = req.body.username
     const user = {name: username}
-    const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '24h'})
+    const accessToken = jwt.sign(user, process.env.JWT_SECRET, {expiresIn: '24h'})
     res.json({access_token: accessToken})
 }
 
@@ -23,7 +23,7 @@ function authenticateToken(req, res, next) {
   
         if (token == null) return res.sendStatus(401);
   
-        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
             if (err) return res.send(err);
 
             console.log("From AUTH", user);
