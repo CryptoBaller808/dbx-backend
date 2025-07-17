@@ -10,13 +10,27 @@ const xrpl = require("xrpl");
 const { XummSdk } = require("xumm-sdk");
 const { Console } = require("console");
 require("dotenv/config");
-const Sdk = new XummSdk(
-  process.env.XUMM_API_KEY,
-  process.env.XUMM_API_SECRET,
-  {
-    network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+
+// Initialize XUMM SDK only if credentials are available
+let Sdk = null;
+if (process.env.XUMM_API_KEY && process.env.XUMM_API_SECRET) {
+  try {
+    Sdk = new XummSdk(
+      process.env.XUMM_API_KEY,
+      process.env.XUMM_API_SECRET,
+      {
+        network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+      }
+    );
+    console.log('✅ [XUMM] XUMM SDK initialized successfully in saleController');
+  } catch (error) {
+    console.warn('⚠️  [XUMM] Failed to initialize XUMM SDK in saleController:', error.message);
+    Sdk = null;
   }
-);
+} else {
+  console.warn('⚠️  [XUMM] XUMM API credentials not found in saleController, SDK not initialized');
+}
+
 // create main Model
 const ActivityEnum = Object.freeze({
   1: "transaction",

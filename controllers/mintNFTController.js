@@ -5,13 +5,26 @@ const Aws = require("aws-sdk");
 const { XummSdk } = require("xumm-sdk");
 const axios = require("axios");
 const xrpl = require("xrpl");
-const Sdk = new XummSdk(
-  process.env.XUMM_API_KEY,
-  process.env.XUMM_API_SECRET,
-  {
-    network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+
+// Initialize XUMM SDK only if credentials are available
+let Sdk = null;
+if (process.env.XUMM_API_KEY && process.env.XUMM_API_SECRET) {
+  try {
+    Sdk = new XummSdk(
+      process.env.XUMM_API_KEY,
+      process.env.XUMM_API_SECRET,
+      {
+        network: process.env.XRPL_NETWORK || 'mainnet' // defaults to mainnet
+      }
+    );
+    console.log('✅ [XUMM] XUMM SDK initialized successfully in mintNFTController');
+  } catch (error) {
+    console.warn('⚠️  [XUMM] Failed to initialize XUMM SDK in mintNFTController:', error.message);
+    Sdk = null;
   }
-);
+} else {
+  console.warn('⚠️  [XUMM] XUMM API credentials not found in mintNFTController, SDK not initialized');
+}
 var Sequelize = require("sequelize");
 
 // Import models from the database connection
