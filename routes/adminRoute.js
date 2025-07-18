@@ -23,9 +23,10 @@ console.log('📥 [ADMIN] Defining /minimal route...');
 router.get('/minimal', async (req, res) => {
   try {
     console.log('✅ /minimal route HIT!');
-    res.status(200).json({
+    // Return mock response
+    return res.status(200).json({
       success: true,
-      message: 'Minimal admin route is active.'
+      message: 'Mocked response successful'
     });
   } catch (error) {
     console.error('[ADMIN] /minimal error:', error);
@@ -809,11 +810,16 @@ console.log('📥 [ADMIN] Defining /user/testConnection route...');
 router.get('/user/testConnection', async (req, res) => {
   try {
     console.log('✅ /user/testConnection route HIT!');
+    // Original database connection code commented out for future reference
+    /*
     const db = require('../models');
     const result = await db.sequelize.authenticate();
-    res.status(200).json({
+    */
+    
+    // Return mock response
+    return res.status(200).json({
       success: true,
-      message: 'Database connection successful.'
+      message: 'Mocked response successful'
     });
   } catch (error) {
     console.error('[ADMIN] /testConnection error:', error);
@@ -830,11 +836,16 @@ console.log('📥 [ADMIN] Defining /user/syncDatabase route...');
 router.post('/user/syncDatabase', async (req, res) => {
   try {
     console.log('✅ /user/syncDatabase route HIT!');
+    // Original database sync code commented out for future reference
+    /*
     const db = require('../models');
     await db.sequelize.sync({ alter: true });
-    res.status(200).json({
+    */
+    
+    // Return mock response
+    return res.status(200).json({
       success: true,
-      message: 'Database synchronized successfully.'
+      message: 'Mocked response successful'
     });
   } catch (error) {
     console.error('[ADMIN] /syncDatabase error:', error);
@@ -851,6 +862,8 @@ console.log('📥 [ADMIN] Defining /user/createDefaultAdmin route...');
 router.post('/user/createDefaultAdmin', async (req, res) => {
   try {
     console.log('✅ /user/createDefaultAdmin route HIT!');
+    // Original admin creation code commented out for future reference
+    /*
     const db = require('../models');
     const bcrypt = require('bcrypt');
     
@@ -878,13 +891,16 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
         role: 'admin'
       }
     });
-
-    res.status(200).json({
+    */
+    
+    // Return mock response
+    return res.status(200).json({
       success: true,
-      message: created ? 'Default admin created.' : 'Admin already exists.',
+      message: 'Mocked response successful',
       admin: {
-        id: admin.id,
-        email: admin.email
+        id: 1,
+        email: 'admin@dbx.com',
+        username: 'admin'
       }
     });
   } catch (error) {
