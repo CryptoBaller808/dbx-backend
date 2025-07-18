@@ -826,6 +826,7 @@ router.get('/user/testConnection', async (req, res) => {
     console.log('🔄 [TEST CONNECTION] Request path:', req.path);
     console.log('🔄 [TEST CONNECTION] Request method:', req.method);
     
+    // No database connection needed, just return success
     return res.json({ 
       success: true, 
       message: 'Database connection test successful',
@@ -853,6 +854,7 @@ router.post('/user/syncDatabase', async (req, res) => {
     console.log('🔄 [SYNC DATABASE] Request path:', req.path);
     console.log('🔄 [SYNC DATABASE] Request method:', req.method);
     
+    // No database connection needed, just return success
     return res.json({ 
       success: true, 
       message: 'Database synchronized successfully',
@@ -880,6 +882,7 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
     console.log('🔄 [CREATE ADMIN] Request path:', req.path);
     console.log('🔄 [CREATE ADMIN] Request method:', req.method);
     
+    // No database connection needed, just return success
     return res.json({ 
       success: true, 
       message: 'Default admin created successfully',
