@@ -1,34 +1,42 @@
 const express = require('express');
 const router = express.Router();
 
-// Add global error handler for admin routes
-router.use((err, req, res, next) => {
-  console.error('❌ [ADMIN ROUTE ERROR]', err);
-  res.status(500).json({ 
-    success: false,
-    error: 'Admin route error', 
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    timestamp: new Date().toISOString()
-  });
+// Add debugging middleware to track requests
+router.use((req, res, next) => {
+  console.log(`🔍 [ADMIN DEBUG] ${req.method} ${req.path} - Request received`);
+  console.log(`🔍 [ADMIN DEBUG] Headers:`, req.headers);
+  console.log(`🔍 [ADMIN DEBUG] Query:`, req.query);
+  next();
 });
 
 // MINIMAL TEST ROUTE - No dependencies
 router.get('/minimal', (req, res) => {
   try {
     console.log('✅ [MINIMAL] Minimal test route called successfully');
-    res.json({ 
+    console.log('✅ [MINIMAL] Request path:', req.path);
+    console.log('✅ [MINIMAL] Request method:', req.method);
+    console.log('✅ [MINIMAL] Process uptime:', process.uptime());
+    
+    const response = { 
       success: true, 
       message: 'Minimal admin route working!',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime()
-    });
+      uptime: process.uptime(),
+      path: req.path,
+      method: req.method,
+      nodeEnv: process.env.NODE_ENV
+    };
+    
+    console.log('✅ [MINIMAL] Sending response:', response);
+    res.json(response);
   } catch (err) {
     console.error('❌ [MINIMAL] Even minimal route failed:', err);
+    console.error('❌ [MINIMAL] Error stack:', err.stack);
     res.status(500).json({ 
       success: false, 
       error: 'Minimal route failed',
-      message: err.message 
+      message: err.message,
+      stack: err.stack
     });
   }
 });
@@ -804,10 +812,24 @@ router.get('/user/test', async (req, res) => {
 router.get('/user/testConnection', async (req, res) => {
   try {
     console.log('🔄 [TEST CONNECTION] Starting database connection test...');
+    console.log('🔄 [TEST CONNECTION] Request path:', req.path);
+    console.log('🔄 [TEST CONNECTION] Request method:', req.method);
     console.log('🔄 [TEST CONNECTION] DATABASE_URL exists:', !!process.env.DATABASE_URL);
     
-    const { Sequelize } = require('sequelize');
+    if (!process.env.DATABASE_URL) {
+      console.error('❌ [TEST CONNECTION] DATABASE_URL is not set');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'DATABASE_URL environment variable is not set',
+        timestamp: new Date().toISOString()
+      });
+    }
     
+    console.log('🔄 [TEST CONNECTION] Importing Sequelize...');
+    const { Sequelize } = require('sequelize');
+    console.log('✅ [TEST CONNECTION] Sequelize imported successfully');
+    
+    console.log('🔄 [TEST CONNECTION] Creating Sequelize instance...');
     // Test basic connection without models
     const sequelize = new Sequelize(process.env.DATABASE_URL, {
       dialect: 'postgres',
@@ -849,13 +871,18 @@ router.get('/user/testConnection', async (req, res) => {
 router.post('/user/syncDatabase', async (req, res) => {
   try {
     console.log('🔄 [SYNC DATABASE] Starting database synchronization...');
+    console.log('🔄 [SYNC DATABASE] Request path:', req.path);
+    console.log('🔄 [SYNC DATABASE] Request method:', req.method);
     
+    console.log('🔄 [SYNC DATABASE] Importing models...');
     const db = require('../models');
     console.log('🔄 [SYNC DATABASE] Models imported successfully');
     console.log('🔄 [SYNC DATABASE] DB object type:', typeof db);
     console.log('🔄 [SYNC DATABASE] DB sequelize exists:', !!db.sequelize);
+    console.log('🔄 [SYNC DATABASE] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'));
     
     if (!db || !db.sequelize) {
+      console.error('❌ [SYNC DATABASE] Database connection not available - db.sequelize is undefined');
       throw new Error('Database connection not available - db.sequelize is undefined');
     }
     
@@ -892,15 +919,24 @@ router.post('/user/syncDatabase', async (req, res) => {
 router.post('/user/createDefaultAdmin', async (req, res) => {
   try {
     console.log('🔄 [CREATE ADMIN] Starting admin creation process...');
+    console.log('🔄 [CREATE ADMIN] Request path:', req.path);
+    console.log('🔄 [CREATE ADMIN] Request method:', req.method);
     
+    console.log('🔄 [CREATE ADMIN] Importing bcrypt...');
     const bcrypt = require('bcryptjs');
+    console.log('✅ [CREATE ADMIN] bcrypt imported successfully');
+    
+    console.log('🔄 [CREATE ADMIN] Importing models...');
     const db = require('../models'); // Import db object
+    console.log('✅ [CREATE ADMIN] Models imported successfully');
     
     console.log('🔄 [CREATE ADMIN] Models imported successfully');
     console.log('🔄 [CREATE ADMIN] DB object type:', typeof db);
     console.log('🔄 [CREATE ADMIN] DB sequelize exists:', !!db.sequelize);
+    console.log('🔄 [CREATE ADMIN] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'));
     
     if (!db || !db.sequelize) {
+      console.error('❌ [CREATE ADMIN] Database connection not available - db.sequelize is undefined');
       throw new Error('Database connection not available - db.sequelize is undefined');
     }
     
@@ -1278,6 +1314,22 @@ router.post('/user/createAdminManual', async (req, res) => {
       error: err.message
     });
   }
+});
+
+// Add error handler at the end (after all routes)
+router.use((err, req, res, next) => {
+  console.error('❌ [ADMIN ROUTE ERROR]', err);
+  console.error('❌ [ADMIN ROUTE ERROR] Request URL:', req.url);
+  console.error('❌ [ADMIN ROUTE ERROR] Request Method:', req.method);
+  console.error('❌ [ADMIN ROUTE ERROR] Stack:', err.stack);
+  
+  res.status(500).json({ 
+    success: false,
+    error: 'Admin route error', 
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
 });
 
 module.exports = router;
