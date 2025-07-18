@@ -599,20 +599,22 @@ app.use('/api/bridge', bridgeRoutes);
 // Mount Creator Tools Routes
 app.use('/api/creator', creatorRoutes);
 
+// TEMPORARILY COMMENTED OUT TO FIX ADMIN ROUTE CONFLICTS
 // Mount Enhanced Admin Routes
-app.use('/admindashboard', enhancedAdminRoutes);
+// app.use('/admindashboard', enhancedAdminRoutes);
 
 // Mount Temporary Admin Setup Route (bypass problematic admin routes)
 app.use('/temp-admin', tempAdminSetup);
 
+// TEMPORARILY COMMENTED OUT TO FIX ADMIN ROUTE CONFLICTS
 // Mount Real-Time Analytics Routes
-app.use('/admindashboard', realTimeAnalyticsRoutes);
+// app.use('/admindashboard', realTimeAnalyticsRoutes);
 
 // Mount User Management Routes
-app.use('/admindashboard', userManagementRoutes);
+// app.use('/admindashboard', userManagementRoutes);
 
 // Mount System Health Monitoring Routes
-app.use('/admindashboard', systemHealthRoutes);
+// app.use('/admindashboard', systemHealthRoutes);
 
 // Mount Bitcoin Routes
 app.use('/api/bitcoin', bitcoinRoutes);
