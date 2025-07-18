@@ -1,7 +1,13 @@
-const express = require('express');
-const router = express.Router();
+console.log('📥 adminRoute.js loaded');
+console.log('📥 [ADMIN] Starting adminRoute.js execution...');
 
-console.log("📥 adminRoute.js loaded");
+const express = require('express');
+console.log('📥 [ADMIN] Express imported successfully');
+
+const router = express.Router();
+console.log('📥 [ADMIN] Router created successfully');
+
+console.log("📥 [ADMIN] adminRoute.js fully loaded and ready");
 
 // Add debugging middleware to track requests
 router.use((req, res, next) => {
@@ -12,8 +18,10 @@ router.use((req, res, next) => {
 });
 
 // MINIMAL TEST ROUTE - No dependencies
+console.log('📥 [ADMIN] Defining /minimal route...');
 router.get('/minimal', (req, res) => {
-  console.log("✅ /minimal route hit");
+  console.log("✅ /minimal route HIT!");
+  console.log('✅ /minimal route initialized');
   try {
     console.log('✅ [MINIMAL] Minimal test route called successfully');
     console.log('✅ [MINIMAL] Request path:', req.path);
@@ -22,7 +30,7 @@ router.get('/minimal', (req, res) => {
     
     const response = { 
       success: true, 
-      message: 'Minimal route working!',
+      message: 'Minimal route is working in production!',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       path: req.path,
@@ -812,7 +820,9 @@ router.get('/user/test', async (req, res) => {
 });
 
 // TEMPORARY: Simple Database Connection Test
+console.log('📥 [ADMIN] Defining /user/testConnection route...');
 router.get('/user/testConnection', async (req, res) => {
+  console.log("✅ /user/testConnection route HIT!");
   try {
     console.log('🔄 [TEST CONNECTION] Starting database connection test...');
     console.log('🔄 [TEST CONNECTION] Request path:', req.path);
@@ -871,7 +881,9 @@ router.get('/user/testConnection', async (req, res) => {
 });
 
 // TEMPORARY: Database Sync - Create Tables
+console.log('📥 [ADMIN] Defining /user/syncDatabase route...');
 router.post('/user/syncDatabase', async (req, res) => {
+  console.log("✅ /user/syncDatabase route HIT!");
   try {
     console.log('🔄 [SYNC DATABASE] Starting database synchronization...');
     console.log('🔄 [SYNC DATABASE] Request path:', req.path);
@@ -919,7 +931,9 @@ router.post('/user/syncDatabase', async (req, res) => {
 });
 
 // TEMPORARY: Create Default Admin
+console.log('📥 [ADMIN] Defining /user/createDefaultAdmin route...');
 router.post('/user/createDefaultAdmin', async (req, res) => {
+  console.log("✅ /user/createDefaultAdmin route HIT!");
   try {
     console.log('🔄 [CREATE ADMIN] Starting admin creation process...');
     console.log('🔄 [CREATE ADMIN] Request path:', req.path);
@@ -1335,4 +1349,10 @@ router.use((err, req, res, next) => {
   });
 });
 
+console.log('📥 [ADMIN] About to export router...');
+console.log('📥 [ADMIN] Router object type:', typeof router);
+console.log('📥 [ADMIN] Router stack length:', router.stack ? router.stack.length : 'undefined');
+
 module.exports = router;
+
+console.log('📥 [ADMIN] adminRoute.js export completed successfully!');
