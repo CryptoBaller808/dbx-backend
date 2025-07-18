@@ -1,8 +1,17 @@
+console.log("🚀 [STARTUP] server.js started...");
+console.log("🚀 [STARTUP] Process ID:", process.pid);
+console.log("🚀 [STARTUP] Node version:", process.version);
+console.log("🚀 [STARTUP] Environment:", process.env.NODE_ENV || 'development');
+
 const express = require('express');
+console.log("✅ [STARTUP] Express imported successfully");
+
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const http = require('http');
 const socketIo = require('socket.io');
+console.log("✅ [STARTUP] Core modules imported successfully");
+
 const { initializeBlockchainServices } = require('./services/blockchain');
 const { initializeDatabase } = require('./models');
 const { 
@@ -14,10 +23,12 @@ const {
 } = require('./middleware/databaseSecurity');
 
 const { createHealthCheckEndpoint } = require('./health-check');
+console.log("✅ [STARTUP] Service modules imported successfully");
 
 // Import your route files
 const adminRoutes = require('./routes/adminRoute');
 const tempAdminSetup = require('./routes/tempAdminSetup');
+console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const { router: walletRoutes, initializeServices: initializeWalletServices } = require('./routes/walletRoutes');
@@ -33,8 +44,15 @@ const { router: userManagementRoutes, initializeUserManagementService } = requir
 const { router: systemHealthRoutes, initializeHealthMonitoringService } = require('./routes/systemHealthRoutes');
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
 
+console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
+console.log("✅ [STARTUP] Express app created successfully");
+
+console.log("🌐 [STARTUP] About to create HTTP server...");
 const server = http.createServer(app);
+console.log("✅ [STARTUP] HTTP server created successfully");
+
+console.log("🔌 [STARTUP] About to initialize Socket.IO...");
 const io = socketIo(server, {
   cors: {
     origin: ['https://digitalblockexchange-fe.vercel.app', 'https://digitalblockexchange-admin.vercel.app', 'http://localhost:3000'],
@@ -42,9 +60,21 @@ const io = socketIo(server, {
     credentials: true
   }
 });
+console.log("✅ [STARTUP] Socket.IO initialized successfully");
+
 const PORT = process.env.PORT || 3000;
+console.log("🔧 [STARTUP] PORT configured:", PORT);
+
+// Add basic health test route at the very top
+console.log("🧪 [STARTUP] Adding basic health test route...");
+app.get('/basic-health', (req, res) => {
+  console.log("✅ [TEST] basic-health hit!");
+  res.send("✅ Backend up!");
+});
+console.log("✅ [STARTUP] Basic health test route added");
 
 // CORS and Middleware - SECURE PRODUCTION CONFIG
+console.log("🛡️ [STARTUP] Setting up CORS and middleware...");
 app.use(cors({
   origin: [
     "https://dbx-admin.onrender.com", 
@@ -54,6 +84,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(bodyParser.json());
+console.log("✅ [STARTUP] CORS and middleware configured successfully");
 
 // Enhanced health check route for Render deployment
 app.get('/health', async (req, res) => {
@@ -570,16 +601,21 @@ app.get('/', (req, res) => {
 });
 
 // 🧪 DIRECT TEST ROUTE - Added for debugging admin route issues
+console.log("🧪 [STARTUP] Adding direct test admin route...");
 app.get('/test-direct-admin', (req, res) => {
   console.log('🧪 [DIRECT TEST] Direct test route hit successfully');
   res.json({ success: true, message: 'Direct route hit' });
 });
+console.log("✅ [STARTUP] Direct test admin route added");
 
 // Mount Admin Routes with enhanced logging
-console.log("🛠 About to mount adminRoutes...");
+console.log("🛠 [STARTUP] About to mount adminRoutes...");
+console.log("🛠 [STARTUP] adminRoutes object:", typeof adminRoutes);
+console.log("🛠 [STARTUP] adminRoutes keys:", Object.keys(adminRoutes || {}));
 app.use('/admindashboard', adminRoutes);
-console.log("✅ adminRoutes mounted!");
+console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
+console.log("🔗 [STARTUP] About to mount other routes...");
 // Mount MFA Routes
 app.use('/api/mfa', mfaRoutes);
 
@@ -843,14 +879,19 @@ const initializeServices = async () => {
 };
 
 // Start server with enhanced initialization and Socket.io
+console.log("🚀 [STARTUP] About to initialize services...");
 initializeServices().then(() => {
+  console.log("✅ [STARTUP] Services initialized successfully, starting server...");
   server.listen(PORT, '0.0.0.0', () => {
+    console.log("🎉 [STARTUP] SERVER LISTENING SUCCESSFULLY!");
     console.log(`[Server] DBX Backend running on port ${PORT} with enhanced database security and real-time Socket.io`);
     console.log(`[Server] Database health check available at: http://localhost:${PORT}/api/health/database`);
     console.log(`[Socket.io] Real-time transaction tracking enabled`);
+    console.log("🎯 [STARTUP] All startup phases completed successfully!");
   });
 }).catch((err) => {
-  console.error('[Server] Failed to initialize services:', err);
+  console.error('❌ [STARTUP] Failed to initialize services:', err);
+  console.error('❌ [STARTUP] Error stack:', err.stack);
   process.exit(1);
 });
 
