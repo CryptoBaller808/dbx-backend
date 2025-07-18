@@ -1,7 +1,8 @@
+const express = require('express');
+
+// Now safe to log after successful import
 console.log('📥 adminRoute.js loaded');
 console.log('📥 [ADMIN] Starting adminRoute.js execution...');
-
-const express = require('express');
 console.log('📥 [ADMIN] Express imported successfully');
 
 const router = express.Router();
