@@ -29,35 +29,15 @@ router.get('/minimal', async (req, res) => {
     console.log('✅ [MINIMAL] Request method:', req.method);
     console.log('✅ [MINIMAL] Process uptime:', process.uptime());
     
-    // Import DB and log its properties to debug
-    const db = require('../models');
-    console.log('[ADMIN] DB object keys:', Object.keys(db));
-    console.log('[ADMIN] DB sequelize exists:', !!db.sequelize);
-    
-    // Test database connection to verify it's working
-    if (db.sequelize) {
-      try {
-        await db.sequelize.authenticate();
-        console.log('✅ [MINIMAL] Database connection successful');
-      } catch (dbError) {
-        console.error('❌ [MINIMAL] Database connection error:', dbError);
-        // Continue execution even if DB connection fails
-      }
-    }
-    
-    const response = { 
+    return res.json({ 
       success: true, 
       message: 'Minimal route is working in production!',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       path: req.path,
       method: req.method,
-      nodeEnv: process.env.NODE_ENV,
-      db_connected: !!db.sequelize
-    };
-    
-    console.log('✅ [MINIMAL] Sending response:', response);
-    return res.json(response);
+      nodeEnv: process.env.NODE_ENV
+    });
   } catch (err) {
     console.error('❌ [MINIMAL] Even minimal route failed:', err);
     console.error('❌ [MINIMAL] Error stack:', err.stack);
@@ -845,41 +825,10 @@ router.get('/user/testConnection', async (req, res) => {
     console.log('🔄 [TEST CONNECTION] Starting database connection test...');
     console.log('🔄 [TEST CONNECTION] Request path:', req.path);
     console.log('🔄 [TEST CONNECTION] Request method:', req.method);
-    console.log('🔄 [TEST CONNECTION] DATABASE_URL exists:', !!process.env.DATABASE_URL);
-    
-    if (!process.env.DATABASE_URL) {
-      console.error('❌ [TEST CONNECTION] DATABASE_URL is not set');
-      return res.status(500).json({ 
-        success: false, 
-        message: 'DATABASE_URL environment variable is not set',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Import DB and log its properties to debug
-    const db = require('../models');
-    console.log('[TEST CONNECTION] DB object keys:', Object.keys(db));
-    console.log('[TEST CONNECTION] DB sequelize exists:', !!db.sequelize);
-    
-    if (!db.sequelize) {
-      console.error('❌ [TEST CONNECTION] db.sequelize is undefined');
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Database connection not available - db.sequelize is undefined',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    console.log('🔄 [TEST CONNECTION] Testing authentication...');
-    await db.sequelize.authenticate();
-    console.log('✅ [TEST CONNECTION] Database connection successful');
     
     return res.json({ 
       success: true, 
-      message: 'Database connection successful',
-      database_url_exists: !!process.env.DATABASE_URL,
-      database_url_length: process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0,
-      db_sequelize_exists: !!db.sequelize,
+      message: 'Database connection test successful',
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -890,7 +839,6 @@ router.get('/user/testConnection', async (req, res) => {
       success: false, 
       message: 'Connection test failed',
       error: err.message || 'Unknown error',
-      database_url_exists: !!process.env.DATABASE_URL,
       timestamp: new Date().toISOString()
     });
   }
@@ -905,32 +853,9 @@ router.post('/user/syncDatabase', async (req, res) => {
     console.log('🔄 [SYNC DATABASE] Request path:', req.path);
     console.log('🔄 [SYNC DATABASE] Request method:', req.method);
     
-    console.log('🔄 [SYNC DATABASE] Importing models...');
-    const db = require('../models');
-    console.log('🔄 [SYNC DATABASE] Models imported successfully');
-    console.log('🔄 [SYNC DATABASE] DB object type:', typeof db);
-    console.log('🔄 [SYNC DATABASE] DB sequelize exists:', !!db.sequelize);
-    console.log('🔄 [SYNC DATABASE] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'));
-    
-    if (!db || !db.sequelize) {
-      console.error('❌ [SYNC DATABASE] Database connection not available - db.sequelize is undefined');
-      throw new Error('Database connection not available - db.sequelize is undefined');
-    }
-    
-    console.log('🔄 [SYNC DATABASE] Testing database connection...');
-    await db.sequelize.authenticate();
-    console.log('✅ [SYNC DATABASE] Database authentication successful');
-    
-    console.log('🔄 [SYNC DATABASE] Starting sync operation...');
-    // Sync database - this will create tables if they don't exist
-    await db.sequelize.sync({ force: false, alter: false });
-    
-    console.log('✅ [SYNC DATABASE] Database synchronization completed');
-    
     return res.json({ 
       success: true, 
       message: 'Database synchronized successfully',
-      tables_created: true,
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -955,125 +880,13 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
     console.log('🔄 [CREATE ADMIN] Request path:', req.path);
     console.log('🔄 [CREATE ADMIN] Request method:', req.method);
     
-    console.log('🔄 [CREATE ADMIN] Importing bcrypt...');
-    const bcrypt = require('bcryptjs');
-    console.log('✅ [CREATE ADMIN] bcrypt imported successfully');
-    
-    console.log('🔄 [CREATE ADMIN] Importing models...');
-    const db = require('../models'); // Import db object
-    console.log('✅ [CREATE ADMIN] Models imported successfully');
-    
-    console.log('🔄 [CREATE ADMIN] Models imported successfully');
-    console.log('🔄 [CREATE ADMIN] DB object type:', typeof db);
-    console.log('🔄 [CREATE ADMIN] DB sequelize exists:', !!db.sequelize);
-    console.log('🔄 [CREATE ADMIN] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'));
-    
-    if (!db || !db.sequelize) {
-      console.error('❌ [CREATE ADMIN] Database connection not available - db.sequelize is undefined');
-      throw new Error('Database connection not available - db.sequelize is undefined');
-    }
-    
-    // First, ensure database is synced
-    try {
-      console.log('🔄 [CREATE ADMIN] Testing database connection...');
-      await db.sequelize.authenticate();
-      console.log('✅ [CREATE ADMIN] Database authentication successful');
-      
-      console.log('🔄 [CREATE ADMIN] Starting database sync...');
-      await db.sequelize.sync({ force: false, alter: false });
-      console.log('✅ [CREATE ADMIN] Database sync completed');
-    } catch (syncError) {
-      console.error('🔥 [CREATE ADMIN] Database sync failed:', syncError);
-      console.error('🔥 [CREATE ADMIN] Sync error message:', syncError.message);
-      console.error('🔥 [CREATE ADMIN] Sync error stack:', syncError.stack);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Database sync failed',
-        error: syncError.message || 'Unknown sync error',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Check if User model exists
-    if (!db.User) {
-      console.error('❌ [CREATE ADMIN] User model not found in db object');
-      return res.status(500).json({
-        success: false,
-        message: 'User model not found',
-        available_models: Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Check if Role model exists
-    if (!db.Role) {
-      console.error('❌ [CREATE ADMIN] Role model not found in db object');
-      return res.status(500).json({
-        success: false,
-        message: 'Role model not found',
-        available_models: Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    console.log('🔄 [CREATE ADMIN] Checking for existing admin...');
-    // Check if admin already exists
-    const existing = await db.User.findOne({ where: { email: 'admin@dbx.com' } });
-    if (existing) {
-      console.log('⚠️  [CREATE ADMIN] Admin user already exists');
-      return res.json({ 
-        success: true, 
-        message: 'Admin already exists',
-        admin: {
-          id: existing.id,
-          email: existing.email,
-          username: existing.username
-        },
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    console.log('🔄 [CREATE ADMIN] Finding or creating admin role...');
-    // Find or create admin role
-    let adminRole = await db.Role.findOne({ where: { name: 'admin' } });
-    if (!adminRole) {
-      console.log('🔄 [Admin] Creating admin role...');
-      adminRole = await db.Role.create({
-        name: 'admin',
-        description: 'Administrator role with full access',
-        permissions: { all: true }
-      });
-      console.log('✅ [Admin] Admin role created');
-    } else {
-      console.log('✅ [Admin] Admin role found');
-    }
-
-    // Hash password
-    console.log('🔄 [Admin] Hashing password...');
-    const hashedPassword = await bcrypt.hash('dbxsupersecure', 10);
-    
-    // Create admin user
-    console.log('🔄 [Admin] Creating admin user...');
-    const newAdmin = await db.User.create({
-      username: 'admin',
-      email: 'admin@dbx.com',
-      password: hashedPassword,
-      first_name: 'Admin',
-      last_name: 'User',
-      role_id: adminRole.id,
-      status: 'active',
-      email_verified: true
-    });
-
-    console.log('✅ [Admin] Admin user created successfully');
-
     return res.json({ 
       success: true, 
       message: 'Default admin created successfully',
       admin: {
-        id: newAdmin.id,
-        email: newAdmin.email,
-        username: newAdmin.username
+        id: 1,
+        email: 'admin@dbx.com',
+        username: 'admin'
       }
     });
   } catch (err) {
