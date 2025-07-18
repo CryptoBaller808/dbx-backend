@@ -18,9 +18,9 @@ router.use((req, res, next) => {
   next();
 });
 
-// MINIMAL TEST ROUTE - No dependencies
+// MINIMAL TEST ROUTE - No dependencies - FIXED PATH
 console.log('📥 [ADMIN] Defining /minimal route...');
-router.get('/minimal', (req, res) => {
+router.get('/minimal', async (req, res) => {
   console.log("✅ /minimal route HIT!");
   console.log('✅ /minimal route initialized');
   try {
@@ -40,11 +40,11 @@ router.get('/minimal', (req, res) => {
     };
     
     console.log('✅ [MINIMAL] Sending response:', response);
-    res.json(response);
+    return res.json(response);
   } catch (err) {
     console.error('❌ [MINIMAL] Even minimal route failed:', err);
     console.error('❌ [MINIMAL] Error stack:', err.stack);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: 'Minimal route failed',
       message: err.message,
