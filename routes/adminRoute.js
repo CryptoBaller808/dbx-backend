@@ -29,6 +29,22 @@ router.get('/minimal', async (req, res) => {
     console.log('✅ [MINIMAL] Request method:', req.method);
     console.log('✅ [MINIMAL] Process uptime:', process.uptime());
     
+    // Import DB and log its properties to debug
+    const db = require('../models');
+    console.log('[ADMIN] DB object keys:', Object.keys(db));
+    console.log('[ADMIN] DB sequelize exists:', !!db.sequelize);
+    
+    // Test database connection to verify it's working
+    if (db.sequelize) {
+      try {
+        await db.sequelize.authenticate();
+        console.log('✅ [MINIMAL] Database connection successful');
+      } catch (dbError) {
+        console.error('❌ [MINIMAL] Database connection error:', dbError);
+        // Continue execution even if DB connection fails
+      }
+    }
+    
     const response = { 
       success: true, 
       message: 'Minimal route is working in production!',
@@ -36,7 +52,8 @@ router.get('/minimal', async (req, res) => {
       uptime: process.uptime(),
       path: req.path,
       method: req.method,
-      nodeEnv: process.env.NODE_ENV
+      nodeEnv: process.env.NODE_ENV,
+      db_connected: !!db.sequelize
     };
     
     console.log('✅ [MINIMAL] Sending response:', response);
@@ -839,41 +856,39 @@ router.get('/user/testConnection', async (req, res) => {
       });
     }
     
-    console.log('🔄 [TEST CONNECTION] Importing Sequelize...');
-    const { Sequelize } = require('sequelize');
-    console.log('✅ [TEST CONNECTION] Sequelize imported successfully');
+    // Import DB and log its properties to debug
+    const db = require('../models');
+    console.log('[TEST CONNECTION] DB object keys:', Object.keys(db));
+    console.log('[TEST CONNECTION] DB sequelize exists:', !!db.sequelize);
     
-    console.log('🔄 [TEST CONNECTION] Creating Sequelize instance...');
-    // Test basic connection without models
-    const sequelize = new Sequelize(process.env.DATABASE_URL, {
-      dialect: 'postgres',
-      dialectOptions: {
-        ssl: {
-          require: true,
-          rejectUnauthorized: false
-        }
-      },
-      logging: false
-    });
+    if (!db.sequelize) {
+      console.error('❌ [TEST CONNECTION] db.sequelize is undefined');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Database connection not available - db.sequelize is undefined',
+        timestamp: new Date().toISOString()
+      });
+    }
     
     console.log('🔄 [TEST CONNECTION] Testing authentication...');
-    await sequelize.authenticate();
-    console.log('✅ [TEST CONNECTION] Direct database connection successful');
+    await db.sequelize.authenticate();
+    console.log('✅ [TEST CONNECTION] Database connection successful');
     
     return res.json({ 
       success: true, 
-      message: 'Direct database connection successful',
+      message: 'Database connection successful',
       database_url_exists: !!process.env.DATABASE_URL,
       database_url_length: process.env.DATABASE_URL ? process.env.DATABASE_URL.length : 0,
+      db_sequelize_exists: !!db.sequelize,
       timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('🔥 [TEST CONNECTION] Direct connection test error:', err);
+    console.error('🔥 [TEST CONNECTION] Connection test error:', err);
     console.error('🔥 [TEST CONNECTION] Error message:', err.message);
     console.error('🔥 [TEST CONNECTION] Error stack:', err.stack);
     return res.status(500).json({ 
       success: false, 
-      message: 'Direct connection test failed',
+      message: 'Connection test failed',
       error: err.message || 'Unknown error',
       database_url_exists: !!process.env.DATABASE_URL,
       timestamp: new Date().toISOString()
@@ -908,7 +923,7 @@ router.post('/user/syncDatabase', async (req, res) => {
     
     console.log('🔄 [SYNC DATABASE] Starting sync operation...');
     // Sync database - this will create tables if they don't exist
-    await db.sequelize.sync({ force: false, alter: true });
+    await db.sequelize.sync({ force: false, alter: false });
     
     console.log('✅ [SYNC DATABASE] Database synchronization completed');
     
@@ -965,7 +980,7 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
       console.log('✅ [CREATE ADMIN] Database authentication successful');
       
       console.log('🔄 [CREATE ADMIN] Starting database sync...');
-      await db.sequelize.sync({ force: false, alter: true });
+      await db.sequelize.sync({ force: false, alter: false });
       console.log('✅ [CREATE ADMIN] Database sync completed');
     } catch (syncError) {
       console.error('🔥 [CREATE ADMIN] Database sync failed:', syncError);
@@ -979,14 +994,41 @@ router.post('/user/createDefaultAdmin', async (req, res) => {
       });
     }
 
+    // Check if User model exists
+    if (!db.User) {
+      console.error('❌ [CREATE ADMIN] User model not found in db object');
+      return res.status(500).json({
+        success: false,
+        message: 'User model not found',
+        available_models: Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'),
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check if Role model exists
+    if (!db.Role) {
+      console.error('❌ [CREATE ADMIN] Role model not found in db object');
+      return res.status(500).json({
+        success: false,
+        message: 'Role model not found',
+        available_models: Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize' && key !== 'initializeDatabase'),
+        timestamp: new Date().toISOString()
+      });
+    }
+
     console.log('🔄 [CREATE ADMIN] Checking for existing admin...');
     // Check if admin already exists
     const existing = await db.User.findOne({ where: { email: 'admin@dbx.com' } });
     if (existing) {
       console.log('⚠️  [CREATE ADMIN] Admin user already exists');
       return res.json({ 
-        success: false, 
+        success: true, 
         message: 'Admin already exists',
+        admin: {
+          id: existing.id,
+          email: existing.email,
+          username: existing.username
+        },
         timestamp: new Date().toISOString()
       });
     }
