@@ -1007,18 +1007,38 @@ const socket = new Server(server, {
 // Initialize database and sync tables
 const initializeDatabase = async () => {
   try {
-    console.log('🔄 [Database] Starting database initialization...');
+    console.log('🔄 [Database] Database initialization started...');
+    console.log('🔍 [Database] Checking environment variables...');
+    console.log('🔍 [Database] DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    console.log('🔍 [Database] NODE_ENV:', process.env.NODE_ENV);
+    
+    console.log('📦 [Database] Importing models from ./models...');
     
     // Import database models
     const { sequelize } = require('./models');
+    
+    console.log('✅ [Database] Models imported successfully');
+    console.log('🔍 [Database] Sequelize instance:', !!sequelize);
+    console.log('🔍 [Database] Sequelize dialect:', sequelize?.getDialect());
+    
+    console.log('🔌 [Database] Testing database connection...');
     
     // Test connection
     await sequelize.authenticate();
     console.log('✅ [Database] Connection authenticated successfully');
     
+    console.log('🔄 [Database] Starting database sync (alter: true)...');
+    
     // Sync database - create tables if they don't exist
-    await sequelize.sync({ alter: true });
-    console.log('✅ [Database] Database synced successfully - tables created/updated');
+    await sequelize.sync({ alter: true }).then(() => {
+      console.log('✅ [Database] Database synced successfully!');
+      console.log('📋 [Database] Tables created/updated successfully');
+    }).catch((syncError) => {
+      console.error('❌ [Database] Database sync failed:', syncError.message);
+      throw syncError;
+    });
+    
+    console.log('🎯 [Database] Database initialization completed successfully!');
     
     return true;
   } catch (error) {
