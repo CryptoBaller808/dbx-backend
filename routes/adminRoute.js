@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
+console.log("📥 adminRoute.js loaded");
+
 // Add debugging middleware to track requests
 router.use((req, res, next) => {
   console.log(`🔍 [ADMIN DEBUG] ${req.method} ${req.path} - Request received`);
@@ -11,6 +13,7 @@ router.use((req, res, next) => {
 
 // MINIMAL TEST ROUTE - No dependencies
 router.get('/minimal', (req, res) => {
+  console.log("✅ /minimal route hit");
   try {
     console.log('✅ [MINIMAL] Minimal test route called successfully');
     console.log('✅ [MINIMAL] Request path:', req.path);
@@ -19,7 +22,7 @@ router.get('/minimal', (req, res) => {
     
     const response = { 
       success: true, 
-      message: 'Minimal admin route working!',
+      message: 'Minimal route working!',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       path: req.path,

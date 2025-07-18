@@ -569,8 +569,16 @@ app.get('/', (req, res) => {
   }
 });
 
-// Mount Admin Routes
+// 🧪 DIRECT TEST ROUTE - Added for debugging admin route issues
+app.get('/test-direct-admin', (req, res) => {
+  console.log('🧪 [DIRECT TEST] Direct test route hit successfully');
+  res.json({ success: true, message: 'Direct route hit' });
+});
+
+// Mount Admin Routes with enhanced logging
+console.log("🛠 About to mount adminRoutes...");
 app.use('/admindashboard', adminRoutes);
+console.log("✅ adminRoutes mounted!");
 
 // Mount MFA Routes
 app.use('/api/mfa', mfaRoutes);
