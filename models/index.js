@@ -154,3 +154,11 @@ const initializeDatabase = async () => {
     // FIXED: Use alter: false to prevent conflicting ALTER queries
     if (env === 'development') {
       await sequelize.s
+
+    // Export database object and initialization function
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+db.initializeDatabase = initializeDatabase;
+
+module.exports = db;
+
