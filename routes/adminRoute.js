@@ -833,7 +833,7 @@ router.get('/user/testConnection', async (req, res) => {
 
 // TEMPORARY: Database Sync - Create Tables
 console.log('📥 [ADMIN] Defining /user/syncDatabase route...');
-router.post('/user/syncDatabase', async (req, res) => {
+router.get('/user/syncDatabase', async (req, res) => {
   try {
     console.log('✅ /user/syncDatabase route HIT!');
     // Original database sync code commented out for future reference
@@ -859,7 +859,7 @@ router.post('/user/syncDatabase', async (req, res) => {
 
 // TEMPORARY: Create Default Admin
 console.log('📥 [ADMIN] Defining /user/createDefaultAdmin route...');
-router.post('/user/createDefaultAdmin', async (req, res) => {
+router.get('/user/createDefaultAdmin', async (req, res) => {
   try {
     console.log('✅ /user/createDefaultAdmin route HIT!');
     // Original admin creation code commented out for future reference
