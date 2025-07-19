@@ -28,7 +28,7 @@ console.log("✅ [STARTUP] Service modules imported successfully");
 // Import your route files
 const adminRoutes = require('./routes/adminRoute');
 const tempAdminSetup = require('./routes/tempAdminSetup');
-console.log("✅ [STARTUP] Route modules imported successfully");
+const priceRoutes = require('./routes/priceRoutes');
 const mfaRoutes = require('./routes/mfaRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const { router: walletRoutes, initializeServices: initializeWalletServices } = require('./routes/walletRoutes');
@@ -616,10 +616,13 @@ app.use('/admindashboard', adminRoutes);
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
 console.log("🔗 [STARTUP] About to mount other routes...");
-// Mount MFA Routes
+// Mount MFA routes
 app.use('/api/mfa', mfaRoutes);
 
-// Mount Transaction Routes
+// Mount Price routes (CoinGecko integration)
+app.use('/api', priceRoutes);
+
+// Mount Transaction routes
 app.use('/api/transactions', transactionRoutes);
 
 // Mount Wallet Routes
