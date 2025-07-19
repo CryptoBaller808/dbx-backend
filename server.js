@@ -769,10 +769,12 @@ global.io = io;
 
 // Global Express error handler to catch unhandled errors
 app.use((err, req, res, next) => {
-  console.error('Global Error:', err);
-  console.error('Request URL:', req.url);
-  console.error('Request Method:', req.method);
-  console.error('Stack trace:', err.stack);
+  console.error('🚨 Global Error Handler Triggered:', err);
+  console.error('🚨 Request URL:', req.url);
+  console.error('🚨 Request Method:', req.method);
+  console.error('🚨 Error Message:', err.message);
+  console.error('🚨 Error Name:', err.name);
+  console.error('🚨 Stack trace:', err.stack);
   
   // Don't send error details in production for security
   const isDevelopment = process.env.NODE_ENV === 'development';
