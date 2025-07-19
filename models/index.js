@@ -108,9 +108,14 @@ models.forEach(file => {
   }
 });
 
-// ✅ Manually register Admin model
-const Admin = require("./Admin")(sequelize, DataTypes);
-db.Admin = Admin;
+// Manually register Admin model
+try {
+  const AdminModel = require(path.join(__dirname, 'Admin.js'))(sequelize, DataTypes);
+  db[AdminModel.name] = AdminModel;
+  console.log(`✅ [Models] Loaded model: ${AdminModel.name}`);
+} catch (error) {
+  console.error('❌ [Models] Failed to load Admin model:', error.message);
+}
 
 // Set up associations
 Object.keys(db).forEach(modelName => {
