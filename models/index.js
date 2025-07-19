@@ -153,12 +153,27 @@ const initializeDatabase = async () => {
     
     // FIXED: Use alter: false to prevent conflicting ALTER queries
     if (env === 'development') {
-      await sequelize.s
+      await sequelize.sync({ alter: false });
+      console.log('✅ [Database] Database models synchronized (development - no alter)');
+    } else if (env === 'production') {
+      // PRODUCTION: Use safest possible sync - no alter, no force
+      // This will only create tables if they don't exist, no modifications to existing tables
+      await sequelize.sync({ force: false, alter: false });
+      console.log('✅ [Database] Database models synchronized (production - safe mode, no alter)');
+    }
+    
+    console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
+    
+    return sequelize;
+  } catch (error) {
+    console.error('❌ [Database] Database connection failed:', error);
+    throw error;
+  }
+};
 
-    // Export database object and initialization function
+// Export database object and initialization function
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 db.initializeDatabase = initializeDatabase;
 
 module.exports = db;
-
