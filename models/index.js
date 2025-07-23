@@ -62,6 +62,7 @@ const basename = path.basename(__filename);
 const models = [
   'userModel.js',
   'roleModel.js',
+  'tokenModel.js',  // Added Token model for Phase 2
   'NFT.js',
   'NFTAuction.js',
   'NFTBid.js',
