@@ -32,6 +32,7 @@ const simpleDatabaseTestRouter = require("./routes/simpleDatabaseTest.js");
 const healthRouter = require("./routes/healthWithDiagnostics.js");
 const schemaDiagnosticsRouter = require("./routes/schemaDiagnosticsEndpoint.js");
 const testSchemaDiagnosticsRouter = require("./routes/testSchemaDiagnostics.js");
+const exchangeRouter = require("./routes/exchangeRoutes.js");
 
 //merge code
 // import path from "path";
@@ -961,6 +962,7 @@ app.use("/debug-admin", debugAdminRouter);
 app.use("/simple-diagnostics", simpleDiagnosticsRouter);
 app.use("/safe-schema", safeSchemaRouter);
 app.use("/simple-db-test", simpleDatabaseTestRouter);
+app.use("/api", exchangeRouter);
 
 // const server = https.createServer(app).listen(PORT, function() {
 //     console.log('Https App started');
