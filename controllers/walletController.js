@@ -1,46 +1,36 @@
-// backend/controllers/walletController.js
-
-/**
- * Sample controller for connecting to a wallet
- * Simplified version without express-validator dependency
- */
-const connectWallet = async (req, res, next) => {
+const connectWallet = async (req, res) => {
   try {
-    // Basic validation without express-validator
-    const { chainId, walletType, options = {} } = req.body;
-    
-    if (!chainId || !walletType) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation failed',
-        details: ['chainId and walletType are required']
-      });
-    }
-
-    const userId = req.user?.id || 'demo-user'; // Temporary fallback
-
-    // For now, return a mock response since WalletService might not be available
-    const result = {
-      userId,
-      chainId,
-      walletType,
-      options,
-      connected: true,
-      timestamp: new Date().toISOString(),
-      message: 'Wallet connection simulated (development mode)'
-    };
-
-    res.json({
-      success: true,
-      data: result
-    });
+    // Placeholder wallet logic - replace with actual integration
+    res.status(200).json({ message: 'Wallet connected successfully.' });
   } catch (error) {
-    console.error('[Wallet Controller] connectWallet error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    console.error('[Wallet Connect Error]', error);
+    res.status(500).json({ message: 'Server error during wallet connection.' });
+  }
+};
+
+const disconnectWallet = async (req, res) => {
+  try {
+    // Placeholder logic for disconnecting wallet
+    res.status(200).json({ message: 'Wallet disconnected successfully.' });
+  } catch (error) {
+    console.error('[Wallet Disconnect Error]', error);
+    res.status(500).json({ message: 'Server error during wallet disconnection.' });
+  }
+};
+
+const getWalletInfo = async (req, res) => {
+  try {
+    // Placeholder logic for wallet info
+    res.status(200).json({ wallet: { id: '0x123', balance: '1000 DBX' } });
+  } catch (error) {
+    console.error('[Wallet Info Error]', error);
+    res.status(500).json({ message: 'Failed to retrieve wallet information.' });
   }
 };
 
 module.exports = {
-  connectWallet
+  connectWallet,
+  disconnectWallet,
+  getWalletInfo,
 };
 
