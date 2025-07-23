@@ -1,3 +1,7 @@
+/**
+ * Banner/Settings Model
+ * Standardized Sequelize implementation
+ */
 module.exports = (sequelize, DataTypes) => {
   const Settings = sequelize.define(
     "Settings",
@@ -11,20 +15,39 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      title: DataTypes.STRING,
-      description: DataTypes.TEXT,
-      image: DataTypes.STRING,
-      link: DataTypes.STRING,
+      title: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      image: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      link: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       status: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
       },
-      config: DataTypes.JSON,
+      config: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
     },
     {
       tableName: "settings",
       timestamps: true,
-      indexes: [{ fields: ['type'] }],
+      indexes: [
+        {
+          fields: ['type']
+        }
+      ]
     }
   );
 

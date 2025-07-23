@@ -4,7 +4,6 @@ const WalletService = require('../services/blockchain/wallet-service');
 const { initializeBlockchainServices } = require('../services/blockchain');
 const { auditMiddleware } = require('../middleware/auditMiddleware');
 const { authenticateToken: authMiddleware } = require('../middleware/auth');
-const walletController = require('../controllers/walletController');
 
 const router = express.Router();
 
@@ -112,7 +111,21 @@ router.post('/connect',
   ],
   validateRequest,
   auditMiddleware({ action: 'wallet_connect' }),
-  walletController.connectWallet
+  async (req, res, next) => {
+    try {
+      const { chainId, walletType, options = {} } = req.body;
+      const userId = req.user.id;
+
+      const result = await walletService.connectWallet(userId, chainId, walletType, options);
+      
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 /**

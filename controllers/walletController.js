@@ -1,36 +1,26 @@
-const connectWallet = async (req, res) => {
-  try {
-    // Placeholder wallet logic - replace with actual integration
-    res.status(200).json({ message: 'Wallet connected successfully.' });
-  } catch (error) {
-    console.error('[Wallet Connect Error]', error);
-    res.status(500).json({ message: 'Server error during wallet connection.' });
-  }
-};
+const { validationResult } = require('express-validator');
 
-const disconnectWallet = async (req, res) => {
+// Dummy connectWallet function
+exports.connectWallet = async (req, res) => {
   try {
-    // Placeholder logic for disconnecting wallet
-    res.status(200).json({ message: 'Wallet disconnected successfully.' });
-  } catch (error) {
-    console.error('[Wallet Disconnect Error]', error);
-    res.status(500).json({ message: 'Server error during wallet disconnection.' });
-  }
-};
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
 
-const getWalletInfo = async (req, res) => {
-  try {
-    // Placeholder logic for wallet info
-    res.status(200).json({ wallet: { id: '0x123', balance: '1000 DBX' } });
-  } catch (error) {
-    console.error('[Wallet Info Error]', error);
-    res.status(500).json({ message: 'Failed to retrieve wallet information.' });
-  }
-};
+    const { walletAddress, network } = req.body;
 
-module.exports = {
-  connectWallet,
-  disconnectWallet,
-  getWalletInfo,
+    // Simulate wallet connection logic here
+    console.log(`Connecting wallet: ${walletAddress} on ${network}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Wallet connected successfully',
+      data: { walletAddress, network }
+    });
+  } catch (error) {
+    console.error('Error connecting wallet:', error.message);
+    return res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
 };
 
