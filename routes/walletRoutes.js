@@ -1,3 +1,4 @@
+const walletController = require('../controllers/walletController');
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const WalletService = require('../services/blockchain/wallet-service');
@@ -409,6 +410,17 @@ router.get('/health',
       next(error);
     }
   }
+);
+
+
+/**
+ * POST /api/wallets/test-controller-connect
+ * Test route for controller-based wallet connection
+ */
+router.post('/test-controller-connect',
+  authMiddleware,
+  auditMiddleware({ action: 'wallet_test_connect' }),
+  walletController.connectWallet
 );
 
 // Apply error handling middleware
