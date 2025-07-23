@@ -1,4 +1,3 @@
-const walletController = require('../controllers/walletController');
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const WalletService = require('../services/blockchain/wallet-service');
@@ -412,16 +411,17 @@ router.get('/health',
   }
 );
 
+// 🔧 CONTROLLER-BASED ROUTES TEMPORARILY DISABLED
+// The following routes are commented out to prevent [object Undefined] errors
+// until walletController is properly exported and ready
 
-/**
- * POST /api/wallets/test-controller-connect
- * Test route for controller-based wallet connection
- */
-// router.post('/test-controller-connect',  // 🔧 Temporarily disabled due to undefined handler
-//   authMiddleware,
-//   auditMiddleware({ action: 'wallet_test_connect' }),
-//   walletController.connectWallet
-// );
+/*
+router.post('/test-controller-connect',
+  authMiddleware,
+  auditMiddleware({ action: 'wallet_test_connect' }),
+  // walletController.connectWallet  // Commented out to prevent undefined errors
+);
+*/
 
 // Apply error handling middleware
 router.use(handleWalletError);
