@@ -94,7 +94,9 @@ router.get('/available',
 /**
  * POST /api/wallets/connect
  * Connect to a wallet for a specific blockchain
+ * TEMPORARILY COMMENTED OUT TO UNBLOCK DEPLOYMENT
  */
+/*
 router.post('/connect',
   authMiddleware,
   [
@@ -114,6 +116,7 @@ router.post('/connect',
   auditMiddleware({ action: 'wallet_connect' }),
   walletController.connectWallet
 );
+*/
 
 /**
  * POST /api/wallets/disconnect
