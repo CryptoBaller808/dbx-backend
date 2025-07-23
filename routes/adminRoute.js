@@ -1225,3 +1225,319 @@ console.log('📥 [ADMIN] Router stack length:', router.stack ? router.stack.len
 module.exports = router;
 
 console.log('📥 [ADMIN] adminRoute.js export completed successfully!');
+
+// ===== TOKEN MANAGEMENT ENDPOINTS =====
+
+/**
+ * @swagger
+ * /admindashboard/token/upload:
+ *   post:
+ *     summary: Upload a new token listing
+ *     tags: [Admin - Token Management]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Token name
+ *               symbol:
+ *                 type: string
+ *                 description: Token symbol
+ *               network:
+ *                 type: string
+ *                 description: Blockchain network
+ *               contractAddress:
+ *                 type: string
+ *                 description: Smart contract address
+ *               icon:
+ *                 type: string
+ *                 format: binary
+ *                 description: Token icon image
+ *     responses:
+ *       200:
+ *         description: Token uploaded successfully
+ *       400:
+ *         description: Invalid input
+ *       500:
+ *         description: Server error
+ */
+router.post('/token/upload', async (req, res) => {
+  try {
+    console.log('🔄 [TOKEN UPLOAD] Starting token upload...');
+    console.log('🔄 [TOKEN UPLOAD] Request body:', req.body);
+    console.log('🔄 [TOKEN UPLOAD] Request files:', req.files);
+    
+    const { name, symbol, network, contractAddress } = req.body;
+    
+    // Validate required fields
+    if (!name || !symbol || !network) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: name, symbol, and network are required'
+      });
+    }
+    
+    // Mock token data for Phase 1
+    const tokenData = {
+      id: Date.now(),
+      name,
+      symbol: symbol.toUpperCase(),
+      network,
+      contractAddress: contractAddress || null,
+      icon: req.files && req.files.icon ? `/uploads/tokens/${req.files.icon.name}` : null,
+      createdAt: new Date().toISOString(),
+      status: 'active'
+    };
+    
+    console.log('✅ [TOKEN UPLOAD] Mock token created:', tokenData);
+    
+    // TODO: In Phase 2, save to database
+    // const savedToken = await db.Token.create(tokenData);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Token uploaded successfully',
+      token: tokenData
+    });
+    
+  } catch (error) {
+    console.error('❌ [TOKEN UPLOAD] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload token',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /admindashboard/token/get:
+ *   get:
+ *     summary: Get all token listings
+ *     tags: [Admin - Token Management]
+ *     responses:
+ *       200:
+ *         description: List of tokens retrieved successfully
+ *       500:
+ *         description: Server error
+ */
+router.get('/token/get', async (req, res) => {
+  try {
+    console.log('🔄 [TOKEN GET] Fetching tokens...');
+    
+    // Mock token data for Phase 1
+    const mockTokens = [
+      {
+        id: 1,
+        name: 'Bitcoin',
+        symbol: 'BTC',
+        network: 'Bitcoin',
+        contractAddress: null,
+        icon: '/images/networks/bitcoin.png',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        status: 'active'
+      },
+      {
+        id: 2,
+        name: 'Ethereum',
+        symbol: 'ETH',
+        network: 'Ethereum',
+        contractAddress: null,
+        icon: '/images/networks/ethereum.png',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        status: 'active'
+      },
+      {
+        id: 3,
+        name: 'BNB',
+        symbol: 'BNB',
+        network: 'BNB Smart Chain',
+        contractAddress: null,
+        icon: '/images/networks/bnb.png',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        status: 'active'
+      }
+    ];
+    
+    console.log('✅ [TOKEN GET] Mock tokens returned:', mockTokens.length);
+    
+    // TODO: In Phase 2, fetch from database
+    // const tokens = await db.Token.findAll({ where: { status: 'active' } });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Tokens retrieved successfully',
+      tokens: mockTokens,
+      count: mockTokens.length
+    });
+    
+  } catch (error) {
+    console.error('❌ [TOKEN GET] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch tokens',
+      error: error.message
+    });
+  }
+});
+
+// ===== BANNER MANAGEMENT ENDPOINTS =====
+
+/**
+ * @swagger
+ * /admindashboard/banner/upload:
+ *   post:
+ *     summary: Upload a new banner image
+ *     tags: [Admin - Banner Management]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: Banner title
+ *               altText:
+ *                 type: string
+ *                 description: Alt text for accessibility
+ *               placement:
+ *                 type: string
+ *                 description: Where to display the banner
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Banner image file
+ *     responses:
+ *       200:
+ *         description: Banner uploaded successfully
+ *       400:
+ *         description: Invalid input
+ *       500:
+ *         description: Server error
+ */
+router.post('/banner/upload', async (req, res) => {
+  try {
+    console.log('🔄 [BANNER UPLOAD] Starting banner upload...');
+    console.log('🔄 [BANNER UPLOAD] Request body:', req.body);
+    console.log('🔄 [BANNER UPLOAD] Request files:', req.files);
+    
+    const { title, altText, placement } = req.body;
+    
+    // Validate required fields
+    if (!title || !placement) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: title and placement are required'
+      });
+    }
+    
+    // Mock banner data for Phase 1
+    const bannerData = {
+      id: Date.now(),
+      title,
+      altText: altText || title,
+      placement,
+      image: req.files && req.files.image ? `/uploads/banners/${req.files.image.name}` : null,
+      createdAt: new Date().toISOString(),
+      status: 'active'
+    };
+    
+    console.log('✅ [BANNER UPLOAD] Mock banner created:', bannerData);
+    
+    // TODO: In Phase 2, save to database
+    // const savedBanner = await db.Banner.create(bannerData);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Banner uploaded successfully',
+      banner: bannerData
+    });
+    
+  } catch (error) {
+    console.error('❌ [BANNER UPLOAD] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload banner',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /admindashboard/banner/get:
+ *   get:
+ *     summary: Get all banner images
+ *     tags: [Admin - Banner Management]
+ *     responses:
+ *       200:
+ *         description: List of banners retrieved successfully
+ *       500:
+ *         description: Server error
+ */
+router.get('/banner/get', async (req, res) => {
+  try {
+    console.log('🔄 [BANNER GET] Fetching banners...');
+    
+    // Mock banner data for Phase 1
+    const mockBanners = [
+      {
+        id: 1,
+        title: 'Welcome to DBX Exchange',
+        altText: 'DBX Exchange welcome banner',
+        placement: 'exchange',
+        image: '/images/banners/welcome-exchange.jpg',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        status: 'active'
+      },
+      {
+        id: 2,
+        title: 'Swap Your Tokens',
+        altText: 'Token swap promotion banner',
+        placement: 'swap',
+        image: '/images/banners/swap-promotion.jpg',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        status: 'active'
+      },
+      {
+        id: 3,
+        title: 'NFT Marketplace',
+        altText: 'NFT marketplace banner',
+        placement: 'nft',
+        image: '/images/banners/nft-marketplace.jpg',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        status: 'active'
+      }
+    ];
+    
+    console.log('✅ [BANNER GET] Mock banners returned:', mockBanners.length);
+    
+    // TODO: In Phase 2, fetch from database
+    // const banners = await db.Banner.findAll({ where: { status: 'active' } });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Banners retrieved successfully',
+      banners: mockBanners,
+      count: mockBanners.length
+    });
+    
+  } catch (error) {
+    console.error('❌ [BANNER GET] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch banners',
+      error: error.message
+    });
+  }
+});
+
+console.log('📥 [ADMIN] Token and Banner management endpoints added successfully!');
+
