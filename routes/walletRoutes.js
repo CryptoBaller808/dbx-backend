@@ -417,11 +417,11 @@ router.get('/health',
  * POST /api/wallets/test-controller-connect
  * Test route for controller-based wallet connection
  */
-router.post('/test-controller-connect',
-  authMiddleware,
-  auditMiddleware({ action: 'wallet_test_connect' }),
-  walletController.connectWallet
-);
+// router.post('/test-controller-connect',  // 🔧 Temporarily disabled due to undefined handler
+//   authMiddleware,
+//   auditMiddleware({ action: 'wallet_test_connect' }),
+//   walletController.connectWallet
+// );
 
 // Apply error handling middleware
 router.use(handleWalletError);
