@@ -619,8 +619,28 @@ console.log("✅ [STARTUP] Direct test admin route added");
 console.log("🛠 [STARTUP] About to mount adminRoutes...");
 console.log("🛠 [STARTUP] adminRoutes object:", typeof adminRoutes);
 console.log("🛠 [STARTUP] adminRoutes keys:", Object.keys(adminRoutes || {}));
+
+// 🔍 COMPREHENSIVE ROUTE DEBUGGING
+if (adminRoutes && adminRoutes.stack) {
+  console.log("🔍 [DEBUG] adminRoutes stack length:", adminRoutes.stack.length);
+  adminRoutes.stack.forEach((layer, index) => {
+    console.log(`🔍 [DEBUG] Route ${index}:`, layer.route ? layer.route.path : 'middleware', 
+                'Methods:', layer.route ? Object.keys(layer.route.methods) : 'N/A');
+  });
+} else {
+  console.log("❌ [DEBUG] adminRoutes has no stack property!");
+}
+
 app.use('/admindashboard', adminRoutes);
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
+
+// 🔍 VERIFY ROUTE REGISTRATION
+console.log("🔍 [DEBUG] Checking app routes after mounting...");
+app._router.stack.forEach((layer, index) => {
+  if (layer.regexp.toString().includes('admindashboard')) {
+    console.log(`🔍 [DEBUG] App route ${index} matches /admindashboard:`, layer.regexp.toString());
+  }
+});
 
 console.log("🔗 [STARTUP] About to mount other routes...");
 // Mount MFA Routes
