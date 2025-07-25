@@ -26,7 +26,10 @@ const { createHealthCheckEndpoint } = require('./health-check');
 console.log("✅ [STARTUP] Service modules imported successfully");
 
 // Import your route files
-const adminRoutes = require('./routes/adminDashboardRoutes');
+const adminRoutes = require('./routes/adminDashboardV2Routes');
+console.log("🚀 [DEBUG] adminDashboardV2Routes imported successfully");
+console.log("🚀 [DEBUG] adminRoutes type:", typeof adminRoutes);
+console.log("🚀 [DEBUG] adminRoutes keys:", Object.keys(adminRoutes || {}));
 const tempAdminSetup = require('./routes/tempAdminSetup');
 console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
