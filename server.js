@@ -27,6 +27,7 @@ console.log("✅ [STARTUP] Service modules imported successfully");
 
 // Import your route files
 const adminRoutes = require('./routes/adminDashboardV2Routes');
+const adminCrudRoutes = require('./routes/adminCrudRoutes');
 console.log("🚀 [DEBUG] adminDashboardV2Routes imported successfully");
 console.log("🚀 [DEBUG] adminRoutes type:", typeof adminRoutes);
 console.log("🚀 [DEBUG] adminRoutes keys:", Object.keys(adminRoutes || {}));
@@ -633,6 +634,13 @@ if (adminRoutes && adminRoutes.stack) {
 
 app.use('/admindashboard', adminRoutes);
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
+
+// Mount Admin CRUD Routes (Bypass Implementation)
+console.log("🚀 [STARTUP] About to mount adminCrudRoutes...");
+console.log("🚀 [STARTUP] adminCrudRoutes object:", typeof adminCrudRoutes);
+app.use('/admin-api', adminCrudRoutes);
+console.log("✅ [STARTUP] adminCrudRoutes mounted successfully at /admin-api!");
+console.log("🎯 [STARTUP] BYPASS CRUD ROUTES ACTIVE - Ghost route bypassed!");
 
 // 🔍 VERIFY ROUTE REGISTRATION
 console.log("🔍 [DEBUG] Checking app routes after mounting...");
