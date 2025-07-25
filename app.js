@@ -955,8 +955,12 @@ app.use("/admindashboard", (req, res, next) => {
   next();
 });
 
-app.use("/admindashboard", adminRouter);
+// 🚀 CRUD FIX: adminDashboardRouter FIRST to enable full CRUD functionality
 app.use("/admindashboard", adminDashboardRouter);
+
+// 🔧 LEGACY ROUTER: Commented out to prevent route conflicts
+// app.use("/admindashboard", adminRouter);
+
 app.use("/mail", mailingRouter);
 app.use("/temp-admin", tempAdminRouter);
 app.use("/simple-admin", simpleAdminRouter);
