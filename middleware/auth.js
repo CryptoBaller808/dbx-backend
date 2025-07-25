@@ -241,6 +241,9 @@ const getAdminProfile = (req, res) => {
   }
 };
 
+// Import requireRole from separate middleware file
+const requireRole = require('./requireRole');
+
 module.exports = {
   generateToken,
   verifyToken,
@@ -250,6 +253,7 @@ module.exports = {
   isAuthenticated,
   refreshToken,
   getAdminProfile,
-  ADMIN_CREDENTIALS
+  ADMIN_CREDENTIALS,
+  requireRole
 };
 
