@@ -22,9 +22,6 @@ const initializeServices = async (db) => {
   }
 };
 
-/**
- * Validation middleware
- */
 const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -37,12 +34,8 @@ const validateRequest = (req, res, next) => {
   next();
 };
 
-/**
- * Error handling middleware
- */
 const handleWalletError = (error, req, res, next) => {
   console.error('[Wallet Routes] Error:', error);
-  
   if (error.name === 'BlockchainError') {
     return res.status(400).json({
       success: false,
@@ -51,7 +44,6 @@ const handleWalletError = (error, req, res, next) => {
       chainId: error.chainId
     });
   }
-  
   res.status(500).json({
     success: false,
     error: 'Internal server error',
@@ -59,10 +51,6 @@ const handleWalletError = (error, req, res, next) => {
   });
 };
 
-/**
- * GET /api/wallets/available
- * Get available wallets for the current environment
- */
 router.get('/available',
   auditMiddleware({ action: 'wallet_list_available' }),
   async (req, res, next) => {
@@ -75,7 +63,6 @@ router.get('/available',
       }
 
       const wallets = await walletService.getAvailableWallets();
-      
       res.json({
         success: true,
         data: {
@@ -90,23 +77,11 @@ router.get('/available',
   }
 );
 
-/**
- * POST /api/wallets/connect
- * Connect to a wallet for a specific blockchain
- */
 router.post('/connect',
   authMiddleware,
   [
-    body('chainId')
-      .notEmpty()
-      .withMessage('Chain ID is required')
-      .isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
-      .withMessage('Invalid chain ID'),
-    body('walletType')
-      .notEmpty()
-      .withMessage('Wallet type is required')
-      .isIn(['metamask', 'phantom', 'xumm', 'freighter', 'solflare', 'walletconnect'])
-      .withMessage('Invalid wallet type'),
+    body('chainId').notEmpty().isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC']),
+    body('walletType').notEmpty().isIn(['metamask', 'phantom', 'xumm', 'freighter', 'solflare', 'walletconnect']),
     body('options').optional().isObject()
   ],
   validateRequest,
@@ -115,31 +90,18 @@ router.post('/connect',
     try {
       const { chainId, walletType, options = {} } = req.body;
       const userId = req.user.id;
-
       const result = await walletService.connectWallet(userId, chainId, walletType, options);
-      
-      res.json({
-        success: true,
-        data: result
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
   }
 );
 
-/**
- * POST /api/wallets/disconnect
- * Disconnect from a wallet for a specific blockchain
- */
 router.post('/disconnect',
   authMiddleware,
   [
-    body('chainId')
-      .notEmpty()
-      .withMessage('Chain ID is required')
-      .isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
-      .withMessage('Invalid chain ID')
+    body('chainId').notEmpty().isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
   ],
   validateRequest,
   auditMiddleware({ action: 'wallet_disconnect' }),
@@ -147,32 +109,21 @@ router.post('/disconnect',
     try {
       const { chainId } = req.body;
       const userId = req.user.id;
-
       const result = await walletService.disconnectWallet(userId, chainId);
-      
-      res.json({
-        success: true,
-        data: result
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
   }
 );
 
-/**
- * POST /api/wallets/disconnect-all
- * Disconnect from all wallets
- */
 router.post('/disconnect-all',
   authMiddleware,
   auditMiddleware({ action: 'wallet_disconnect_all' }),
   async (req, res, next) => {
     try {
       const userId = req.user.id;
-
       const results = await walletService.disconnectAllWallets(userId);
-      
       res.json({
         success: true,
         data: {
@@ -187,39 +138,24 @@ router.post('/disconnect-all',
   }
 );
 
-/**
- * GET /api/wallets/status
- * Get wallet connection status for the current user
- */
 router.get('/status',
   authMiddleware,
   auditMiddleware({ action: 'wallet_status_check' }),
   async (req, res, next) => {
     try {
       const userId = req.user.id;
-
       const status = walletService.getUserWalletStatus(userId);
-      
-      res.json({
-        success: true,
-        data: status
-      });
+      res.json({ success: true, data: status });
     } catch (error) {
       next(error);
     }
   }
 );
 
-/**
- * GET /api/wallets/connection/:chainId
- * Get specific wallet connection for a chain
- */
 router.get('/connection/:chainId',
   authMiddleware,
   [
-    param('chainId')
-      .isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
-      .withMessage('Invalid chain ID')
+    param('chainId').isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
   ],
   validateRequest,
   auditMiddleware({ action: 'wallet_connection_check' }),
@@ -227,9 +163,7 @@ router.get('/connection/:chainId',
     try {
       const { chainId } = req.params;
       const userId = req.user.id;
-
       const connection = walletService.getUserWalletConnection(userId, chainId);
-      
       res.json({
         success: true,
         data: {
@@ -244,17 +178,10 @@ router.get('/connection/:chainId',
   }
 );
 
-/**
- * GET /api/wallets/balance
- * Get multi-chain balance for the current user
- */
 router.get('/balance',
   authMiddleware,
   [
-    query('includeTokens')
-      .optional()
-      .isBoolean()
-      .withMessage('includeTokens must be a boolean')
+    query('includeTokens').optional().isBoolean()
   ],
   validateRequest,
   auditMiddleware({ action: 'wallet_balance_check' }),
@@ -262,13 +189,9 @@ router.get('/balance',
     try {
       const userId = req.user.id;
       const includeTokens = req.query.includeTokens === 'true';
-
       const balances = await walletService.getUserMultiChainBalance(userId, includeTokens);
-      
-      // Calculate total value (would need price data in real implementation)
       const totalChains = balances.filter(b => !b.error).length;
       const totalErrors = balances.filter(b => b.error).length;
-      
       res.json({
         success: true,
         data: {
@@ -287,21 +210,12 @@ router.get('/balance',
   }
 );
 
-/**
- * GET /api/wallets/balance/:chainId
- * Get balance for a specific chain
- */
 router.get('/balance/:chainId',
   authMiddleware,
   [
-    param('chainId')
-      .isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC'])
-      .withMessage('Invalid chain ID'),
+    param('chainId').isIn(['XRP', 'STELLAR', 'XDC', 'SOLANA', 'AVALANCHE', 'POLYGON', 'BSC']),
     query('address').optional().isString(),
-    query('includeTokens')
-      .optional()
-      .isBoolean()
-      .withMessage('includeTokens must be a boolean')
+    query('includeTokens').optional().isBoolean()
   ],
   validateRequest,
   auditMiddleware({ action: 'wallet_chain_balance_check' }),
@@ -312,7 +226,6 @@ router.get('/balance/:chainId',
       const userId = req.user.id;
       const includeTokens = req.query.includeTokens === 'true';
 
-      // Get wallet connection
       const connection = walletService.getUserWalletConnection(userId, chainId);
       if (!connection && !address) {
         return res.status(400).json({
@@ -322,7 +235,6 @@ router.get('/balance/:chainId',
       }
 
       const targetAddress = address || connection.publicKey || connection.accounts?.[0];
-      
       if (!targetAddress) {
         return res.status(400).json({
           success: false,
@@ -330,15 +242,14 @@ router.get('/balance/:chainId',
         });
       }
 
-      // Get adapter and check balance
       const adapter = blockchainServices.registry.getAdapter(chainId);
       const balance = await adapter.getBalance(targetAddress);
-      
+
       let tokens = [];
       if (includeTokens) {
         tokens = await walletService.getUserTokenBalances(userId, chainId, targetAddress);
       }
-      
+
       res.json({
         success: true,
         data: {
@@ -356,10 +267,6 @@ router.get('/balance/:chainId',
   }
 );
 
-/**
- * GET /api/wallets/health
- * Health check for wallet service
- */
 router.get('/health',
   auditMiddleware({ action: 'wallet_health_check' }),
   async (req, res, next) => {
@@ -380,12 +287,12 @@ router.get('/health',
           health.supportedChains = supportedChains.length;
           health.chainStatus = {};
 
-          for (const chainId of supportedChains.slice(0, 3)) { // Check first 3 chains for health
+          for (const chainId of supportedChains.slice(0, 3)) {
             try {
               const adapter = blockchainServices.registry.getAdapter(chainId);
               const status = await adapter.getNetworkStatus();
               health.chainStatus[chainId] = status.isConnected ? 'connected' : 'disconnected';
-            } catch (error) {
+            } catch {
               health.chainStatus[chainId] = 'error';
             }
           }
@@ -397,10 +304,9 @@ router.get('/health',
         health.status = 'unhealthy';
         health.error = 'Services not initialized';
       }
-      
+
       const statusCode = health.status === 'healthy' ? 200 : 
-                        health.status === 'degraded' ? 200 : 503;
-      
+                         health.status === 'degraded' ? 200 : 503;
       res.status(statusCode).json({
         success: health.status !== 'unhealthy',
         data: health
@@ -411,23 +317,6 @@ router.get('/health',
   }
 );
 
-// 🔧 CONTROLLER-BASED ROUTES TEMPORARILY DISABLED
-// The following routes are commented out to prevent [object Undefined] errors
-// until walletController is properly exported and ready
-
-/*
-router.post('/test-controller-connect',
-  authMiddleware,
-  auditMiddleware({ action: 'wallet_test_connect' }),
-  // walletController.connectWallet  // Commented out to prevent undefined errors
-);
-*/
-
-// Apply error handling middleware
 router.use(handleWalletError);
-
-module.exports = {
-  router,
-  initializeServices
-};
+module.exports = { router, initializeServices };
 
