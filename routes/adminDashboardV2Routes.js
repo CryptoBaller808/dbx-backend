@@ -565,6 +565,23 @@ router.get('/health', (req, res) => {
   });
 });
 
+/**
+ * @route GET /admindashboard/v2test
+ * @desc Test endpoint to verify V2 routes are loading
+ * @access Public
+ */
+router.get('/v2test', (req, res) => {
+  console.log('🚀 [DEBUG] V2 TEST ENDPOINT HIT - ROUTES ARE WORKING!');
+  
+  res.json({
+    success: true,
+    message: 'V2 Routes are working!',
+    timestamp: new Date().toISOString(),
+    source: 'adminDashboardV2Routes.js',
+    debug: 'This confirms V2 routes are loaded and accessible'
+  });
+});
+
 console.log('🚀 [DEBUG] adminDashboardV2Routes.js - ALL ROUTES REGISTERED');
 console.log('🚀 [DEBUG] Router stack length:', router.stack ? router.stack.length : 'Unknown');
 
