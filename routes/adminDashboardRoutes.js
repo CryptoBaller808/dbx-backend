@@ -165,7 +165,7 @@ router.get('/token/get',
 
       res.json({
         success: true,
-        message: 'Tokens retrieved successfully',
+        message: 'TRACE: adminDashboardRoutes.js - ACTIVE ROUTE DETECTED',
         data: filteredTokens,
         total: filteredTokens.length
       });
