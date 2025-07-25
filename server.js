@@ -47,6 +47,10 @@ const { router: userManagementRoutes, initializeUserManagementService } = requir
 const { router: systemHealthRoutes, initializeHealthMonitoringService } = require('./routes/systemHealthRoutes');
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
 
+console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
+console.log("🌺 Route consolidation complete - Single source of truth architecture");
+console.log("⚡ Dual application conflict resolved - app.js deactivated");
+
 console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
 console.log("✅ [STARTUP] Express app created successfully");
