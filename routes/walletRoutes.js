@@ -319,4 +319,3 @@ router.get('/health',
 
 router.use(handleWalletError);
 module.exports = { router, initializeServices };
-
