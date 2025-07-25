@@ -482,6 +482,27 @@ router.delete('/banner/delete/:id', (req, res) => {
 });
 
 // ================================
+// DIAGNOSTIC TEST ENDPOINT
+// ================================
+
+/**
+ * GET /admin-api/test
+ * Simple diagnostic endpoint to verify route registration
+ */
+router.get('/test', (req, res) => {
+  console.log('🔍 [ADMIN-CRUD] Diagnostic test endpoint hit - adminCrudRoutes.js CONFIRMED ACTIVE');
+  
+  res.json({
+    success: true,
+    message: "Admin CRUD Test Route Active - BYPASS WORKING!",
+    source: 'adminCrudRoutes.js',
+    endpoint: 'GET /admin-api/test',
+    timestamp: new Date().toISOString(),
+    status: 'DIAGNOSTIC_SUCCESS'
+  });
+});
+
+// ================================
 // HEALTH CHECK ENDPOINT
 // ================================
 

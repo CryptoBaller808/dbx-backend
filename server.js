@@ -26,11 +26,15 @@ const { createHealthCheckEndpoint } = require('./health-check');
 console.log("✅ [STARTUP] Service modules imported successfully");
 
 // Import your route files
+console.log("🔍 [DEBUG] About to import adminDashboardV2Routes...");
 const adminRoutes = require('./routes/adminDashboardV2Routes');
+console.log("✅ [DEBUG] adminDashboardV2Routes imported successfully");
+
+console.log("🔍 [DEBUG] About to import adminCrudRoutes...");
 const adminCrudRoutes = require('./routes/adminCrudRoutes');
-console.log("🚀 [DEBUG] adminDashboardV2Routes imported successfully");
-console.log("🚀 [DEBUG] adminRoutes type:", typeof adminRoutes);
-console.log("🚀 [DEBUG] adminRoutes keys:", Object.keys(adminRoutes || {}));
+console.log("✅ [DEBUG] adminCrudRoutes imported successfully");
+console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
+console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
 const tempAdminSetup = require('./routes/tempAdminSetup');
 console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
@@ -632,15 +636,38 @@ if (adminRoutes && adminRoutes.stack) {
   console.log("❌ [DEBUG] adminRoutes has no stack property!");
 }
 
+// Mount Admin CRUD Routes (Bypass Implementation) - PRIORITY MOUNTING
+console.log("🚀 [STARTUP] ========================================");
+console.log("🚀 [STARTUP] MOUNTING ADMIN CRUD ROUTES (BYPASS)");
+console.log("🚀 [STARTUP] ========================================");
+console.log("🔍 [STARTUP] adminCrudRoutes object type:", typeof adminCrudRoutes);
+console.log("🔍 [STARTUP] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
+
+try {
+  app.use('/admin-api', adminCrudRoutes);
+  console.log("✅ [STARTUP] adminCrudRoutes mounted successfully at /admin-api!");
+  console.log("🎯 [STARTUP] BYPASS CRUD ROUTES ACTIVE - Ghost route bypassed!");
+  console.log("🔍 [STARTUP] Available endpoints:");
+  console.log("🔍 [STARTUP] - GET  /admin-api/test");
+  console.log("🔍 [STARTUP] - GET  /admin-api/health");
+  console.log("🔍 [STARTUP] - GET  /admin-api/token/list");
+  console.log("🔍 [STARTUP] - POST /admin-api/token/create");
+  console.log("🔍 [STARTUP] - PUT  /admin-api/token/update/:id");
+  console.log("🔍 [STARTUP] - DELETE /admin-api/token/delete/:id");
+  console.log("🔍 [STARTUP] - GET  /admin-api/banner/list");
+  console.log("🔍 [STARTUP] - POST /admin-api/banner/create");
+  console.log("🔍 [STARTUP] - PUT  /admin-api/banner/update/:id");
+  console.log("🔍 [STARTUP] - DELETE /admin-api/banner/delete/:id");
+} catch (error) {
+  console.error("❌ [STARTUP] ERROR mounting adminCrudRoutes:", error);
+  console.error("❌ [STARTUP] Error details:", error.message);
+  console.error("❌ [STARTUP] Stack trace:", error.stack);
+}
+
+console.log("🚀 [STARTUP] ========================================");
+
 app.use('/admindashboard', adminRoutes);
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
-
-// Mount Admin CRUD Routes (Bypass Implementation)
-console.log("🚀 [STARTUP] About to mount adminCrudRoutes...");
-console.log("🚀 [STARTUP] adminCrudRoutes object:", typeof adminCrudRoutes);
-app.use('/admin-api', adminCrudRoutes);
-console.log("✅ [STARTUP] adminCrudRoutes mounted successfully at /admin-api!");
-console.log("🎯 [STARTUP] BYPASS CRUD ROUTES ACTIVE - Ghost route bypassed!");
 
 // 🔍 VERIFY ROUTE REGISTRATION
 console.log("🔍 [DEBUG] Checking app routes after mounting...");
