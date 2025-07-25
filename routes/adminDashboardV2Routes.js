@@ -183,7 +183,7 @@ router.get('/token/get',
       // CRITICAL: Using "data" and "total" format to distinguish from old routes
       res.json({
         success: true,
-        message: 'Tokens retrieved successfully',
+        message: 'TRACE: adminDashboardV2Routes.js - ACTIVE ROUTE DETECTED',
         data: filteredTokens,
         total: filteredTokens.length,
         debug: 'adminDashboardV2Routes.js - GET /token/get - SUCCESS'
