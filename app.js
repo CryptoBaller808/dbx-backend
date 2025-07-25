@@ -21,6 +21,7 @@ const minter = require("./routes/mintNFTRoute.js");
 const saleRouter = require("./routes/saleRoute.js");
 const dashRouter = require("./routes/dashRoute.js");
 const adminRouter = require("./routes/adminRoute.js");
+const adminDashboardRouter = require("./routes/adminDashboardRoutes.js");
 const mailingRouter = require("./routes/malingRoute.js");
 const tempAdminRouter = require("./routes/tempAdminSetup.js");
 const versionRouter = require("./routes/versionCheck_simple.js");
@@ -955,6 +956,7 @@ app.use("/admindashboard", (req, res, next) => {
 });
 
 app.use("/admindashboard", adminRouter);
+app.use("/admindashboard", adminDashboardRouter);
 app.use("/mail", mailingRouter);
 app.use("/temp-admin", tempAdminRouter);
 app.use("/simple-admin", simpleAdminRouter);
