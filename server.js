@@ -3,6 +3,23 @@ console.log("🔥 OPERATION: SERVER RESURRECTION - PHANTOM APP BANISHED!");
 console.log("⚡ DBX BACKEND TRUE HEART IS BEATING - GHOST SAGA ENDS HERE!");
 console.log("🌺 RENDER DEPLOYMENT TIMESTAMP:", new Date().toISOString());
 
+// ================================
+// FAILSAFE EXECUTION PROOF
+// ================================
+const fs = require('fs');
+const executionProof = `🚀 FAILSAFE PROOF: server.js executed at ${new Date().toISOString()}
+🔥 PLATFORM EXORCISM: Render phantom detection system
+⚡ TRUE ENGINE CONFIRMATION: DBX backend heart is beating
+🌺 GHOST ELIMINATION: This file proves server.js runs on Render
+📊 EXECUTION EVIDENCE: Undeniable proof of platform resurrection`;
+
+try {
+  fs.writeFileSync('server-proof.txt', executionProof);
+  console.log("✅ [FAILSAFE] server-proof.txt created - EXECUTION CONFIRMED!");
+} catch (error) {
+  console.error("❌ [FAILSAFE] Failed to create server-proof.txt:", error.message);
+}
+
 console.log("🚀 [STARTUP] server.js started...");
 // ================================
 // DEEP PROBE MISSION - PROOF OF LIFE
