@@ -279,6 +279,9 @@ module.exports = (sequelize, DataTypes) => {
           fields: ['is_verified']
         },
         {
+          fields: ['created_at']
+         },
+        {       
           fields: ['is_featured']
         },
         {
