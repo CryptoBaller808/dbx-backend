@@ -214,6 +214,8 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       tableName: "nfts",
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
       timestamps: true,
       indexes: [
         {
@@ -230,6 +232,9 @@ module.exports = (sequelize, DataTypes) => {
         },
         {
           fields: ['status']
+        },
+        {
+          fields: ['created_at']
         },
         {
           fields: ['token_id', 'blockchain', 'contract_address'],
