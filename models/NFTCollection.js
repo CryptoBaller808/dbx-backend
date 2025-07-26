@@ -260,6 +260,8 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "nft_collections",
       timestamps: true,
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
       indexes: [
         {
           fields: ['creator_id']
