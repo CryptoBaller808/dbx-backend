@@ -112,6 +112,17 @@ console.log("⚡ Dual application conflict resolved - app.js deactivated");
 
 console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
+app.get('/fs-test', (req, res) => {
+  const fs = require('fs');
+  try {
+    fs.writeFileSync('fs-test-proof.txt', `FS write test at ${new Date().toISOString()}`);
+    res.send('✅ FS write successful');
+  } catch (err) {
+    console.error('❌ FS write error:', err);
+    res.status(500).send('❌ FS write failed');
+  }
+});
+
 console.log("✅ [STARTUP] Express app created successfully");
 
 // ================================
