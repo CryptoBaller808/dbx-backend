@@ -19,7 +19,7 @@
     "health-check": "curl -f http://localhost:${PORT:-3000}/health || exit 1"
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": "=18.x",
     "npm": ">=8.0.0"
   },
   "keywords": [
