@@ -1,3 +1,8 @@
+console.log("🚀 SERVER.JS IS RUNNING ON RENDER - THIS IS THE TRUE ENGINE");
+console.log("🔥 OPERATION: SERVER RESURRECTION - PHANTOM APP BANISHED!");
+console.log("⚡ DBX BACKEND TRUE HEART IS BEATING - GHOST SAGA ENDS HERE!");
+console.log("🌺 RENDER DEPLOYMENT TIMESTAMP:", new Date().toISOString());
+
 console.log("🚀 [STARTUP] server.js started...");
 // ================================
 // DEEP PROBE MISSION - PROOF OF LIFE
