@@ -65,8 +65,9 @@ console.log("📦 [PROBE] STARTING ROUTE FILE IMPORT DEBUGGING");
 console.log("📦 [PROBE] ========================================");
 
 console.log("📦 [PROBE] Loading apiAdminRoutes.js...");
+let apiAdminRoutes = null; // Declare variable outside try-catch for proper scope
 try {
-  const apiAdminRoutes = require('./routes/apiAdminRoutes');
+  apiAdminRoutes = require('./routes/apiAdminRoutes');
   console.log("✅ [PROBE] apiAdminRoutes.js loaded successfully");
   console.log("🔍 [PROBE] apiAdminRoutes type:", typeof apiAdminRoutes);
   console.log("🔍 [PROBE] apiAdminRoutes is function:", typeof apiAdminRoutes === 'function');
