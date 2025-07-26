@@ -127,7 +127,7 @@ module.exports = (sequelize, DataTypes) => {
           //key: 'id'
         // }
       // }
-    // },
+    },
     {
       tableName: "tokens",
       timestamps: true,
