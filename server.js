@@ -995,7 +995,7 @@ const initializeServices = async () => {
     console.log('[Server] Initializing wallet services...');
     
     // Initialize wallet services
-    await initializeWalletServices(db);
+    // await initializeWalletServices(db);
     
     console.log('[Server] Initializing cross-chain services...');
     
