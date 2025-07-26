@@ -26,6 +26,12 @@ const { createHealthCheckEndpoint } = require('./health-check');
 console.log("✅ [STARTUP] Service modules imported successfully");
 
 // Import your route files
+console.log("🔍 [DEBUG] About to import apiAdminRoutes...");
+const apiAdminRoutes = require('./routes/apiAdminRoutes');
+console.log("✅ [DEBUG] apiAdminRoutes imported successfully");
+console.log("🔍 [DEBUG] apiAdminRoutes type:", typeof apiAdminRoutes);
+console.log("🔍 [DEBUG] apiAdminRoutes is function:", typeof apiAdminRoutes === 'function');
+
 console.log("🔍 [DEBUG] About to import adminDashboardV2Routes...");
 const adminRoutes = require('./routes/adminDashboardV2Routes');
 console.log("✅ [DEBUG] adminDashboardV2Routes imported successfully");
@@ -635,6 +641,35 @@ if (adminRoutes && adminRoutes.stack) {
 } else {
   console.log("❌ [DEBUG] adminRoutes has no stack property!");
 }
+
+// Mount API Admin Routes (Ghost Bypass System) - PRIORITY MOUNTING
+console.log("🚀 [STARTUP] ========================================");
+console.log("🚀 [STARTUP] MOUNTING API ADMIN ROUTES (GHOST BYPASS)");
+console.log("🚀 [STARTUP] ========================================");
+console.log("🔍 [STARTUP] apiAdminRoutes object type:", typeof apiAdminRoutes);
+console.log("🔍 [STARTUP] apiAdminRoutes is function:", typeof apiAdminRoutes === 'function');
+
+try {
+  app.use('/api/admin', apiAdminRoutes);
+  console.log("✅ [STARTUP] apiAdminRoutes mounted successfully at /api/admin!");
+  console.log("🎯 [STARTUP] GHOST BYPASS SYSTEM ACTIVE - Clean isolated CRUD!");
+  console.log("🔍 [STARTUP] Individual endpoint confirmations:");
+  console.log("✅ [STARTUP] Mounted GET    /api/admin/token/list");
+  console.log("✅ [STARTUP] Mounted POST   /api/admin/token/create");
+  console.log("✅ [STARTUP] Mounted PUT    /api/admin/token/update/:id");
+  console.log("✅ [STARTUP] Mounted DELETE /api/admin/token/delete/:id");
+  console.log("✅ [STARTUP] Mounted GET    /api/admin/banner/list");
+  console.log("✅ [STARTUP] Mounted POST   /api/admin/banner/create");
+  console.log("✅ [STARTUP] Mounted PUT    /api/admin/banner/update/:id");
+  console.log("✅ [STARTUP] Mounted DELETE /api/admin/banner/delete/:id");
+  console.log("✅ [STARTUP] Mounted GET    /api/admin/health");
+} catch (error) {
+  console.error("❌ [STARTUP] ERROR mounting apiAdminRoutes:", error);
+  console.error("❌ [STARTUP] Error details:", error.message);
+  console.error("❌ [STARTUP] Stack trace:", error.stack);
+}
+
+console.log("🚀 [STARTUP] ========================================");
 
 // Mount Admin CRUD Routes (Bypass Implementation) - PRIORITY MOUNTING
 console.log("🚀 [STARTUP] ========================================");
