@@ -118,16 +118,16 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: true
       },
-      addedBy: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-        field: 'added_by',
-        references: {
-          model: 'admins',
-          key: 'id'
-        }
-      }
-    },
+      // addedBy: {
+        // type: DataTypes.INTEGER,
+        // allowNull: true,
+        // field: 'added_by',
+        // references: {
+          // model: 'admins',
+          //key: 'id'
+        // }
+      // }
+    // },
     {
       tableName: "tokens",
       timestamps: true,
