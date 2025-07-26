@@ -76,8 +76,9 @@ try {
 }
 
 console.log("📦 [PROBE] Loading adminDashboardV2Routes.js...");
+let adminRoutes = null; // Declare adminRoutes in proper scope
 try {
-  const adminRoutes = require('./routes/adminDashboardV2Routes');
+  adminRoutes = require('./routes/adminDashboardV2Routes');
   console.log("✅ [PROBE] adminDashboardV2Routes.js loaded successfully");
 } catch (error) {
   console.error("❌ [PROBE] ERROR loading adminDashboardV2Routes.js:", error.message);
