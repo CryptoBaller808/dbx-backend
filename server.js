@@ -1000,7 +1000,7 @@ const initializeServices = async () => {
     console.log('[Server] Initializing cross-chain services...');
     
     // Initialize cross-chain services
-    await initializeCrossChainServices(db);
+    // await initializeCrossChainServices(db);
     
     console.log('[Server] Initializing risk management system...');
     
