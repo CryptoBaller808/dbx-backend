@@ -1,4 +1,16 @@
 console.log("🚀 [STARTUP] server.js started...");
+// ================================
+// DEEP PROBE MISSION - PROOF OF LIFE
+// ================================
+console.log("🔥 SERVER.JS STARTED: Time =", new Date().toISOString());
+console.log("🔥 [PROBE] DBX Backend Server initializing...");
+console.log("🔥 [PROBE] CRITICAL: This log confirms server.js is executing!");
+console.log("🔥 [PROBE] Process ID:", process.pid);
+console.log("🔥 [PROBE] Node version:", process.version);
+console.log("🔥 [PROBE] Environment:", process.env.NODE_ENV || 'development');
+console.log("🔥 [PROBE] Working directory:", process.cwd());
+console.log("🔥 [PROBE] Entry point confirmed: server.js is running!");
+
 console.log("🚀 [STARTUP] Process ID:", process.pid);
 console.log("🚀 [STARTUP] Node version:", process.version);
 console.log("🚀 [STARTUP] Environment:", process.env.NODE_ENV || 'development');
@@ -26,15 +38,28 @@ const { createHealthCheckEndpoint } = require('./health-check');
 console.log("✅ [STARTUP] Service modules imported successfully");
 
 // Import your route files
-console.log("🔍 [DEBUG] About to import apiAdminRoutes...");
-const apiAdminRoutes = require('./routes/apiAdminRoutes');
-console.log("✅ [DEBUG] apiAdminRoutes imported successfully");
-console.log("🔍 [DEBUG] apiAdminRoutes type:", typeof apiAdminRoutes);
-console.log("🔍 [DEBUG] apiAdminRoutes is function:", typeof apiAdminRoutes === 'function');
+console.log("📦 [PROBE] ========================================");
+console.log("📦 [PROBE] STARTING ROUTE FILE IMPORT DEBUGGING");
+console.log("📦 [PROBE] ========================================");
 
-console.log("🔍 [DEBUG] About to import adminDashboardV2Routes...");
-const adminRoutes = require('./routes/adminDashboardV2Routes');
-console.log("✅ [DEBUG] adminDashboardV2Routes imported successfully");
+console.log("📦 [PROBE] Loading apiAdminRoutes.js...");
+try {
+  const apiAdminRoutes = require('./routes/apiAdminRoutes');
+  console.log("✅ [PROBE] apiAdminRoutes.js loaded successfully");
+  console.log("🔍 [PROBE] apiAdminRoutes type:", typeof apiAdminRoutes);
+  console.log("🔍 [PROBE] apiAdminRoutes is function:", typeof apiAdminRoutes === 'function');
+} catch (error) {
+  console.error("❌ [PROBE] ERROR loading apiAdminRoutes.js:", error.message);
+  console.error("❌ [PROBE] Stack trace:", error.stack);
+}
+
+console.log("📦 [PROBE] Loading adminDashboardV2Routes.js...");
+try {
+  const adminRoutes = require('./routes/adminDashboardV2Routes');
+  console.log("✅ [PROBE] adminDashboardV2Routes.js loaded successfully");
+} catch (error) {
+  console.error("❌ [PROBE] ERROR loading adminDashboardV2Routes.js:", error.message);
+}
 
 console.log("🔍 [DEBUG] About to import adminCrudRoutes...");
 const adminCrudRoutes = require('./routes/adminCrudRoutes');
@@ -65,6 +90,22 @@ console.log("⚡ Dual application conflict resolved - app.js deactivated");
 console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
 console.log("✅ [STARTUP] Express app created successfully");
+
+// ================================
+// DEEP PROBE MISSION - INLINE ROUTE TEST
+// ================================
+console.log("🧪 [PROBE] Adding inline live-check route for testing...");
+app.get('/live-check', (req, res) => {
+  console.log("🔥 [PROBE] /live-check endpoint hit - INLINE ROUTE WORKING!");
+  res.json({ 
+    status: "LIVE", 
+    timestamp: new Date().toISOString(),
+    message: "Inline route test successful - server.js is executing routes!",
+    source: "server.js inline route",
+    probe_mission: "SUCCESS"
+  });
+});
+console.log("✅ [PROBE] Inline live-check route added successfully!");
 
 console.log("🌐 [STARTUP] About to create HTTP server...");
 const server = http.createServer(app);
