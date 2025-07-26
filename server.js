@@ -232,7 +232,7 @@ app.get('/health', async (req, res) => {
         User.belongsTo(Role, { foreignKey: 'role_id' });
         Role.hasMany(User, { foreignKey: 'role_id' });
         
-        await sequelize.sync({ alter: false });
+        // await sequelize.sync({ alter: false });
         console.log('✅ [Emergency] Tables synced');
         
         const [adminRole] = await Role.findOrCreate({
