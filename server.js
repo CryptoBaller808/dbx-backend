@@ -992,7 +992,7 @@ const initializeServices = async () => {
     // Initialize blockchain services
     await initializeBlockchainServices(db);
     
-    console.log('[Server] Initializing wallet services...');
+    // console.log('[Server] Initializing wallet services...');
     
     // Initialize wallet services
     // await initializeWalletServices(db);
