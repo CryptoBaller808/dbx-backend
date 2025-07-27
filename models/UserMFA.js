@@ -4,7 +4,7 @@ const { DataTypes } = require('sequelize');
  * User MFA Model
  * Stores MFA configuration and recovery codes for users
  */
-module.exports = (sequelize) => {
+module.exports = (sequelize, DataTypes) => {
   const UserMFA = sequelize.define('UserMFA', {
     id: {
       type: DataTypes.INTEGER,
