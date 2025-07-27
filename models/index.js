@@ -157,15 +157,14 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // FIXED: Use alter: false to prevent conflicting ALTER queries
+    // UPDATED: Use alter: true to safely add missing columns like isEnabled
     if (env === 'development') {
-      await sequelize.sync({ alter: false });
-      console.log('✅ [Database] Database models synchronized (development - no alter)');
+      await sequelize.sync({ alter: true });
+      console.log('✅ [Database] Database models synchronized (development - with alter for missing columns)');
     } else if (env === 'production') {
-      // PRODUCTION: Use safest possible sync - no alter, no force
-      // This will only create tables if they don't exist, no modifications to existing tables
-      await sequelize.sync({ force: false, alter: false });
-      console.log('✅ [Database] Database models synchronized (production - safe mode, no alter)');
+      // PRODUCTION: Use alter: true to safely add missing columns without data loss
+      await sequelize.sync({ force: false, alter: true });
+      console.log('✅ [Database] Database models synchronized (production - safe alter for missing columns)');
     }
     
     console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
