@@ -262,6 +262,7 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
       createdAt: 'created_at',
       updatedAt: 'updated_at',
+      underscored: true, // Ensure snake_case naming for all fields and associations
       indexes: [
         {
           fields: ['creator_id']
