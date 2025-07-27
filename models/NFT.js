@@ -275,6 +275,27 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
+  // Define associations
+  NFT.associate = function(models) {
+    // NFT belongs to User (creator)
+    NFT.belongsTo(models.User, {
+      foreignKey: 'creator_id',
+      as: 'creator'
+    });
+    
+    // NFT belongs to User (current owner)
+    NFT.belongsTo(models.User, {
+      foreignKey: 'current_owner_id',
+      as: 'currentOwner'
+    });
+    
+    // NFT belongs to NFTCollection
+    NFT.belongsTo(models.NFTCollection, {
+      foreignKey: 'collection_id',
+      as: 'collection'
+    });
+  };
+
   return NFT;
 };
 

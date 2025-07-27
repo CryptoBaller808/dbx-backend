@@ -320,6 +320,21 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
+  // Define associations
+  NFTCollection.associate = function(models) {
+    // NFTCollection belongs to User (creator)
+    NFTCollection.belongsTo(models.User, {
+      foreignKey: 'creator_id',
+      as: 'creator'
+    });
+    
+    // NFTCollection has many NFTs
+    NFTCollection.hasMany(models.NFT, {
+      foreignKey: 'collection_id',
+      as: 'nfts'
+    });
+  };
+
   return NFTCollection;
 };
 
