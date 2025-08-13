@@ -93,6 +93,7 @@ console.log("✅ [DEBUG] adminCrudRoutes imported successfully");
 console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
 console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
 const tempAdminSetup = require('./routes/tempAdminSetup');
+const simpleAdminSetup = require('./routes/simpleAdminSetup');
 const { router: adminAuthRoutes } = require('./routes/adminAuthRoutes');
 console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
@@ -1033,6 +1034,8 @@ app.use('/api/creator', creatorRoutes);
 
 // Mount Temporary Admin Setup Route (bypass problematic admin routes)
 app.use('/temp-admin', tempAdminSetup);
+// Mount Simple Admin Setup Route (works with existing schema)
+app.use('/simple-admin', simpleAdminSetup);
 
 // TEMPORARILY COMMENTED OUT TO FIX ADMIN ROUTE CONFLICTS
 // Mount Real-Time Analytics Routes
