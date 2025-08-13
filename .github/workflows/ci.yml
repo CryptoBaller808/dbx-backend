@@ -1,0 +1,116 @@
+name: DBX Backend CI
+
+on:
+  push:
+    branches: [ main, new-branch-exchange-logic, develop ]
+  pull_request:
+    branches: [ main, new-branch-exchange-logic ]
+  workflow_dispatch:
+
+concurrency:
+  group: dbx-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test_lint:
+    name: Test & Lint (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+      - run: npm ci
+      # Lint if script exists; otherwise skip
+      - name: Lint
+        run: |
+          if npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo "No lint script; skipping"
+          fi
+      # Run tests but don’t fail if none exist
+      - name: Test
+        run: |
+          if npm run | grep -q "test"; then
+            npm test -- --passWithNoTests
+          else
+            echo "No test script; skipping"
+          fi
+
+  migration_check:
+    name: Migration Check (Postgres 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dbx_ci
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/dbx_ci
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - name: Wait for DB
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            sleep 2
+          done
+      - name: Run migrations (sequelize-cli or project script)
+        run: |
+          if [ -f ./node_modules/.bin/sequelize ]; then
+            npx sequelize db:migrate
+          elif npm run | grep -q "migrate"; then
+            npm run migrate
+          else
+            echo "No migration command found. Ensure migrations are run in production by the app."
+          fi
+
+  security_check:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      # Surface vulnerabilities but don’t fail the pipeline
+      - run: npm audit --audit-level=high || true
+
+  build_check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - name: Build (if script exists)
+        run: |
+          if npm run | grep -q "build"; then
+            npm run build
+          else
+            echo "No build script; skipping"
+          fi
