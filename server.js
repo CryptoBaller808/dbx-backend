@@ -1004,13 +1004,19 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       await db.authenticate();
       console.log('✅ DB connection established');
       
-      // Sync database tables - create if they don't exist (skip in light mode)
-      if (process.env.DBX_STARTUP_MODE !== 'light') {
-        console.log('[Server] Synchronizing database tables...');
+      // MIGRATION-FIRST APPROACH: Database schema managed by migrations only
+      if (process.env.DBX_STARTUP_MODE === 'light') {
+        console.log('🚀 [LIGHT START] Skipping database sync in light mode');
+      } else if (process.env.NODE_ENV === 'production') {
+        console.log('🏭 [PRODUCTION] Using migration-first approach - no sync/alter in production');
+        console.log('🏭 [PRODUCTION] Database schema managed by migrations only');
+        // REMOVED: db.sync() in production - migrations handle schema changes
+      } else if (process.env.NODE_ENV === 'development' && process.env.DBX_STARTUP_MODE === 'full') {
+        console.log('[Server] Synchronizing database tables (development full mode only)...');
         await db.sync({ alter: true });
         console.log('✅ Database tables synchronized successfully');
       } else {
-        console.log('🚀 [LIGHT START] Skipping database sync in light mode');
+        console.log('🔧 [DEVELOPMENT] Skipping sync - use DBX_STARTUP_MODE=full to enable sync for debugging');
       }
       
       // Now that database is connected, add connection pool monitoring middleware
@@ -1098,18 +1104,42 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
 // ================================
 (async () => {
   try {
-    const lightStart = process.env.DBX_STARTUP_MODE === 'light';
-    if (lightStart) {
+    const startupMode = process.env.DBX_STARTUP_MODE;
+    console.log(`🚀 [STARTUP] DBX_STARTUP_MODE=${startupMode}`);
+    
+    if (startupMode === 'light') {
       console.log('[STARTUP] Light mode: skipping Sequelize sync; doing authenticate() only');
       await initializeServices({ skipDBDependent: true });
       console.log('[STARTUP] DB connection OK');
+    } else if (startupMode === 'full') {
+      console.log('[STARTUP] Full mode: running complete initializeDatabase() for SQL diagnostics');
+      await initializeServices();
+      console.log('[STARTUP] Full initialization completed');
     } else {
-      console.log('[STARTUP] Full mode: running initializeServices()');
+      console.log('[STARTUP] Normal mode: running initializeServices()');
       await initializeServices();
     }
     console.log('[STARTUP] Services initialized');
   } catch (err) {
-    console.error('[STARTUP] Non-fatal init error:', err);
+    console.error('[STARTUP] Initialization error:', err);
+    console.error('[STARTUP] Error stack:', err.stack);
+    
+    // In full mode, we want to see the exact SQL error for debugging
+    if (process.env.DBX_STARTUP_MODE === 'full') {
+      console.error('🔍 [SQL DEBUG] Full error details for debugging:');
+      console.error('🔍 [SQL DEBUG] Error name:', err.name);
+      console.error('🔍 [SQL DEBUG] Error message:', err.message);
+      console.error('🔍 [SQL DEBUG] SQL:', err.sql || 'No SQL in error');
+      console.error('🔍 [SQL DEBUG] Original error:', err.original || 'No original error');
+    }
+    
+    // In light mode, treat as non-fatal; in full mode, let it crash for debugging
+    if (process.env.DBX_STARTUP_MODE !== 'full') {
+      console.error('[STARTUP] Treating as non-fatal in light mode');
+    } else {
+      console.error('[STARTUP] Full mode - allowing crash for debugging');
+      throw err;
+    }
   }
 })();
 

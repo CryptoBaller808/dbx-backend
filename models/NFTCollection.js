@@ -83,19 +83,15 @@ module.exports = (sequelize, DataTypes) => {
       // Creator and Category
       creator_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'users',
-          key: 'id'
-        }
+        allowNull: false
+        // REMOVED: inline references to fix PostgreSQL REFERENCES syntax error
+        // Foreign key constraint will be handled by migrations instead
       },
       category_id: {
         type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-          model: 'categories',
-          key: 'id'
-        }
+        allowNull: true
+        // REMOVED: inline references to fix PostgreSQL REFERENCES syntax error
+        // Foreign key constraint will be handled by migrations instead
       },
       // Collection Configuration
       max_supply: {

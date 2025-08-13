@@ -10,6 +10,10 @@ const { Sequelize, DataTypes } = require('sequelize');
 // Environment configuration
 const env = process.env.NODE_ENV || 'development';
 
+// Enable SQL logging for startup diagnostics
+const enableStartupSQL = process.env.DBX_LOG_SQL === 'true';
+console.log(`🔍 [SQL Logging] DBX_LOG_SQL=${process.env.DBX_LOG_SQL}, enableStartupSQL=${enableStartupSQL}`);
+
 // Database configuration
 let sequelize;
 
@@ -23,7 +27,7 @@ if (process.env.DATABASE_URL) {
         rejectUnauthorized: false
       }
     },
-    logging: env === 'development' ? console.log : false,
+    logging: enableStartupSQL ? console.log : (env === 'development' ? console.log : false),
     pool: {
       max: 5,
       min: 0,
@@ -41,7 +45,7 @@ if (process.env.DATABASE_URL) {
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
       dialect: 'postgres',
-      logging: env === 'development' ? console.log : false,
+      logging: enableStartupSQL ? console.log : (env === 'development' ? console.log : false),
       pool: {
         max: 5,
         min: 0,
@@ -157,19 +161,20 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // LIGHT START BYPASS: Skip sync in light mode
-    if (process.env.DBX_STARTUP_MODE !== 'light') {
-      // UPDATED: Use alter: true to safely add missing columns like isEnabled
-      if (env === 'development') {
-        await sequelize.sync({ alter: true });
-        console.log('✅ [Database] Database models synchronized (development - with alter for missing columns)');
-      } else if (env === 'production') {
-        // PRODUCTION: Use alter: true to safely add missing columns without data loss
-        await sequelize.sync({ force: false, alter: true });
-        console.log('✅ [Database] Database models synchronized (production - safe alter for missing columns)');
-      }
-    } else {
+    // MIGRATION-FIRST APPROACH: Skip sync in light mode and production
+    if (process.env.DBX_STARTUP_MODE === 'light') {
       console.log('🚀 [LIGHT START] Skipping database sync in light mode');
+    } else if (env === 'production') {
+      console.log('🏭 [PRODUCTION] Using migration-first approach - no sync/alter in production');
+      console.log('🏭 [PRODUCTION] Database schema managed by migrations only');
+      // REMOVED: sequelize.sync() in production - migrations handle schema changes
+    } else if (env === 'development' && process.env.DBX_STARTUP_MODE === 'full') {
+      // Only allow sync in development with explicit full mode for debugging
+      console.log('🔧 [DEVELOPMENT] Running sync with alter for debugging (full mode only)');
+      await sequelize.sync({ alter: true });
+      console.log('✅ [Database] Database models synchronized (development - with alter for debugging)');
+    } else {
+      console.log('🔧 [DEVELOPMENT] Skipping sync - use DBX_STARTUP_MODE=full to enable sync for debugging');
     }
     
     console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));

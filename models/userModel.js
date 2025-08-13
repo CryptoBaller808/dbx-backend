@@ -63,13 +63,9 @@ module.exports = (sequelize, DataTypes) => {
       role_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 2,
-        references: {
-          model: 'roles',
-          key: 'id'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'NO ACTION'
+        defaultValue: 2
+        // REMOVED: inline references to fix PostgreSQL REFERENCES syntax error
+        // Foreign key constraint will be handled by migrations instead
       },
       status: {
         type: DataTypes.STRING,
