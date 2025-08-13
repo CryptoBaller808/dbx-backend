@@ -93,6 +93,7 @@ console.log("✅ [DEBUG] adminCrudRoutes imported successfully");
 console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
 console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
 const tempAdminSetup = require('./routes/tempAdminSetup');
+const { router: adminAuthRoutes } = require('./routes/adminAuthRoutes');
 console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
@@ -985,6 +986,10 @@ console.log("🚀 [STARTUP] ========================================");
 
 app.use('/admindashboard', adminRoutes);
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
+
+// Mount Admin Authentication Routes
+app.use('/admindashboard', adminAuthRoutes);
+console.log("✅ [STARTUP] adminAuthRoutes mounted successfully!");
 
 // 🔍 VERIFY ROUTE REGISTRATION
 console.log("🔍 [DEBUG] Checking app routes after mounting...");
