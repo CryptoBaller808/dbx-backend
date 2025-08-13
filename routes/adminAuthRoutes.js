@@ -8,8 +8,13 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-// JWT secret - in production this should be in environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'dbx-admin-secret-key-change-in-production';
+// JWT secret - REQUIRED in production
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error('❌ [AdminAuth] FATAL: JWT_SECRET environment variable is required');
+  process.exit(1);
+}
 
 /**
  * @route POST /admindashboard/auth/login
@@ -39,21 +44,29 @@ router.post('/auth/login', async (req, res) => {
     // Get database connection
     const { sequelize } = require('../models');
     
-    // Find admin user by email or username
-    const [users] = await sequelize.query(`
-      SELECT u.id, u.username, u.email, u.password, u.first_name, u.last_name, 
-             u.status, r.name as role_name, r.id as role_id
-      FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      WHERE (u.username = :identifier OR u.email = :identifier)
-      AND u.status = 'active'
-      AND r.name = 'admin'
+    // Ensure database connection is available
+    if (!sequelize) {
+      console.error('❌ [AdminAuth] Database connection not available');
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+    
+    // Find admin user by email or username in Admins table
+    const [admins] = await sequelize.query(`
+      SELECT a.id, a.username, a.email, a.password_hash, a.role_id,
+             r.name as role_name
+      FROM "Admins" a
+      LEFT JOIN roles r ON a.role_id = r.id
+      WHERE (a.username = :identifier OR a.email = :identifier)
+      AND r.name = 'Admin'
     `, {
       replacements: { identifier },
       type: sequelize.QueryTypes.SELECT
     });
     
-    if (users.length === 0) {
+    if (admins.length === 0) {
       console.log('❌ [AdminAuth] Admin user not found:', identifier);
       return res.status(401).json({
         success: false,
@@ -61,10 +74,10 @@ router.post('/auth/login', async (req, res) => {
       });
     }
     
-    const user = users[0];
+    const admin = admins[0];
     
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    // Verify password using password_hash field
+    const isValidPassword = await bcrypt.compare(password, admin.password_hash);
     
     if (!isValidPassword) {
       console.log('❌ [AdminAuth] Invalid password for user:', identifier);
@@ -77,11 +90,11 @@ router.post('/auth/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role_name,
-        role_id: user.role_id
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role_name,
+        role_id: admin.role_id
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -94,22 +107,31 @@ router.post('/auth/login', async (req, res) => {
       message: 'Login successful',
       token,
       admin: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        role: user.role_name,
-        roleId: user.role_id
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role_name,
+        roleId: admin.role_id
       }
     });
     
   } catch (error) {
     console.error('❌ [AdminAuth] Login error:', error);
-    res.status(500).json({
+    
+    // Only return 500 for true server errors, not validation errors
+    if (error.name === 'SequelizeConnectionError' || 
+        error.name === 'SequelizeDatabaseError' ||
+        error.message.includes('JWT_SECRET')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+    
+    // For other errors, return 401 (likely authentication related)
+    res.status(401).json({
       success: false,
-      message: 'Login failed',
-      error: error.message
+      message: 'Authentication failed'
     });
   }
 });
@@ -135,41 +157,47 @@ router.get('/auth/profile', async (req, res) => {
     // Verify JWT token
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Get fresh user data from database
+    // Get fresh admin data from database
     const { sequelize } = require('../models');
     
-    const [users] = await sequelize.query(`
-      SELECT u.id, u.username, u.email, u.first_name, u.last_name, 
-             u.status, r.name as role_name, r.id as role_id
-      FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      WHERE u.id = :userId
-      AND u.status = 'active'
-      AND r.name = 'admin'
+    // Ensure database connection is available
+    if (!sequelize) {
+      console.error('❌ [AdminAuth] Database connection not available');
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+    
+    const [admins] = await sequelize.query(`
+      SELECT a.id, a.username, a.email, a.role_id,
+             r.name as role_name
+      FROM "Admins" a
+      LEFT JOIN roles r ON a.role_id = r.id
+      WHERE a.id = :adminId
+      AND r.name = 'Admin'
     `, {
-      replacements: { userId: decoded.id },
+      replacements: { adminId: decoded.id },
       type: sequelize.QueryTypes.SELECT
     });
     
-    if (users.length === 0) {
+    if (admins.length === 0) {
       return res.status(401).json({
         success: false,
         message: 'Admin user not found or inactive'
       });
     }
     
-    const user = users[0];
+    const admin = admins[0];
     
     res.json({
       success: true,
       admin: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        role: user.role_name,
-        roleId: user.role_id
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role_name,
+        roleId: admin.role_id
       }
     });
     
@@ -189,10 +217,20 @@ router.get('/auth/profile', async (req, res) => {
     }
     
     console.error('❌ [AdminAuth] Profile error:', error);
-    res.status(500).json({
+    
+    // Only return 500 for true server errors
+    if (error.name === 'SequelizeConnectionError' || 
+        error.name === 'SequelizeDatabaseError') {
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+    
+    // For other errors, return 401 (likely authentication related)
+    res.status(401).json({
       success: false,
-      message: 'Failed to get profile',
-      error: error.message
+      message: 'Authentication failed'
     });
   }
 });
