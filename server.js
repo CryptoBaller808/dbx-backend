@@ -92,8 +92,7 @@ const adminCrudRoutes = require('./routes/adminCrudRoutes');
 console.log("✅ [DEBUG] adminCrudRoutes imported successfully");
 console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
 console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
-const tempAdminSetup = require('./routes/tempAdminSetup');
-const simpleAdminSetup = require('./routes/simpleAdminSetup');
+// Temporary admin setup routes removed for security
 const { router: adminAuthRoutes } = require('./routes/adminAuthRoutes');
 console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
@@ -339,11 +338,29 @@ app.use(cors({
       callback(new Error('Not allowed by CORS policy'));
     }
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id']
+  credentials: false, // Using Bearer tokens, not cookies
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['X-Request-Id']
 }));
 console.log("✅ [SECURITY] CORS allowlist configured");
+
+// Handle preflight OPTIONS requests
+app.options('*', cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (corsOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS policy'));
+    }
+  },
+  credentials: false,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['X-Request-Id']
+}));
+console.log("✅ [SECURITY] CORS preflight handler configured");
 
 // 4. Rate limiting for auth routes
 const authRateLimit = rateLimit({
@@ -1032,10 +1049,8 @@ app.use('/api/creator', creatorRoutes);
 // Mount Enhanced Admin Routes
 // app.use('/admindashboard', enhancedAdminRoutes);
 
-// Mount Temporary Admin Setup Route (bypass problematic admin routes)
-app.use('/temp-admin', tempAdminSetup);
-// Mount Simple Admin Setup Route (works with existing schema)
-app.use('/simple-admin', simpleAdminSetup);
+// Temporary admin setup routes removed for security
+// Only /admindashboard/auth/* endpoints are available for authentication
 
 // TEMPORARILY COMMENTED OUT TO FIX ADMIN ROUTE CONFLICTS
 // Mount Real-Time Analytics Routes
