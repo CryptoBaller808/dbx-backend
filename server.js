@@ -94,6 +94,9 @@ console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
 console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
 // Temporary admin setup routes removed for security
 const { router: adminAuthRoutes } = require('./routes/adminAuthRoutes');
+const seedRoutes = require('./routes/seedRoutes');
+const { migrateOnBoot } = require('./lib/migrations');
+const { runSeed } = require('./lib/seeding');
 console.log("✅ [STARTUP] Route modules imported successfully");
 const mfaRoutes = require('./routes/mfaRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
@@ -1007,7 +1010,8 @@ console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
 // Mount Admin Authentication Routes
 app.use('/admindashboard', adminAuthRoutes);
-console.log("✅ [STARTUP] adminAuthRoutes mounted successfully!");
+app.use('/admindashboard', seedRoutes);
+console.log("✅ [STARTUP] adminAuthRoutes and seedRoutes mounted successfully!");
 
 // 🔍 VERIFY ROUTE REGISTRATION
 console.log("🔍 [DEBUG] Checking app routes after mounting...");
@@ -1210,6 +1214,26 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
     try {
       await db.authenticate();
       console.log('✅ DB connection established');
+      
+      // BOOT MIGRATIONS (if enabled)
+      if (process.env.RUN_MIGRATIONS_ON_BOOT === 'true') {
+        console.log('[BOOT] Running migrations on boot...');
+        const migrationResult = await migrateOnBoot(db);
+        console.log(`[MIGRATIONS] Ran ${migrationResult.ran} migrations`);
+        if (migrationResult.error) {
+          console.warn('[MIGRATIONS] Boot migration warning:', migrationResult.error);
+        }
+      }
+      
+      // BOOT SEEDING (if enabled)
+      if (process.env.RUN_SEEDS_ON_BOOT === 'true') {
+        console.log('[BOOT] Running seeds on boot...');
+        const seedResult = await runSeed(db);
+        console.log(`[SEED] ${seedResult.summary}`);
+        if (!seedResult.success) {
+          console.warn('[SEED] Boot seeding warning:', seedResult.error);
+        }
+      }
       
       // MIGRATION-FIRST APPROACH: Database schema managed by migrations only
       if (process.env.DBX_STARTUP_MODE === 'light') {
