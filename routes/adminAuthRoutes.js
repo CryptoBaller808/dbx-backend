@@ -18,36 +18,43 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dbx-admin-secret-key-change-in-pro
  */
 router.post('/auth/login', async (req, res) => {
   try {
-    console.log('🔐 [AdminAuth] Login attempt:', { username: req.body.username });
+    const { email, username, password } = req.body || {};
     
-    const { username, password } = req.body;
+    console.log('🔐 [AdminAuth] Login attempt:', { 
+      email: email ? email.substring(0, 3) + '***' : undefined,
+      username: username ? username.substring(0, 3) + '***' : undefined 
+    });
     
-    if (!username || !password) {
+    // Validate required fields
+    if (!password || (!email && !username)) {
       return res.status(400).json({
         success: false,
-        message: 'Username and password are required'
+        message: 'Email/username and password are required'
       });
     }
+    
+    // Normalize identifier (email takes precedence if both provided)
+    const identifier = (email || username).toLowerCase().trim();
     
     // Get database connection
     const { sequelize } = require('../models');
     
-    // Find admin user by username or email
+    // Find admin user by email or username
     const [users] = await sequelize.query(`
       SELECT u.id, u.username, u.email, u.password, u.first_name, u.last_name, 
              u.status, r.name as role_name, r.id as role_id
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
-      WHERE (u.username = :username OR u.email = :username)
+      WHERE (u.username = :identifier OR u.email = :identifier)
       AND u.status = 'active'
       AND r.name = 'admin'
     `, {
-      replacements: { username },
+      replacements: { identifier },
       type: sequelize.QueryTypes.SELECT
     });
     
     if (users.length === 0) {
-      console.log('❌ [AdminAuth] Admin user not found:', username);
+      console.log('❌ [AdminAuth] Admin user not found:', identifier);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -60,7 +67,7 @@ router.post('/auth/login', async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
     
     if (!isValidPassword) {
-      console.log('❌ [AdminAuth] Invalid password for user:', username);
+      console.log('❌ [AdminAuth] Invalid password for user:', identifier);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -80,7 +87,7 @@ router.post('/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
     
-    console.log('✅ [AdminAuth] Login successful for:', username);
+    console.log('✅ [AdminAuth] Login successful for:', identifier);
     
     res.json({
       success: true,
