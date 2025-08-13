@@ -157,14 +157,19 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // UPDATED: Use alter: true to safely add missing columns like isEnabled
-    if (env === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('✅ [Database] Database models synchronized (development - with alter for missing columns)');
-    } else if (env === 'production') {
-      // PRODUCTION: Use alter: true to safely add missing columns without data loss
-      await sequelize.sync({ force: false, alter: true });
-      console.log('✅ [Database] Database models synchronized (production - safe alter for missing columns)');
+    // LIGHT START BYPASS: Skip sync in light mode
+    if (process.env.DBX_STARTUP_MODE !== 'light') {
+      // UPDATED: Use alter: true to safely add missing columns like isEnabled
+      if (env === 'development') {
+        await sequelize.sync({ alter: true });
+        console.log('✅ [Database] Database models synchronized (development - with alter for missing columns)');
+      } else if (env === 'production') {
+        // PRODUCTION: Use alter: true to safely add missing columns without data loss
+        await sequelize.sync({ force: false, alter: true });
+        console.log('✅ [Database] Database models synchronized (production - safe alter for missing columns)');
+      }
+    } else {
+      console.log('🚀 [LIGHT START] Skipping database sync in light mode');
     }
     
     console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));
