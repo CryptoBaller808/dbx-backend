@@ -36,14 +36,16 @@ console.log("🔥 [PROBE] Entry point confirmed: server.js is running!");
 console.log("🚀 [STARTUP] Process ID:", process.pid);
 console.log("🚀 [STARTUP] Node version:", process.version);
 console.log("🚀 [STARTUP] Environment:", process.env.NODE_ENV || 'development');
-
 const express = require('express');
-console.log("✅ [STARTUP] Express imported successfully");
-
-const cors = require('cors');
-const bodyParser = require('body-parser');
 const http = require('http');
 const socketIo = require('socket.io');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const pinoHttp = require('pino-http');
+const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 console.log("✅ [STARTUP] Core modules imported successfully");
 
 const { initializeBlockchainServices } = require('./services/blockchain');
@@ -117,11 +119,107 @@ const app = express();
 // ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
 // ================================
-console.log("🚀 [LIGHT START] Adding early health route for Railway deployment...");
+// HEALTH & STATUS ENDPOINTS
+// ================================
+console.log("🚀 [HEALTH] Adding health and status endpoints...");
+
+// Shallow health check (existing)
 app.get('/health', (req, res) => {
   res.status(200).json({ ok: true, service: 'dbx-backend', ts: Date.now() });
 });
-console.log("✅ [LIGHT START] Early health route added successfully");
+
+// Deep status check with comprehensive information
+app.get('/status', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // Get version from package.json
+    const packageJson = require('./package.json');
+    
+    // Calculate uptime
+    const uptimeSeconds = process.uptime();
+    const uptimeFormatted = {
+      seconds: Math.floor(uptimeSeconds),
+      minutes: Math.floor(uptimeSeconds / 60),
+      hours: Math.floor(uptimeSeconds / 3600),
+      days: Math.floor(uptimeSeconds / 86400)
+    };
+    
+    // Database ping test
+    let dbStatus = { ok: false, latencyMs: null, error: null };
+    try {
+      const dbStartTime = Date.now();
+      const { sequelize } = require('./models');
+      await sequelize.query('SELECT 1 as ping');
+      dbStatus = {
+        ok: true,
+        latencyMs: Date.now() - dbStartTime,
+        error: null
+      };
+    } catch (error) {
+      dbStatus = {
+        ok: false,
+        latencyMs: null,
+        error: error.message
+      };
+    }
+    
+    // Migration status (optional - requires Sequelize CLI setup)
+    let migrationStatus = { pending: 'unknown' };
+    try {
+      const { sequelize } = require('./models');
+      const [results] = await sequelize.query(`
+        SELECT COUNT(*) as pending_count 
+        FROM information_schema.tables 
+        WHERE table_name = 'SequelizeMeta'
+      `);
+      
+      if (results[0].pending_count > 0) {
+        // Get migration files count vs executed count
+        const fs = require('fs');
+        const path = require('path');
+        const migrationDir = path.join(__dirname, 'migrations');
+        
+        if (fs.existsSync(migrationDir)) {
+          const migrationFiles = fs.readdirSync(migrationDir).filter(f => f.endsWith('.js'));
+          const [executedResults] = await sequelize.query('SELECT COUNT(*) as executed FROM "SequelizeMeta"');
+          migrationStatus = {
+            pending: migrationFiles.length - executedResults[0].executed,
+            total: migrationFiles.length,
+            executed: executedResults[0].executed
+          };
+        }
+      }
+    } catch (error) {
+      migrationStatus = { pending: 'error', error: error.message };
+    }
+    
+    const status = {
+      ok: true,
+      service: 'dbx-backend',
+      version: packageJson.version,
+      mode: process.env.NODE_ENV || 'development',
+      uptime: uptimeFormatted,
+      db: dbStatus,
+      migrations: migrationStatus,
+      timestamp: new Date().toISOString(),
+      responseTimeMs: Date.now() - startTime
+    };
+    
+    res.status(200).json(status);
+    
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      service: 'dbx-backend',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      responseTimeMs: Date.now() - startTime
+    });
+  }
+});
+
+console.log("✅ [HEALTH] Health and status endpoints configured");
 
 app.get('/fs-test', (req, res) => {
   const fs = require('fs');
@@ -174,18 +272,104 @@ app.get('/basic-health', (req, res) => {
 });
 console.log("✅ [STARTUP] Basic health test route added");
 
-// CORS and Middleware - SECURE PRODUCTION CONFIG
-console.log("🛡️ [STARTUP] Setting up CORS and middleware...");
-app.use(cors({
-  origin: [
-    "https://dbx-admin.onrender.com", 
-    "https://dbx-frontend.onrender.com",
-    "https://3000-ih2gkwnpbh66k77cohrr1-0e7cf462.manusvm.computer"  // Local development domain
-  ],  // SECURE: Allow both admin and frontend domains + local dev
-  credentials: true
+// ================================
+// SECURITY HARDENING & MIDDLEWARE
+// ================================
+console.log("🛡️ [SECURITY] Setting up production security hardening...");
+
+// 1. Request logging with pino-http
+const logger = pinoHttp({
+  genReqId: (req) => req.headers['x-request-id'] || uuidv4(),
+  serializers: {
+    req: (req) => ({
+      method: req.method,
+      url: req.url,
+      headers: {
+        ...req.headers,
+        authorization: req.headers.authorization ? '[MASKED]' : undefined
+      }
+    })
+  }
+});
+app.use(logger);
+console.log("✅ [SECURITY] Request logging with pino-http enabled");
+
+// 2. Helmet for security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "wss:", "https:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false // Allow embedding for admin panels
 }));
-app.use(bodyParser.json());
-console.log("✅ [STARTUP] CORS and middleware configured successfully");
+console.log("✅ [SECURITY] Helmet security headers enabled");
+
+// 3. CORS allowlist from environment
+const corsOrigins = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      "https://dbx-frontend.onrender.com",
+      "https://dbx-admin.onrender.com",
+      "http://localhost:3000", // Development
+      "http://localhost:3001"  // Development admin
+    ];
+
+console.log("🌐 [SECURITY] CORS allowlist:", corsOrigins);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (corsOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`🚫 [SECURITY] Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS policy'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id']
+}));
+console.log("✅ [SECURITY] CORS allowlist configured");
+
+// 4. Rate limiting for auth routes
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many authentication attempts, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health' || req.path === '/status';
+  }
+});
+
+// Apply rate limiting to auth routes
+app.use('/api/auth', authRateLimit);
+app.use('/api/admin/auth', authRateLimit);
+console.log("✅ [SECURITY] Rate limiting enabled for auth routes (100 req/15min)");
+
+// 5. Body parser middleware
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+console.log("✅ [SECURITY] Body parser configured with size limits");
+
+console.log("🛡️ [SECURITY] Security hardening complete");
 
 // ================================
 // LIGHT START BYPASS - START SERVER EARLY
@@ -1230,3 +1414,81 @@ app.get('/admin/reset-password-production', async (req, res) => {
   }
 });
 // Force deployment with dependencies
+
+
+// ================================
+// GRACEFUL SHUTDOWN HANDLING
+// ================================
+console.log("🛡️ [SHUTDOWN] Setting up graceful shutdown handlers...");
+
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal) => {
+  if (isShuttingDown) {
+    console.log(`⚠️ [SHUTDOWN] Already shutting down, ignoring ${signal}`);
+    return;
+  }
+  
+  isShuttingDown = true;
+  console.log(`🛑 [SHUTDOWN] Received ${signal}, starting graceful shutdown...`);
+  
+  try {
+    // 1. Stop accepting new connections
+    console.log("🔌 [SHUTDOWN] Closing HTTP server...");
+    if (serverInstance) {
+      await new Promise((resolve) => {
+        serverInstance.close((err) => {
+          if (err) {
+            console.error("❌ [SHUTDOWN] Error closing server:", err);
+          } else {
+            console.log("✅ [SHUTDOWN] HTTP server closed");
+          }
+          resolve();
+        });
+      });
+    }
+    
+    // 2. Close database connections
+    console.log("🗄️ [SHUTDOWN] Closing database connections...");
+    try {
+      const { sequelize } = require('./models');
+      await sequelize.close();
+      console.log("✅ [SHUTDOWN] Database connections closed");
+    } catch (dbError) {
+      console.error("❌ [SHUTDOWN] Error closing database:", dbError);
+    }
+    
+    // 3. Close Socket.IO connections
+    console.log("🔌 [SHUTDOWN] Closing Socket.IO connections...");
+    if (io) {
+      io.close();
+      console.log("✅ [SHUTDOWN] Socket.IO connections closed");
+    }
+    
+    console.log("✅ [SHUTDOWN] Graceful shutdown completed");
+    process.exit(0);
+    
+  } catch (error) {
+    console.error("❌ [SHUTDOWN] Error during graceful shutdown:", error);
+    process.exit(1);
+  }
+};
+
+// Handle different shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions and unhandled rejections
+process.on('uncaughtException', (error) => {
+  console.error('💥 [SHUTDOWN] Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 [SHUTDOWN] Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
+});
+
+console.log("✅ [SHUTDOWN] Graceful shutdown handlers configured");
+console.log("🚀 [STARTUP] DBX Backend fully initialized and ready!");
+
