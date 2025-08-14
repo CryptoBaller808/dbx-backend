@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { runSeed, checkSeedStatus } = require('../lib/seeding');
-const { getMigrationStatus, migrateOnBoot } = require('../lib/migrations');
+const { getMigrationStatus, migrateOnBoot, baselineMigrations } = require('../lib/migrations');
 
 /**
  * @route GET /admindashboard/auth/seed-check
@@ -226,8 +226,115 @@ router.post('/auth/run-migrations', async (req, res) => {
     
     console.log('[RUN-MIGRATIONS] Starting migration execution...');
     
-    // Run migrations using existing Umzug runner
-    const migrationResult = await migrateOnBoot(sequelize);
+    // Check for allowlist in request body
+    const { allowlist } = req.body || {};
+    
+    if (allowlist && Array.isArray(allowlist)) {
+      console.log('[RUN-MIGRATIONS] Allowlist mode: executing only specified migrations');
+      console.log('[RUN-MIGRATIONS] Allowlist:', allowlist);
+      
+      // First, baseline legacy migrations (mark as executed without running)
+      const legacyMigrations = [
+        '20250101000000-create-core-tables.js',
+        '20250103121127-create-transactions.js',
+        '20250127000000-update-roleid-users.js',
+        '20250630060805-add-updated-at-to-currency-list.js',
+        '20250714000000-safe-init-migration.js',
+        '20250714000001-fix-role-id-foreign-key.js',
+        '20250727065016-add-roleId-constraint-to-user.js',
+        '20250728081606-add-role-id-constraint.js',
+        '20250813000000-consolidate-foreign-keys.js'
+      ];
+      
+      console.log('[RUN-MIGRATIONS] Baselining legacy migrations...');
+      const baselineResult = await baselineMigrations(sequelize, legacyMigrations);
+      
+      if (!baselineResult.success) {
+        console.error('[RUN-MIGRATIONS] Baseline failed:', baselineResult.error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to baseline legacy migrations',
+          details: baselineResult.error,
+          phase: 'baseline'
+        });
+      }
+      
+      console.log(`[RUN-MIGRATIONS] Baselined ${baselineResult.baselined} legacy migrations`);
+      
+      // Now run only allowlisted migrations
+      const { Umzug, SequelizeStorage } = require('umzug');
+      const path = require('path');
+      
+      const umzug = new Umzug({
+        migrations: {
+          glob: path.resolve(__dirname, '..', 'migrations', '*.js'),
+          resolve: ({ name, path: migrationPath }) => {
+            // Only resolve migrations that are in the allowlist
+            if (!allowlist.includes(name)) {
+              return null;
+            }
+            
+            console.log(`[RUN-MIGRATIONS] Loading allowlisted migration: ${name}`);
+            const migration = require(migrationPath);
+            return {
+              name,
+              up: async () => migration.up(sequelize.getQueryInterface(), sequelize.constructor),
+              down: async () => migration.down(sequelize.getQueryInterface(), sequelize.constructor),
+            };
+          },
+        },
+        context: sequelize.getQueryInterface(),
+        storage: new SequelizeStorage({ sequelize }),
+        logger: {
+          info: (message) => console.log(`[MIGRATION] ${message}`),
+          warn: (message) => console.warn(`[MIGRATION] ${message}`),
+          error: (message) => console.error(`[MIGRATION] ${message}`),
+        },
+      });
+      
+      // Get pending migrations from allowlist
+      const pending = await umzug.pending();
+      const allowlistedPending = pending.filter(m => allowlist.includes(m.name));
+      
+      console.log(`[RUN-MIGRATIONS] Found ${allowlistedPending.length} allowlisted pending migrations:`, 
+                  allowlistedPending.map(m => m.name));
+      
+      if (allowlistedPending.length === 0) {
+        return res.json({
+          success: true,
+          timestamp: new Date().toISOString(),
+          executed: 0,
+          files: [],
+          baselined: baselineResult.baselined,
+          baselinedFiles: baselineResult.migrations,
+          summary: `Baselined ${baselineResult.baselined} legacy migrations, no allowlisted migrations to execute`,
+          recommendation: 'Remove SEED_WEB_KEY environment variable for security'
+        });
+      }
+      
+      // Execute allowlisted migrations
+      const executed = await umzug.up({ migrations: allowlistedPending.map(m => m.name) });
+      
+      console.log('[RUN-MIGRATIONS] Allowlist execution completed successfully');
+      console.log('[RUN-MIGRATIONS] SECURITY: Consider removing SEED_WEB_KEY environment variable');
+      
+      return res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        executed: executed.length,
+        files: executed.map(m => m.name),
+        baselined: baselineResult.baselined,
+        baselinedFiles: baselineResult.migrations,
+        summary: `Baselined ${baselineResult.baselined} legacy migrations, executed ${executed.length} allowlisted migrations`,
+        recommendation: 'Remove SEED_WEB_KEY environment variable for security'
+      });
+      
+    } else {
+      // Original behavior: run all pending migrations
+      console.log('[RUN-MIGRATIONS] Standard mode: executing all pending migrations');
+      
+      // Run migrations using existing Umzug runner
+      const migrationResult = await migrateOnBoot(sequelize);
     
     if (migrationResult.success !== false) {
       console.log('[RUN-MIGRATIONS] Migrations completed successfully');
@@ -252,6 +359,7 @@ router.post('/auth/run-migrations', async (req, res) => {
         files: migrationResult.migrations || []
       });
     }
+    } // End of else block for standard migration mode
     
   } catch (error) {
     console.error('[RUN-MIGRATIONS] Error:', error.message);
