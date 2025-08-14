@@ -1225,11 +1225,12 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       console.log('✅ DB connection established');
       
       // BOOT MIGRATIONS (if enabled)
-      if (process.env.RUN_MIGRATIONS_ON_BOOT === 'true') {
-        console.log('[BOOT] Running migrations on boot...');
-        const migrationResult = await migrateOnBoot(db);
-        console.log(`[MIGRATIONS] Ran ${migrationResult.ran} migrations`);
-        if (migrationResult.error) {
+      const { runOnBootIfEnv } = require('./lib/migrations');
+      const migrationResult = await runOnBootIfEnv(db);
+      
+      if (migrationResult) {
+        console.log(`[MIGRATIONS] baselined:${migrationResult.baselined} executed:${migrationResult.executed} files:[${migrationResult.files?.executed?.join(', ') || 'none'}]`);
+        if (!migrationResult.success) {
           console.warn('[MIGRATIONS] Boot migration warning:', migrationResult.error);
         }
       }
@@ -1237,8 +1238,9 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       // BOOT SEEDING (if enabled)
       if (process.env.RUN_SEEDS_ON_BOOT === 'true') {
         console.log('[BOOT] Running seeds on boot...');
+        const { runSeed } = require('./lib/seeding');
         const seedResult = await runSeed(db);
-        console.log(`[SEED] ${seedResult.summary}`);
+        console.log(`[SEED] roles: ${seedResult.success ? 'ok' : 'failed'}, admin: ${seedResult.admin ? 'ok' : 'failed'}`);
         if (!seedResult.success) {
           console.warn('[SEED] Boot seeding warning:', seedResult.error);
         }

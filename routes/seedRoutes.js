@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { runSeed, checkSeedStatus } = require('../lib/seeding');
-const { getMigrationStatus, migrateOnBoot, baselineMigrations } = require('../lib/migrations');
+const { getMigrationStatus, migrateOnBoot, baselineMigrations, baselineAndRunAllowlist } = require('../lib/migrations');
 
 /**
  * @route GET /admindashboard/auth/diag/version
@@ -777,6 +777,90 @@ router.post('/auth/run-migrations', async (req, res) => {
     };
     
     res.status(500).json(response);
+  }
+});
+
+/**
+ * @route POST /admindashboard/auth/run-allowlist-server
+ * @desc Server-only baseline + allowlist migration runner (no outbound HTTP)
+ * @access Protected (requires SEED_WEB_KEY)
+ */
+router.post('/auth/run-allowlist-server', async (req, res) => {
+  try {
+    console.log('[RUN-ALLOWLIST-SERVER] Server-only allowlist migration request received');
+    
+    // Verify secret key
+    const providedKey = req.headers['x-seed-key'];
+    const expectedKey = process.env.SEED_WEB_KEY;
+    
+    if (!expectedKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'SEED_WEB_KEY not configured'
+      });
+    }
+    
+    if (providedKey !== expectedKey) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or missing x-seed-key header'
+      });
+    }
+    
+    // Get allowlist from request body
+    const { allowlist } = req.body;
+    
+    if (!Array.isArray(allowlist)) {
+      return res.status(400).json({
+        success: false,
+        error: 'allowlist must be an array of migration filenames'
+      });
+    }
+    
+    console.log('[RUN-ALLOWLIST-SERVER] Running baseline + allowlist with:', allowlist);
+    
+    // Get sequelize instance
+    const { sequelize } = require('../models');
+    
+    if (!sequelize) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+    
+    // Run baseline + allowlist process
+    const result = await baselineAndRunAllowlist(sequelize, { allowlist });
+    
+    console.log('[RUN-ALLOWLIST-SERVER] Process complete:', result.summary);
+    
+    // Return structured response
+    const response = {
+      success: result.success,
+      baselined: result.baselined,
+      executed: result.executed,
+      files: result.files,
+      summary: result.summary
+    };
+    
+    if (!result.success && result.errors) {
+      response.errors = result.errors;
+    }
+    
+    if (!result.success && result.error) {
+      response.error = result.error;
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('[RUN-ALLOWLIST-SERVER] Error:', error.name, error.message);
+    console.error('[RUN-ALLOWLIST-SERVER] Stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: `${error.name}: ${error.message}`
+    });
   }
 });
 
