@@ -9,6 +9,33 @@ const { runSeed, checkSeedStatus } = require('../lib/seeding');
 const { getMigrationStatus, migrateOnBoot, baselineMigrations } = require('../lib/migrations');
 
 /**
+ * @route GET /admindashboard/auth/diag/version
+ * @desc Get version information including commit SHA and branch
+ * @access Public (for deployment verification)
+ */
+router.get('/auth/diag/version', async (req, res) => {
+  try {
+    const versionInfo = {
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "unknown",
+      branch: process.env.RAILWAY_GIT_BRANCH || process.env.GIT_BRANCH || "unknown",
+      builtAt: new Date().toISOString()
+    };
+    
+    console.log('[VERSION] Version info requested:', versionInfo);
+    
+    res.json(versionInfo);
+    
+  } catch (error) {
+    console.error('[VERSION] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get version information',
+      details: error.message
+    });
+  }
+});
+
+/**
  * @route GET /admindashboard/auth/diagnostics
  * @desc Comprehensive diagnostics and file discovery (requires secret key)
  * @access Protected (requires SEED_WEB_KEY)

@@ -298,6 +298,15 @@ const logger = pinoHttp({
 app.use(logger);
 console.log("✅ [SECURITY] Request logging with pino-http enabled");
 
+// 2. X-App-Commit header for version tracking
+console.log("🏷️ [VERSION] Setting up X-App-Commit header middleware...");
+app.use((req, res, next) => {
+  const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "unknown";
+  res.setHeader('X-App-Commit', commitSha);
+  next();
+});
+console.log("✅ [VERSION] X-App-Commit header middleware enabled");
+
 // 2. Helmet for security headers
 app.use(helmet({
   contentSecurityPolicy: {
