@@ -9,6 +9,186 @@ const { runSeed, checkSeedStatus } = require('../lib/seeding');
 const { getMigrationStatus, migrateOnBoot, baselineMigrations } = require('../lib/migrations');
 
 /**
+ * @route GET /admindashboard/auth/diagnostics
+ * @desc Comprehensive diagnostics and file discovery (requires secret key)
+ * @access Protected (requires SEED_WEB_KEY)
+ */
+router.get('/auth/diagnostics', async (req, res) => {
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    
+    // Check for secret key
+    const providedKey = req.query.key || req.headers['x-seed-key'];
+    const requiredKey = process.env.SEED_WEB_KEY;
+    
+    if (!requiredKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'Diagnostics endpoint not configured (SEED_WEB_KEY not set)'
+      });
+    }
+    
+    if (!providedKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'Secret key required (provide ?key=... or x-seed-key header)'
+      });
+    }
+    
+    if (providedKey !== requiredKey) {
+      console.warn('[DIAGNOSTICS] Invalid key attempt from:', req.ip);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid secret key'
+      });
+    }
+    
+    // Environment variables check (return booleans only, no values)
+    const envCheck = {
+      JWT_SECRET: !!process.env.JWT_SECRET,
+      SEED_ADMIN_EMAIL: !!process.env.SEED_ADMIN_EMAIL,
+      SEED_ADMIN_PASSWORD: !!process.env.SEED_ADMIN_PASSWORD,
+      SEED_WEB_KEY: !!process.env.SEED_WEB_KEY,
+      RUN_MIGRATIONS_ON_BOOT: process.env.RUN_MIGRATIONS_ON_BOOT || '',
+      RUN_SEEDS_ON_BOOT: process.env.RUN_SEEDS_ON_BOOT || ''
+    };
+    
+    // File discovery
+    const migrationsDirectory = path.resolve(__dirname, '..', 'migrations');
+    const libDirectory = path.resolve(__dirname, '..', 'lib');
+    
+    let migrationFiles = [];
+    let libFiles = [];
+    let migrationsDirExists = false;
+    let libDirExists = false;
+    
+    try {
+      migrationsDirExists = fs.existsSync(migrationsDirectory);
+      if (migrationsDirExists) {
+        migrationFiles = fs.readdirSync(migrationsDirectory).filter(f => f.endsWith('.js')).sort();
+      }
+    } catch (err) {
+      console.warn('[DIAGNOSTICS] Error reading migrations directory:', err.message);
+    }
+    
+    try {
+      libDirExists = fs.existsSync(libDirectory);
+      if (libDirExists) {
+        libFiles = fs.readdirSync(libDirectory).filter(f => f.endsWith('.js')).sort();
+      }
+    } catch (err) {
+      console.warn('[DIAGNOSTICS] Error reading lib directory:', err.message);
+    }
+    
+    // Database connection check
+    let dbConnected = false;
+    let dbError = null;
+    try {
+      const { sequelize } = require('../models');
+      if (sequelize) {
+        await sequelize.authenticate();
+        dbConnected = true;
+      }
+    } catch (err) {
+      dbError = err.message;
+    }
+    
+    console.log('[DIAGNOSTICS] Comprehensive diagnostics completed');
+    
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      environment: envCheck,
+      paths: {
+        migrationsDirectory,
+        libDirectory,
+        migrationsDirExists,
+        libDirExists
+      },
+      files: {
+        migrations: migrationFiles,
+        lib: libFiles
+      },
+      database: {
+        connected: dbConnected,
+        error: dbError
+      },
+      recommendation: 'Remove SEED_WEB_KEY after successful setup'
+    });
+    
+  } catch (error) {
+    console.error('[DIAGNOSTICS] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to run diagnostics',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route GET /admindashboard/auth/env-check
+ * @desc Check environment variables (requires secret key)
+ * @access Protected (requires SEED_WEB_KEY)
+ */
+router.get('/auth/env-check', async (req, res) => {
+  try {
+    // Check for secret key
+    const providedKey = req.query.key || req.headers['x-seed-key'];
+    const requiredKey = process.env.SEED_WEB_KEY;
+    
+    if (!requiredKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'Environment check endpoint not configured (SEED_WEB_KEY not set)'
+      });
+    }
+    
+    if (!providedKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'Secret key required (provide ?key=... or x-seed-key header)'
+      });
+    }
+    
+    if (providedKey !== requiredKey) {
+      console.warn('[ENV-CHECK] Invalid key attempt from:', req.ip);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid secret key'
+      });
+    }
+    
+    // Check environment variables (return booleans only, no values)
+    const envCheck = {
+      JWT_SECRET: !!process.env.JWT_SECRET,
+      SEED_ADMIN_EMAIL: !!process.env.SEED_ADMIN_EMAIL,
+      SEED_ADMIN_PASSWORD: !!process.env.SEED_ADMIN_PASSWORD,
+      SEED_WEB_KEY: !!process.env.SEED_WEB_KEY,
+      RUN_MIGRATIONS_ON_BOOT: process.env.RUN_MIGRATIONS_ON_BOOT || '',
+      RUN_SEEDS_ON_BOOT: process.env.RUN_SEEDS_ON_BOOT || ''
+    };
+    
+    console.log('[ENV-CHECK] Environment variables checked');
+    
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      environment: envCheck,
+      recommendation: 'Remove SEED_WEB_KEY after successful setup'
+    });
+    
+  } catch (error) {
+    console.error('[ENV-CHECK] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check environment variables'
+    });
+  }
+});
+
+/**
  * @route GET /admindashboard/auth/seed-check
  * @desc Check seeding status (roles and admin user existence)
  * @access Public (for deployment verification)
@@ -20,22 +200,50 @@ router.get('/auth/seed-check', async (req, res) => {
     if (!sequelize) {
       return res.status(500).json({
         success: false,
-        error: 'Database connection not available'
+        error: 'Database connection not available',
+        details: 'Sequelize instance not found'
       });
     }
     
-    // Get seeding status
-    const seedStatus = await checkSeedStatus(sequelize);
+    // Test database connection first
+    try {
+      await sequelize.authenticate();
+    } catch (dbError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection failed',
+        details: dbError.message
+      });
+    }
+    
+    // Get seeding status with enhanced error handling
+    let seedStatus;
+    try {
+      seedStatus = await checkSeedStatus(sequelize);
+    } catch (seedError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to check seed status',
+        details: seedError.message
+      });
+    }
     
     if (seedStatus.error) {
       return res.status(500).json({
         success: false,
-        error: seedStatus.error
+        error: 'Seed status check failed',
+        details: seedStatus.error
       });
     }
     
     // Get migration status for additional context
-    const migrationStatus = await getMigrationStatus(sequelize);
+    let migrationStatus;
+    try {
+      migrationStatus = await getMigrationStatus(sequelize);
+    } catch (migrationError) {
+      console.warn('[SEED-CHECK] Migration status check failed:', migrationError.message);
+      migrationStatus = { error: migrationError.message };
+    }
     
     res.json({
       success: true,
@@ -54,10 +262,12 @@ router.get('/auth/seed-check', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[SEED-CHECK] Error:', error.message);
+    console.error('[SEED-CHECK] Unexpected error:', error.name, error.message);
+    console.error('[SEED-CHECK] Stack trace:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to check seed status'
+      error: 'Unexpected error during seed check',
+      details: `${error.name}: ${error.message}`
     });
   }
 });
@@ -74,7 +284,8 @@ router.post('/auth/seed-run', async (req, res) => {
     if (!sequelize) {
       return res.status(500).json({
         success: false,
-        error: 'Database connection not available'
+        error: 'Database connection not available',
+        details: 'Sequelize instance not found'
       });
     }
     
@@ -85,14 +296,16 @@ router.post('/auth/seed-run', async (req, res) => {
     if (!requiredKey) {
       return res.status(503).json({
         success: false,
-        error: 'Seeding endpoint not configured (SEED_WEB_KEY not set)'
+        error: 'Seeding endpoint not configured (SEED_WEB_KEY not set)',
+        details: 'Environment variable SEED_WEB_KEY is required'
       });
     }
     
     if (!providedKey) {
       return res.status(400).json({
         success: false,
-        error: 'Secret key required (provide ?key=... or x-seed-key header)'
+        error: 'Secret key required (provide ?key=... or x-seed-key header)',
+        details: 'Authentication required for seeding operations'
       });
     }
     
@@ -100,14 +313,90 @@ router.post('/auth/seed-run', async (req, res) => {
       console.warn('[SEED-RUN] Invalid seed key attempt from:', req.ip);
       return res.status(401).json({
         success: false,
-        error: 'Invalid secret key'
+        error: 'Invalid secret key',
+        details: 'Provided key does not match configured SEED_WEB_KEY'
       });
     }
     
-    console.log('[SEED-RUN] Starting seeding process...');
+    // Parse request body for dry-run option
+    const { dryRun } = req.body || {};
+    const isDryRun = !!dryRun;
+    
+    console.log('[SEED-RUN] Starting seeding process...', isDryRun ? '(DRY RUN)' : '');
+    
+    // Test database connection first
+    try {
+      await sequelize.authenticate();
+      console.log('[SEED-RUN] Database connection verified');
+    } catch (dbError) {
+      console.error('[SEED-RUN] Database connection failed:', dbError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection failed',
+        details: dbError.message
+      });
+    }
+    
+    // Check environment variables required for seeding
+    const requiredEnvVars = ['SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD'];
+    const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    
+    if (missingEnvVars.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required environment variables',
+        details: `Required: ${missingEnvVars.join(', ')}`
+      });
+    }
+    
+    // If dry run, return configuration check without executing
+    if (isDryRun) {
+      console.log('[SEED-RUN] Dry run mode - checking configuration only');
+      
+      // Get current seed status
+      let seedStatus;
+      try {
+        seedStatus = await checkSeedStatus(sequelize);
+      } catch (seedError) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to check current seed status',
+          details: seedError.message
+        });
+      }
+      
+      return res.json({
+        success: true,
+        dryRun: true,
+        timestamp: new Date().toISOString(),
+        configuration: {
+          environmentVariables: {
+            SEED_ADMIN_EMAIL: !!process.env.SEED_ADMIN_EMAIL,
+            SEED_ADMIN_PASSWORD: !!process.env.SEED_ADMIN_PASSWORD,
+            JWT_SECRET: !!process.env.JWT_SECRET
+          },
+          currentStatus: {
+            roles: seedStatus.roles,
+            adminPresent: seedStatus.adminPresent,
+            ready: seedStatus.ready
+          }
+        },
+        recommendation: 'Set dryRun: false to execute seeding'
+      });
+    }
     
     // Run seeding process
-    const seedResult = await runSeed(sequelize);
+    let seedResult;
+    try {
+      seedResult = await runSeed(sequelize);
+    } catch (seedError) {
+      console.error('[SEED-RUN] Seeding process failed:', seedError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Seeding process failed',
+        details: seedError.message
+      });
+    }
     
     if (seedResult.success) {
       console.log('[SEED-RUN] Seeding completed successfully');
@@ -129,15 +418,17 @@ router.post('/auth/seed-run', async (req, res) => {
       res.status(500).json({
         success: false,
         error: 'Seeding process failed',
-        details: seedResult.summary
+        details: seedResult.summary || seedResult.error
       });
     }
     
   } catch (error) {
-    console.error('[SEED-RUN] Error:', error.message);
+    console.error('[SEED-RUN] Unexpected error:', error.name, error.message);
+    console.error('[SEED-RUN] Stack trace:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to run seeding process'
+      error: 'Unexpected error during seeding',
+      details: `${error.name}: ${error.message}`
     });
   }
 });
@@ -150,34 +441,84 @@ router.post('/auth/seed-run', async (req, res) => {
 router.get('/auth/migration-status', async (req, res) => {
   try {
     const { sequelize } = require('../models');
+    const path = require('path');
+    const fs = require('fs');
     
     if (!sequelize) {
       return res.status(500).json({
         success: false,
-        error: 'Database connection not available'
+        error: 'Database connection not available',
+        details: 'Sequelize instance not found'
       });
     }
     
-    const migrationStatus = await getMigrationStatus(sequelize);
+    // Test database connection first
+    try {
+      await sequelize.authenticate();
+    } catch (dbError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection failed',
+        details: dbError.message
+      });
+    }
+    
+    // Get migration status with enhanced error handling
+    let migrationStatus;
+    try {
+      migrationStatus = await getMigrationStatus(sequelize);
+    } catch (migrationError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to get migration status',
+        details: migrationError.message
+      });
+    }
     
     if (migrationStatus.error) {
       return res.status(500).json({
         success: false,
-        error: migrationStatus.error
+        error: 'Migration status check failed',
+        details: migrationStatus.error
       });
+    }
+    
+    // Add file discovery information
+    const migrationsDirectory = path.resolve(__dirname, '..', 'migrations');
+    let availableFiles = [];
+    let directoryExists = false;
+    
+    try {
+      directoryExists = fs.existsSync(migrationsDirectory);
+      if (directoryExists) {
+        availableFiles = fs.readdirSync(migrationsDirectory)
+          .filter(f => f.endsWith('.js'))
+          .sort();
+      }
+    } catch (fileError) {
+      console.warn('[MIGRATION-STATUS] Error reading migrations directory:', fileError.message);
     }
     
     res.json({
       success: true,
       timestamp: new Date().toISOString(),
-      migrations: migrationStatus
+      migrations: {
+        ...migrationStatus,
+        directory: {
+          path: migrationsDirectory,
+          exists: directoryExists,
+          availableFiles: availableFiles
+        }
+      }
     });
     
   } catch (error) {
-    console.error('[MIGRATION-STATUS] Error:', error.message);
+    console.error('[MIGRATION-STATUS] Unexpected error:', error.name, error.message);
+    console.error('[MIGRATION-STATUS] Stack trace:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to get migration status'
+      error: 'Unexpected error during migration status check',
+      details: `${error.name}: ${error.message}`
     });
   }
 });
@@ -190,12 +531,35 @@ router.get('/auth/migration-status', async (req, res) => {
 router.post('/auth/run-migrations', async (req, res) => {
   try {
     const { sequelize } = require('../models');
+    const { Umzug, SequelizeStorage } = require('umzug');
+    const path = require('path');
+    
+    // Initialize response structure
+    const response = {
+      success: false,
+      paths: {
+        migrationsDirectory: '',
+        globPattern: '',
+        found: []
+      },
+      input: {
+        allowlist: null,
+        dryRun: false
+      },
+      match: {
+        intersection: [],
+        missingFromFound: []
+      },
+      executed: 0,
+      files: [],
+      baselined: 0,
+      baselinedFiles: [],
+      error: null
+    };
     
     if (!sequelize) {
-      return res.status(500).json({
-        success: false,
-        error: 'Database connection not available'
-      });
+      response.error = 'Database connection not available';
+      return res.status(500).json(response);
     }
     
     // Check for secret key
@@ -203,35 +567,74 @@ router.post('/auth/run-migrations', async (req, res) => {
     const requiredKey = process.env.SEED_WEB_KEY;
     
     if (!requiredKey) {
-      return res.status(503).json({
-        success: false,
-        error: 'Migration endpoint not configured (SEED_WEB_KEY not set)'
-      });
+      response.error = 'Migration endpoint not configured (SEED_WEB_KEY not set)';
+      return res.status(503).json(response);
     }
     
     if (!providedKey) {
-      return res.status(400).json({
-        success: false,
-        error: 'Secret key required (provide ?key=... or x-seed-key header)'
-      });
+      response.error = 'Secret key required (provide ?key=... or x-seed-key header)';
+      return res.status(400).json(response);
     }
     
     if (providedKey !== requiredKey) {
       console.warn('[RUN-MIGRATIONS] Invalid migration key attempt from:', req.ip);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid secret key'
-      });
+      response.error = 'Invalid secret key';
+      return res.status(401).json(response);
     }
     
+    // Parse request body
+    const { allowlist, dryRun } = req.body || {};
+    response.input.allowlist = allowlist || null;
+    response.input.dryRun = !!dryRun;
+    
     console.log('[RUN-MIGRATIONS] Starting migration execution...');
+    console.log('[RUN-MIGRATIONS] Input:', response.input);
     
-    // Check for allowlist in request body
-    const { allowlist } = req.body || {};
+    // Set up paths and discover migrations
+    const migrationsDirectory = path.resolve(__dirname, '..', 'migrations');
+    const globPattern = path.join(migrationsDirectory, '*.js');
+    response.paths.migrationsDirectory = migrationsDirectory;
+    response.paths.globPattern = globPattern;
     
+    console.log('[RUN-MIGRATIONS] Migrations directory:', migrationsDirectory);
+    console.log('[RUN-MIGRATIONS] Glob pattern:', globPattern);
+    
+    // Discover available migration files
+    const fs = require('fs');
+    try {
+      const files = fs.readdirSync(migrationsDirectory);
+      response.paths.found = files.filter(f => f.endsWith('.js')).sort();
+      console.log('[RUN-MIGRATIONS] Found migration files:', response.paths.found);
+    } catch (err) {
+      console.error('[RUN-MIGRATIONS] Error reading migrations directory:', err.message);
+      response.error = `Error reading migrations directory: ${err.message}`;
+      return res.status(500).json(response);
+    }
+    
+    // Calculate intersection and missing files if allowlist provided
+    if (allowlist && Array.isArray(allowlist)) {
+      response.match.intersection = allowlist.filter(file => response.paths.found.includes(file));
+      response.match.missingFromFound = allowlist.filter(file => !response.paths.found.includes(file));
+      
+      console.log('[RUN-MIGRATIONS] Allowlist intersection:', response.match.intersection);
+      console.log('[RUN-MIGRATIONS] Missing from found:', response.match.missingFromFound);
+      
+      if (response.match.missingFromFound.length > 0) {
+        response.error = `Allowlisted files not found: ${response.match.missingFromFound.join(', ')}`;
+        return res.status(400).json(response);
+      }
+    }
+    
+    // If dry run, return discovery information without executing
+    if (response.input.dryRun) {
+      console.log('[RUN-MIGRATIONS] Dry run mode - returning discovery information');
+      response.success = true;
+      return res.json(response);
+    }
+    
+    // Execute migrations based on mode
     if (allowlist && Array.isArray(allowlist)) {
       console.log('[RUN-MIGRATIONS] Allowlist mode: executing only specified migrations');
-      console.log('[RUN-MIGRATIONS] Allowlist:', allowlist);
       
       // First, baseline legacy migrations (mark as executed without running)
       const legacyMigrations = [
@@ -251,23 +654,18 @@ router.post('/auth/run-migrations', async (req, res) => {
       
       if (!baselineResult.success) {
         console.error('[RUN-MIGRATIONS] Baseline failed:', baselineResult.error);
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to baseline legacy migrations',
-          details: baselineResult.error,
-          phase: 'baseline'
-        });
+        response.error = `Baseline failed: ${baselineResult.error}`;
+        return res.status(500).json(response);
       }
       
+      response.baselined = baselineResult.baselined;
+      response.baselinedFiles = baselineResult.migrations;
       console.log(`[RUN-MIGRATIONS] Baselined ${baselineResult.baselined} legacy migrations`);
       
-      // Now run only allowlisted migrations
-      const { Umzug, SequelizeStorage } = require('umzug');
-      const path = require('path');
-      
+      // Set up Umzug for allowlisted migrations
       const umzug = new Umzug({
         migrations: {
-          glob: path.resolve(__dirname, '..', 'migrations', '*.js'),
+          glob: globPattern,
           resolve: ({ name, path: migrationPath }) => {
             // Only resolve migrations that are in the allowlist
             if (!allowlist.includes(name)) {
@@ -300,34 +698,24 @@ router.post('/auth/run-migrations', async (req, res) => {
                   allowlistedPending.map(m => m.name));
       
       if (allowlistedPending.length === 0) {
-        return res.json({
-          success: true,
-          timestamp: new Date().toISOString(),
-          executed: 0,
-          files: [],
-          baselined: baselineResult.baselined,
-          baselinedFiles: baselineResult.migrations,
-          summary: `Baselined ${baselineResult.baselined} legacy migrations, no allowlisted migrations to execute`,
-          recommendation: 'Remove SEED_WEB_KEY environment variable for security'
-        });
+        response.success = true;
+        response.executed = 0;
+        response.files = [];
+        console.log('[RUN-MIGRATIONS] No allowlisted migrations to execute');
+        return res.json(response);
       }
       
       // Execute allowlisted migrations
       const executed = await umzug.up({ migrations: allowlistedPending.map(m => m.name) });
       
+      response.success = true;
+      response.executed = executed.length;
+      response.files = executed.map(m => m.name);
+      
       console.log('[RUN-MIGRATIONS] Allowlist execution completed successfully');
       console.log('[RUN-MIGRATIONS] SECURITY: Consider removing SEED_WEB_KEY environment variable');
       
-      return res.json({
-        success: true,
-        timestamp: new Date().toISOString(),
-        executed: executed.length,
-        files: executed.map(m => m.name),
-        baselined: baselineResult.baselined,
-        baselinedFiles: baselineResult.migrations,
-        summary: `Baselined ${baselineResult.baselined} legacy migrations, executed ${executed.length} allowlisted migrations`,
-        recommendation: 'Remove SEED_WEB_KEY environment variable for security'
-      });
+      return res.json(response);
       
     } else {
       // Original behavior: run all pending migrations
@@ -336,37 +724,32 @@ router.post('/auth/run-migrations', async (req, res) => {
       // Run migrations using existing Umzug runner
       const migrationResult = await migrateOnBoot(sequelize);
     
-    if (migrationResult.success !== false) {
-      console.log('[RUN-MIGRATIONS] Migrations completed successfully');
-      console.log('[RUN-MIGRATIONS] SECURITY: Consider removing SEED_WEB_KEY environment variable');
-      
-      res.json({
-        success: true,
-        timestamp: new Date().toISOString(),
-        executed: migrationResult.ran || 0,
-        files: migrationResult.migrations || [],
-        summary: `Executed ${migrationResult.ran || 0} migrations`,
-        recommendation: 'Remove SEED_WEB_KEY environment variable for security'
-      });
-    } else {
-      console.error('[RUN-MIGRATIONS] Migration execution failed:', migrationResult.error);
-      
-      res.status(500).json({
-        success: false,
-        error: 'Migration execution failed',
-        details: migrationResult.error || 'Unknown migration error',
-        executed: migrationResult.ran || 0,
-        files: migrationResult.migrations || []
-      });
+      if (migrationResult.success !== false) {
+        response.success = true;
+        response.executed = migrationResult.ran || 0;
+        response.files = migrationResult.migrations || [];
+        
+        console.log('[RUN-MIGRATIONS] Migrations completed successfully');
+        console.log('[RUN-MIGRATIONS] SECURITY: Consider removing SEED_WEB_KEY environment variable');
+        
+        return res.json(response);
+      } else {
+        console.error('[RUN-MIGRATIONS] Migration execution failed:', migrationResult.error);
+        response.error = migrationResult.error || 'Unknown migration error';
+        return res.status(500).json(response);
+      }
     }
-    } // End of else block for standard migration mode
     
   } catch (error) {
-    console.error('[RUN-MIGRATIONS] Error:', error.message);
-    res.status(500).json({
+    console.error('[RUN-MIGRATIONS] Error:', error.name, error.message);
+    console.error('[RUN-MIGRATIONS] Stack (first 10 lines):', error.stack.split('\n').slice(0, 10).join('\n'));
+    
+    const response = {
       success: false,
-      error: 'Failed to run migrations'
-    });
+      error: `${error.name}: ${error.message}`
+    };
+    
+    res.status(500).json(response);
   }
 });
 
