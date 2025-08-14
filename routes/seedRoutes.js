@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { runSeed, checkSeedStatus } = require('../lib/seeding');
-const { getMigrationStatus } = require('../lib/migrations');
+const { getMigrationStatus, migrateOnBoot } = require('../lib/migrations');
 
 /**
  * @route GET /admindashboard/auth/seed-check
@@ -178,6 +178,86 @@ router.get('/auth/migration-status', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get migration status'
+    });
+  }
+});
+
+/**
+ * @route POST /admindashboard/auth/run-migrations
+ * @desc Run pending migrations (requires secret key)
+ * @access Protected (requires SEED_WEB_KEY)
+ */
+router.post('/auth/run-migrations', async (req, res) => {
+  try {
+    const { sequelize } = require('../models');
+    
+    if (!sequelize) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+    
+    // Check for secret key
+    const providedKey = req.query.key || req.headers['x-seed-key'];
+    const requiredKey = process.env.SEED_WEB_KEY;
+    
+    if (!requiredKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'Migration endpoint not configured (SEED_WEB_KEY not set)'
+      });
+    }
+    
+    if (!providedKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'Secret key required (provide ?key=... or x-seed-key header)'
+      });
+    }
+    
+    if (providedKey !== requiredKey) {
+      console.warn('[RUN-MIGRATIONS] Invalid migration key attempt from:', req.ip);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid secret key'
+      });
+    }
+    
+    console.log('[RUN-MIGRATIONS] Starting migration execution...');
+    
+    // Run migrations using existing Umzug runner
+    const migrationResult = await migrateOnBoot(sequelize);
+    
+    if (migrationResult.success !== false) {
+      console.log('[RUN-MIGRATIONS] Migrations completed successfully');
+      console.log('[RUN-MIGRATIONS] SECURITY: Consider removing SEED_WEB_KEY environment variable');
+      
+      res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        executed: migrationResult.ran || 0,
+        files: migrationResult.migrations || [],
+        summary: `Executed ${migrationResult.ran || 0} migrations`,
+        recommendation: 'Remove SEED_WEB_KEY environment variable for security'
+      });
+    } else {
+      console.error('[RUN-MIGRATIONS] Migration execution failed:', migrationResult.error);
+      
+      res.status(500).json({
+        success: false,
+        error: 'Migration execution failed',
+        details: migrationResult.error || 'Unknown migration error',
+        executed: migrationResult.ran || 0,
+        files: migrationResult.migrations || []
+      });
+    }
+    
+  } catch (error) {
+    console.error('[RUN-MIGRATIONS] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to run migrations'
     });
   }
 });
