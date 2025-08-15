@@ -227,12 +227,21 @@ const initializeBlockchainServices = async (db) => {
       return null;
     }
     
-    // Check for blockchains table existence
+    // Check for blockchains table existence with proper guard
     try {
       if (db.models.Blockchain) {
-        // Test if we can query the table
-        await db.models.Blockchain.findOne({ limit: 1 });
-        console.log('[Blockchain Services] Blockchain table exists and is accessible');
+        // Use SELECT to_regclass to check table existence without causing errors
+        const [results] = await db.sequelize.query(
+          "SELECT to_regclass('public.blockchains') as table_exists"
+        );
+        
+        if (results && results[0] && results[0].table_exists) {
+          // Test if we can query the table
+          await db.models.Blockchain.findOne({ limit: 1 });
+          console.log('[Blockchain Services] Blockchain table exists and is accessible');
+        } else {
+          console.log('[Blockchain Services] Blockchain table does not exist, using default configurations');
+        }
       } else {
         console.log('[Blockchain Services] Blockchain model not found, using default configurations');
       }
