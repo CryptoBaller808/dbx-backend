@@ -1365,10 +1365,14 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       // Initialize creator tools service with Socket.io
       await initializeCreatorToolsService(io);
       
-      console.log('[Server] Initializing real-time analytics service...');
-      
-      // Initialize real-time analytics service with Socket.io
-      const realTimeAnalytics = initializeRealTimeAnalytics(io);
+      // Gate RealTimeAnalyticsService behind ENABLE_ANALYTICS as requested by Owen
+      let realTimeAnalytics = null;
+      if (process.env.ENABLE_ANALYTICS === 'true') {
+        console.log('[Server] Initializing real-time analytics service...');
+        realTimeAnalytics = initializeRealTimeAnalytics(io);
+      } else {
+        console.log('[Server] Skipping real-time analytics (ENABLE_ANALYTICS not set to true)');
+      }
       
       console.log('[Server] Initializing user management service...');
       

@@ -9,6 +9,45 @@ const { runSeed, checkSeedStatus } = require('../lib/seeding');
 const { getMigrationStatus, migrateOnBoot, baselineMigrations, baselineAndRunAllowlist } = require('../lib/migrations');
 
 /**
+ * Create verbose error response when SEED_DEBUG=1 is set
+ * @param {Error} error - The error object
+ * @param {string} where - Function or file where error occurred
+ * @returns {Object} Verbose error object
+ */
+function createVerboseError(error, where) {
+  const verboseError = {
+    success: false,
+    message: "Server error",
+    error: {
+      name: error.name || 'UnknownError',
+      message: error.message || 'No error message',
+      code: error.code || null,
+      sql: error.parent?.sql || error.sql || null,
+      detail: error.parent?.detail || null,
+      schema: error.parent?.schema || null,
+      table: error.parent?.table || null,
+      constraint: error.parent?.constraint || null,
+      stackTop: error.stack ? error.stack.split('\n').slice(0, 3).join('\n') : null
+    },
+    where: where || 'unknown',
+    ts: new Date().toISOString()
+  };
+  
+  // Log to Railway logs for debugging
+  console.error('[MIGRATION-ERROR]', JSON.stringify(verboseError, null, 2));
+  
+  return verboseError;
+}
+
+/**
+ * Check if verbose error mode is enabled
+ * @returns {boolean} True if SEED_DEBUG=1 is set
+ */
+function isVerboseMode() {
+  return process.env.SEED_DEBUG === '1';
+}
+
+/**
  * @route GET /admindashboard/auth/diag/version
  * @desc Get version information including commit SHA and branch
  * @access Public (for deployment verification)
@@ -452,10 +491,16 @@ router.post('/auth/seed-run', async (req, res) => {
   } catch (error) {
     console.error('[SEED-RUN] Unexpected error:', error.name, error.message);
     console.error('[SEED-RUN] Stack trace:', error.stack);
+    
+    if (isVerboseMode()) {
+      return res.status(500).json(createVerboseError(error, 'seed-run'));
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Unexpected error during seeding',
-      details: `${error.name}: ${error.message}`
+      message: "Server error",
+      error: "Internal server error",
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -857,9 +902,177 @@ router.post('/auth/run-allowlist-server', async (req, res) => {
     console.error('[RUN-ALLOWLIST-SERVER] Error:', error.name, error.message);
     console.error('[RUN-ALLOWLIST-SERVER] Stack:', error.stack);
     
+    if (isVerboseMode()) {
+      return res.status(500).json(createVerboseError(error, 'run-allowlist-server'));
+    }
+    
     res.status(500).json({
       success: false,
-      error: `${error.name}: ${error.message}`
+      message: "Server error",
+      error: "Internal server error",
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * @route POST /admindashboard/auth/seed-direct
+ * @desc Direct seed fallback endpoint (temporary, one-time use)
+ * @access Protected (requires SEED_WEB_KEY)
+ */
+router.post('/auth/seed-direct', async (req, res) => {
+  try {
+    console.log('[SEED-DIRECT] Direct seed fallback request received');
+    
+    // Verify secret key
+    const providedKey = req.headers['x-seed-key'];
+    const expectedKey = process.env.SEED_WEB_KEY;
+    
+    if (!expectedKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'SEED_WEB_KEY not configured'
+      });
+    }
+    
+    if (providedKey !== expectedKey) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or missing x-seed-key header'
+      });
+    }
+    
+    // Get required environment variables
+    const adminEmail = process.env.SEED_ADMIN_EMAIL;
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+    
+    if (!adminEmail || !adminPassword) {
+      return res.status(500).json({
+        success: false,
+        error: 'SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be configured'
+      });
+    }
+    
+    // Get sequelize instance
+    const { sequelize } = require('../models');
+    
+    if (!sequelize) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+    
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('[SEED-DIRECT] Database connection verified');
+    
+    // Use single transaction for all operations
+    const result = await sequelize.transaction(async (transaction) => {
+      const queryInterface = sequelize.getQueryInterface();
+      
+      console.log('[SEED-DIRECT] Starting direct seeding in transaction...');
+      
+      // Step 1: Upsert roles (Admin and User) with snake_case
+      console.log('[SEED-DIRECT] Upserting roles...');
+      
+      await queryInterface.sequelize.query(`
+        INSERT INTO roles(name, created_at, updated_at) 
+        VALUES ('Admin', now(), now()) 
+        ON CONFLICT (name) DO NOTHING;
+      `, { transaction });
+      
+      await queryInterface.sequelize.query(`
+        INSERT INTO roles(name, created_at, updated_at) 
+        VALUES ('User', now(), now()) 
+        ON CONFLICT (name) DO NOTHING;
+      `, { transaction });
+      
+      console.log('[SEED-DIRECT] Roles upserted successfully');
+      
+      // Step 2: Get Admin role ID
+      console.log('[SEED-DIRECT] Fetching Admin role ID...');
+      
+      const [adminRoleResults] = await queryInterface.sequelize.query(`
+        SELECT id FROM roles WHERE name='Admin' LIMIT 1;
+      `, { transaction });
+      
+      if (!adminRoleResults || adminRoleResults.length === 0) {
+        throw new Error('Admin role not found after upsert');
+      }
+      
+      const adminRoleId = adminRoleResults[0].id;
+      console.log('[SEED-DIRECT] Admin role ID:', adminRoleId);
+      
+      // Step 3: Hash password with bcryptjs (12 rounds)
+      console.log('[SEED-DIRECT] Hashing admin password...');
+      
+      const bcrypt = require('bcryptjs');
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      
+      console.log('[SEED-DIRECT] Password hashed successfully');
+      
+      // Step 4: Upsert admin user with snake_case columns
+      console.log('[SEED-DIRECT] Upserting admin user...');
+      
+      const [adminResults] = await queryInterface.sequelize.query(`
+        INSERT INTO "Admins"(email, password_hash, role_id, created_at, updated_at)
+        VALUES (:email, :hash, :roleId, now(), now())
+        ON CONFLICT (email) DO UPDATE
+          SET password_hash = EXCLUDED.password_hash,
+              role_id = EXCLUDED.role_id,
+              updated_at = now()
+        RETURNING id, email, role_id;
+      `, {
+        replacements: {
+          email: adminEmail,
+          hash: passwordHash,
+          roleId: adminRoleId
+        },
+        transaction
+      });
+      
+      if (!adminResults || adminResults.length === 0) {
+        throw new Error('Admin user upsert failed - no results returned');
+      }
+      
+      const adminUser = adminResults[0];
+      console.log('[SEED-DIRECT] Admin user upserted:', { id: adminUser.id, email: adminUser.email });
+      
+      return {
+        rolesUpserted: true,
+        admin: {
+          id: adminUser.id,
+          email: adminUser.email,
+          role_id: adminUser.role_id
+        }
+      };
+    });
+    
+    console.log('[SEED-DIRECT] Direct seeding completed successfully');
+    console.log('[SEED-DIRECT] SECURITY: Remove this endpoint after success');
+    
+    res.json({
+      ok: true,
+      rolesUpserted: result.rolesUpserted,
+      admin: result.admin,
+      ts: new Date().toISOString(),
+      warning: 'Remove this endpoint and SEED_WEB_KEY after success'
+    });
+    
+  } catch (error) {
+    console.error('[SEED-DIRECT] Error:', error.name, error.message);
+    console.error('[SEED-DIRECT] Stack:', error.stack);
+    
+    if (isVerboseMode()) {
+      return res.status(500).json(createVerboseError(error, 'seed-direct'));
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: "Internal server error",
+      timestamp: new Date().toISOString()
     });
   }
 });
