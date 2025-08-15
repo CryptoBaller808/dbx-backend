@@ -1017,6 +1017,58 @@ console.log("🚀 [STARTUP] ========================================");
 app.use('/admindashboard', adminRoutes);
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
+// ================================
+// CORS FIX FOR ADMIN OPERATIONS
+// ================================
+console.log("🌐 [CORS] Setting up relaxed CORS for admin operations...");
+
+const internalOpsCors = cors({
+  origin(origin, cb) {
+    // Allow same-origin or missing origin (curl, server-side, service worker)
+    if (!origin) {
+      console.log("🌐 [CORS] Allowing request with no origin (server-side/curl)");
+      return cb(null, true);
+    }
+    
+    const allowlist = [
+      'https://dbx-admin.onrender.com',
+      'https://dbx-frontend.onrender.com',
+      'https://dbx-backend-api-production-98f3.up.railway.app',
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ];
+    
+    if (allowlist.includes(origin)) {
+      console.log(`✅ [CORS] Allowing admin operation from: ${origin}`);
+      cb(null, true);
+    } else {
+      console.log(`❌ [CORS] Blocking admin operation from: ${origin}`);
+      cb(new Error(`Not allowed by CORS policy: ${origin}`));
+    }
+  },
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-seed-key', 'authorization'],
+  credentials: false
+});
+
+// Apply relaxed CORS to specific admin operation endpoints
+app.post('/admindashboard/auth/run-allowlist-server', internalOpsCors, (req, res, next) => {
+  console.log("🔧 [ADMIN-OPS] run-allowlist-server endpoint hit with relaxed CORS");
+  next();
+});
+
+app.post('/admindashboard/auth/run-migrations', internalOpsCors, (req, res, next) => {
+  console.log("🔧 [ADMIN-OPS] run-migrations endpoint hit with relaxed CORS");
+  next();
+});
+
+app.post('/admindashboard/auth/seed-run', internalOpsCors, (req, res, next) => {
+  console.log("🔧 [ADMIN-OPS] seed-run endpoint hit with relaxed CORS");
+  next();
+});
+
+console.log("✅ [CORS] Relaxed CORS configured for admin operations endpoints");
+
 // Mount Admin Authentication Routes
 app.use('/admindashboard', adminAuthRoutes);
 app.use('/admindashboard', seedRoutes);
