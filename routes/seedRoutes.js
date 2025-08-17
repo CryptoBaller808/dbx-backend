@@ -917,7 +917,7 @@ router.post('/auth/run-allowlist-server', async (req, res) => {
 
 /**
  * @route POST /admindashboard/auth/seed-direct
- * @desc Direct seed fallback endpoint (temporary, one-time use)
+ * @desc Direct seed fallback endpoint with comprehensive schema adaptation
  * @access Protected (requires SEED_WEB_KEY)
  */
 router.post('/auth/seed-direct', async (req, res) => {
@@ -967,161 +967,19 @@ router.post('/auth/seed-direct', async (req, res) => {
     await sequelize.authenticate();
     console.log('[SEED-DIRECT] Database connection verified');
     
-    // Use single transaction for all operations
+    // Use comprehensive seeding function with dynamic schema adaptation
     const result = await sequelize.transaction(async (transaction) => {
-      const queryInterface = sequelize.getQueryInterface();
+      const { ensureRolesAndAdmin } = require('../lib/seeding');
       
-      console.log('[SEED-DIRECT] Starting direct seeding with dynamic column detection...');
+      console.log('[SEED-DIRECT] Using comprehensive schema adaptation...');
       
-      // Step 1: Detect Admins table columns at runtime
-      console.log('[SEED-DIRECT] Detecting Admins table schema...');
-      
-      const [columns] = await queryInterface.sequelize.query(`
-        SELECT column_name FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='Admins'
-        ORDER BY column_name;
-      `, { transaction });
-      
-      const columnNames = columns.map(row => row.column_name);
-      console.log('[SEED-DIRECT] Available Admins columns:', columnNames);
-      
-      // Step 2: Choose password column in priority order
-      let passwordCol = null;
-      if (columnNames.includes('password_hash')) {
-        passwordCol = 'password_hash';
-      } else if (columnNames.includes('password')) {
-        passwordCol = 'password';
-      } else if (columnNames.includes('passwordHash')) {
-        passwordCol = '"passwordHash"';
-      } else {
-        throw new Error('No password column found in Admins table (checked: password_hash, password, passwordHash)');
-      }
-      
-      // Step 3: Choose timestamp columns
-      const createdCol = columnNames.includes('created_at') ? 'created_at' : '"createdAt"';
-      const updatedCol = columnNames.includes('updated_at') ? 'updated_at' : '"updatedAt"';
-      
-      // Step 4: Check if username column exists
-      const hasUsername = columnNames.includes('username');
-      
-      console.log('[SEED-DIRECT] Column mapping:', {
-        password: passwordCol,
-        created: createdCol,
-        updated: updatedCol,
-        hasUsername: hasUsername
-      });
-      
-      // Step 5: Upsert roles (Admin and User) - keep idempotent
-      console.log('[SEED-DIRECT] Upserting roles...');
-      
-      await queryInterface.sequelize.query(`
-        INSERT INTO roles (name, description, created_at, updated_at)
-        VALUES ('Admin','Administrator role with full access', NOW(), NOW()),
-               ('User','Standard user role', NOW(), NOW())
-        ON CONFLICT (name) DO NOTHING;
-      `, { transaction });
-      
-      console.log('[SEED-DIRECT] ✅ Roles upserted (Admin, User)');
-      
-      // Step 6: Get Admin role ID
-      console.log('[SEED-DIRECT] Fetching Admin role ID...');
-      
-      const [adminRoleResults] = await queryInterface.sequelize.query(`
-        SELECT id FROM roles WHERE name='Admin' LIMIT 1;
-      `, { transaction });
-      
-      if (!adminRoleResults || adminRoleResults.length === 0) {
-        throw new Error('Admin role not found after upsert');
-      }
-      
-      const adminRoleId = adminRoleResults[0].id;
-      console.log('[SEED-DIRECT] Admin role ID:', adminRoleId);
-      
-      // Step 7: Hash password with bcryptjs (12 rounds)
-      console.log('[SEED-DIRECT] Hashing admin password...');
-      
-      const bcrypt = require('bcryptjs');
-      const passwordHash = await bcrypt.hash(adminPassword, 12);
-      
-      console.log('[SEED-DIRECT] Password hashed successfully');
-      
-      // Step 8: UPDATE-then-INSERT pattern (no ON CONFLICT due to missing columns)
-      console.log('[SEED-DIRECT] Attempting UPDATE first...');
-      
-      const [updateResults] = await queryInterface.sequelize.query(`
-        UPDATE "Admins"
-        SET ${passwordCol} = :hash,
-            role_id = :roleId,
-            ${updatedCol} = NOW()
-        WHERE email = :email
-        RETURNING id, email;
-      `, {
-        replacements: {
-          hash: passwordHash,
-          roleId: adminRoleId,
-          email: adminEmail
-        },
+      return await ensureRolesAndAdmin({
+        sequelize,
+        email: adminEmail,
+        plainPassword: adminPassword,
+        roleName: 'Admin',
         transaction
       });
-      
-      let adminUser;
-      
-      if (updateResults && updateResults.length > 0) {
-        // UPDATE succeeded
-        adminUser = updateResults[0];
-        console.log('[SEED-DIRECT] ✅ Admin user updated:', { id: adminUser.id, email: adminUser.email });
-      } else {
-        // UPDATE returned zero rows, do INSERT
-        console.log('[SEED-DIRECT] No existing admin found, inserting new admin...');
-        
-        // Build INSERT query dynamically based on available columns
-        let insertColumns = `email, ${passwordCol}, role_id, ${createdCol}, ${updatedCol}`;
-        let insertValues = ':email, :hash, :roleId, NOW(), NOW()';
-        let insertReplacements = {
-          email: adminEmail,
-          hash: passwordHash,
-          roleId: adminRoleId
-        };
-        
-        if (hasUsername) {
-          insertColumns += ', username';
-          insertValues += ', :username';
-          insertReplacements.username = 'admin';
-        }
-        
-        const [insertResults] = await queryInterface.sequelize.query(`
-          INSERT INTO "Admins" (${insertColumns})
-          VALUES (${insertValues})
-          RETURNING id, email;
-        `, {
-          replacements: insertReplacements,
-          transaction
-        });
-        
-        if (!insertResults || insertResults.length === 0) {
-          throw new Error('Admin user INSERT failed - no results returned');
-        }
-        
-        adminUser = insertResults[0];
-        console.log('[SEED-DIRECT] ✅ Admin user inserted:', { id: adminUser.id, email: adminUser.email });
-      }
-      
-      console.log('[SEED-DIRECT] ✅ Admin user upserted successfully:', adminEmail);
-      
-      return {
-        rolesUpserted: true,
-        admin: {
-          id: adminUser.id,
-          email: adminUser.email,
-          role_id: adminRoleId
-        },
-        columnMapping: {
-          password: passwordCol,
-          created: createdCol,
-          updated: updatedCol,
-          hasUsername: hasUsername
-        }
-      };
     });
     
     console.log('[SEED-DIRECT] Direct seeding completed successfully');
@@ -1135,9 +993,12 @@ router.post('/auth/seed-direct', async (req, res) => {
       warning: 'Remove this endpoint and SEED_WEB_KEY after success'
     };
     
-    // Include column mapping in verbose mode for debugging
+    // Include schema info in verbose mode for debugging
     if (isVerboseMode()) {
-      response.columnMapping = result.columnMapping;
+      response.schemaInfo = result.schemaInfo;
+      response.availableColumns = result.schemaInfo.availableColumns;
+      response.requiredNoDefault = result.schemaInfo.requiredNoDefault;
+      response.columnMapping = result.schemaInfo.columnMapping;
     }
     
     res.json(response);
@@ -1148,9 +1009,9 @@ router.post('/auth/seed-direct', async (req, res) => {
     
     if (isVerboseMode()) {
       const verboseError = createVerboseError(error, 'seed-direct');
-      // Add any detected column mapping to verbose error for debugging
-      if (error.columnMapping) {
-        verboseError.columnMapping = error.columnMapping;
+      // Add schema info to verbose error for debugging if available
+      if (error.schemaInfo) {
+        verboseError.schemaInfo = error.schemaInfo;
       }
       return res.status(500).json(verboseError);
     }
