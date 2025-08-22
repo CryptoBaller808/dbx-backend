@@ -969,17 +969,13 @@ router.post('/auth/seed-direct', async (req, res) => {
     const expectedKey = process.env.SEED_WEB_KEY;
     
     if (!expectedKey) {
-      return res.status(500).json({
-        success: false,
-        error: 'SEED_WEB_KEY not configured'
-      });
+      const error = new Error('SEED_WEB_KEY not configured');
+      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'config-check' });
     }
     
     if (providedKey !== expectedKey) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid or missing x-seed-key header'
-      });
+      const error = new Error('Invalid or missing x-seed-key header');
+      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'auth-check' });
     }
     
     // Get required environment variables
@@ -987,20 +983,16 @@ router.post('/auth/seed-direct', async (req, res) => {
     const adminPassword = process.env.SEED_ADMIN_PASSWORD;
     
     if (!adminEmail || !adminPassword) {
-      return res.status(500).json({
-        success: false,
-        error: 'SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be configured'
-      });
+      const error = new Error('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be configured');
+      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'env-check' });
     }
     
     // Get sequelize instance
     const { sequelize } = require('../models');
     
     if (!sequelize) {
-      return res.status(500).json({
-        success: false,
-        error: 'Database connection not available'
-      });
+      const error = new Error('Database connection not available');
+      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'db-check' });
     }
     
     // Test database connection
