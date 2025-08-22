@@ -48,6 +48,17 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 console.log("✅ [STARTUP] Core modules imported successfully");
 
+// Helper function for boolean coercion
+const coerceBool = v => ['1','true','yes','on'].includes(String(v || '').toLowerCase());
+
+// Log environment variables once on boot
+console.log('[ENV] SEED_DEBUG raw="%s" coerced=%s SEED_ADMIN_NAME="%s" SEED_ADMIN_USERNAME="%s"',
+  process.env.SEED_DEBUG || 'undefined',
+  coerceBool(process.env.SEED_DEBUG),
+  process.env.SEED_ADMIN_NAME || 'undefined',
+  process.env.SEED_ADMIN_USERNAME || 'undefined'
+);
+
 const { initializeBlockchainServices } = require('./services/blockchain');
 const { initializeDatabase } = require('./models');
 const { 
