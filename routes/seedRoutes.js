@@ -23,6 +23,16 @@ router.get('/auth/seed-ping', (req, res) => {
 });
 
 /**
+ * @route POST /admindashboard/auth/seed-ping
+ * @desc POST ping endpoint to test POST middleware chain
+ * @access Public (for debugging)
+ */
+router.post('/auth/seed-ping', (req, res) => {
+  console.log('[SEED-PING] POST ping endpoint hit');
+  res.json({ ok: true, method: req.method, at: 'seed-ping', timestamp: new Date().toISOString() });
+});
+
+/**
  * @route GET /admindashboard/auth/diag/version
  * @desc Get version information including commit SHA and branch
  * @access Public (for deployment verification)
@@ -980,6 +990,66 @@ router.post('/auth/seed-direct', wrap(async (req, res) => {
   if (req.query.probe === '1') {
     console.log('[SEED-DIRECT] PROBE MODE - throwing test error');
     throw new Error('seed-direct probe throw');
+  }
+  
+  // Preflight introspection (no DB modification)
+  if (req.query.preflight === '1') {
+    console.log('[SEED-DIRECT] PREFLIGHT MODE - introspection only');
+    
+    const { sequelize } = require('../models');
+    
+    // Get schema information
+    const [columns] = await sequelize.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'Admins' 
+      ORDER BY ordinal_position
+    `);
+    
+    const availableColumns = columns.map(col => col.column_name);
+    const requiredNoDefault = columns
+      .filter(col => col.is_nullable === 'NO' && col.column_default === null)
+      .map(col => col.column_name);
+    
+    // Determine column mapping
+    const hasPasswordHash = availableColumns.includes('password_hash');
+    const hasPasswordHashCamel = availableColumns.includes('passwordHash');
+    const hasPassword = availableColumns.includes('password');
+    const hasUsername = availableColumns.includes('username');
+    const hasName = availableColumns.includes('name');
+    const hasCreatedAt = availableColumns.includes('created_at');
+    const hasCreatedAtCamel = availableColumns.includes('createdAt');
+    
+    const columnMapping = {
+      password: hasPasswordHash ? 'password_hash' : hasPasswordHashCamel ? '"passwordHash"' : 'password',
+      created: hasCreatedAt ? 'created_at' : '"createdAt"',
+      updated: hasCreatedAt ? 'updated_at' : '"updatedAt"',
+      hasUsername,
+      hasName,
+      nameRequired: requiredNoDefault.includes('name')
+    };
+    
+    // Plan SQL statements
+    const updateSql = `UPDATE "Admins" SET ${columnMapping.password} = :hash, role_id = :roleId, ${columnMapping.updated} = NOW() WHERE email = :email RETURNING id, email`;
+    const insertSql = `INSERT INTO "Admins" (email, ${columnMapping.password}, role_id, ${columnMapping.created}, ${columnMapping.updated}${hasName ? ', name' : ''}${hasUsername ? ', username' : ''}) VALUES (:email, :hash, :roleId, NOW(), NOW()${hasName ? ', :name' : ''}${hasUsername ? ', :username' : ''}) RETURNING id, email`;
+    
+    const preflightResult = {
+      availableColumns,
+      requiredNoDefault,
+      columnMapping,
+      plannedSql: {
+        update: updateSql,
+        insert: insertSql
+      }
+    };
+    
+    console.log('[SEED-DIRECT] Preflight mapping =>', JSON.stringify(preflightResult, null, 2));
+    
+    return res.json({
+      success: true,
+      preflight: preflightResult,
+      timestamp: new Date().toISOString()
+    });
   }
   
   console.log('[SEED-DIRECT] Headers:', req.headers);
