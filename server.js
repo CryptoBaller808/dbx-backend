@@ -343,6 +343,7 @@ const corsOrigins = process.env.CORS_ORIGINS
   : [
       "https://dbx-frontend.onrender.com",
       "https://dbx-admin.onrender.com",
+      "https://dbx-backend-api-production-98f3.up.railway.app", // Railway backend for testing
       "http://localhost:3000", // Development
       "http://localhost:3001"  // Development admin
     ];
@@ -363,7 +364,7 @@ app.use(cors({
   },
   credentials: false, // Using Bearer tokens, not cookies
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key'],
   exposedHeaders: ['X-Request-Id']
 }));
 console.log("✅ [SECURITY] CORS allowlist configured");
