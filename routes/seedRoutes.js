@@ -37,6 +37,83 @@ router.get('/auth/diag/version', async (req, res) => {
 });
 
 /**
+ * @route GET /admindashboard/auth/diag/routes
+ * @desc Get list of registered routes (temporary for debugging)
+ * @access Public (for deployment verification)
+ */
+router.get('/auth/diag/routes', async (req, res) => {
+  try {
+    // Get all routes from this router
+    const routes = [];
+    
+    // Extract routes from router stack
+    router.stack.forEach(layer => {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods);
+        methods.forEach(method => {
+          routes.push({
+            method: method.toUpperCase(),
+            path: `/admindashboard${layer.route.path}`
+          });
+        });
+      }
+    });
+    
+    console.log('[ROUTES] Route inventory requested, found:', routes.length);
+    
+    res.json({
+      success: true,
+      routes: routes,
+      count: routes.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[ROUTES] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get route inventory',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route GET /admindashboard/auth/debug/throw
+ * @desc Test endpoint that throws an error to verify centralized debug system
+ * @access Public (temporary for debugging)
+ */
+router.get('/auth/debug/throw', async (req, res, next) => {
+  try {
+    console.log('[DEBUG-THROW] Manual throw test initiated');
+    throw new Error('Manual throw test');
+  } catch (error) {
+    console.log('[DEBUG-THROW] Error thrown, passing to centralized handler');
+    respondError(res, error, 'debug-throw');
+  }
+});
+
+/**
+ * @route GET /admindashboard/auth/debug/sql
+ * @desc Test endpoint that simulates SQL error to verify centralized debug system
+ * @access Public (temporary for debugging)
+ */
+router.get('/auth/debug/sql', async (req, res, next) => {
+  try {
+    console.log('[DEBUG-SQL] SQL error simulation initiated');
+    const { sequelize } = require('../models');
+    
+    // Intentionally run invalid SQL to trigger database error
+    await sequelize.query('SELECT * FROM nonexistent_table_12345');
+    
+    res.json({ success: true, message: 'This should not be reached' });
+  } catch (error) {
+    console.log('[DEBUG-SQL] SQL error caught, passing to centralized handler');
+    respondError(res, error, 'debug-sql');
+  }
+});
+
+/**
  * @route GET /admindashboard/auth/diagnostics
  * @desc Comprehensive diagnostics and file discovery (requires secret key)
  * @access Protected (requires SEED_WEB_KEY)
