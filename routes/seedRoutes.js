@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { runSeed, checkSeedStatus } = require('../lib/seeding');
 const { getMigrationStatus, migrateOnBoot, baselineMigrations, baselineAndRunAllowlist } = require('../lib/migrations');
-const { respondError, isDebug, coerceBool } = require('../lib/debug');
+const { respondWithError, isDebugEnabled, withContext, coerceBool } = require('../lib/debug');
 
 /**
  * @route GET /admindashboard/auth/diag/version
@@ -89,7 +89,8 @@ router.get('/auth/debug/throw', async (req, res, next) => {
     throw new Error('Manual throw test');
   } catch (error) {
     console.log('[DEBUG-THROW] Error thrown, passing to centralized handler');
-    respondError(res, error, 'debug-throw');
+    const context = { where: 'debug-throw', phase: 'test' };
+    return respondWithError(req, res, error, context);
   }
 });
 
@@ -109,7 +110,8 @@ router.get('/auth/debug/sql', async (req, res, next) => {
     res.json({ success: true, message: 'This should not be reached' });
   } catch (error) {
     console.log('[DEBUG-SQL] SQL error caught, passing to centralized handler');
-    respondError(res, error, 'debug-sql');
+    const context = { where: 'debug-sql', phase: 'test' };
+    return respondWithError(req, res, error, context);
   }
 });
 
@@ -534,8 +536,14 @@ router.post('/auth/seed-run', async (req, res) => {
     console.error('[SEED-RUN] Unexpected error:', error.name, error.message);
     console.error('[SEED-RUN] Stack trace:', error.stack);
     
+    // Create context for seeding error
+    const context = { 
+      where: 'seed-run', 
+      phase: 'seeding-process'
+    };
+    
     // Use centralized debug error handling
-    return respondError(res, error, 'seed-run');
+    return respondWithError(req, res, error, context);
   }
 });
 
@@ -936,8 +944,14 @@ router.post('/auth/run-allowlist-server', async (req, res) => {
     console.error('[RUN-ALLOWLIST-SERVER] Error:', error.name, error.message);
     console.error('[RUN-ALLOWLIST-SERVER] Stack:', error.stack);
     
+    // Create context for migration error
+    const context = { 
+      where: 'run-allowlist-server', 
+      phase: 'migration-execution'
+    };
+    
     // Use centralized debug error handling
-    return respondError(res, error, 'run-allowlist-server');
+    return respondWithError(req, res, error, context);
   }
 });
 
@@ -1020,7 +1034,7 @@ router.post('/auth/seed-direct', async (req, res) => {
     };
     
     // Include schema info in verbose mode for debugging
-    if (isDebug()) {
+    if (isDebugEnabled()) {
       response.schemaInfo = result.schemaInfo;
       response.availableColumns = result.schemaInfo.availableColumns;
       response.requiredNoDefault = result.schemaInfo.requiredNoDefault;
@@ -1033,13 +1047,21 @@ router.post('/auth/seed-direct', async (req, res) => {
     console.error('[SEED-DIRECT] Error:', error.name, error.message);
     console.error('[SEED-DIRECT] Stack:', error.stack);
     
+    // Create context with schema probe information if available
+    const context = { 
+      where: 'seed-direct', 
+      phase: 'admin-upsert'
+    };
+    
     // Attach schema context if available from error or result
     if (error.schemaInfo) {
-      error.context = error.schemaInfo;
+      context.availableColumns = error.schemaInfo.availableColumns;
+      context.requiredNoDefault = error.schemaInfo.requiredNoDefault;
+      context.columnMapping = error.schemaInfo.columnMapping;
     }
     
     // Use centralized debug error handling
-    return respondError(res, error, 'seed-direct');
+    return respondWithError(req, res, error, context);
   }
 });
 

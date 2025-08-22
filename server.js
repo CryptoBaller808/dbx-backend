@@ -1618,9 +1618,9 @@ console.log("✅ [SHUTDOWN] Graceful shutdown handlers configured");
 
 // Global Express error handler (must be last middleware)
 app.use((err, req, res, next) => {
-  const { respondError } = require('./lib/debug');
+  const { respondWithError } = require('./lib/debug');
   if (res.headersSent) return next(err);
-  return respondError(res, err, 'global');
+  return respondWithError(req, res, err, { where: 'global' });
 });
 
 console.log("🚀 [STARTUP] DBX Backend fully initialized and ready!");
