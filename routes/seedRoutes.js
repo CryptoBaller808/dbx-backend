@@ -961,6 +961,12 @@ router.post('/auth/run-allowlist-server', async (req, res) => {
  * @access Protected (requires SEED_WEB_KEY)
  */
 router.post('/auth/seed-direct', async (req, res) => {
+  console.log('[SEED-DIRECT] ===== ENDPOINT ENTRY =====');
+  console.log('[SEED-DIRECT] Method:', req.method);
+  console.log('[SEED-DIRECT] Headers:', req.headers);
+  console.log('[SEED-DIRECT] SEED_DEBUG:', process.env.SEED_DEBUG);
+  console.log('[SEED-DIRECT] isDebugEnabled():', isDebugEnabled());
+  
   try {
     console.log('[SEED-DIRECT] Direct seed fallback request received');
     
@@ -968,12 +974,16 @@ router.post('/auth/seed-direct', async (req, res) => {
     const providedKey = req.headers['x-seed-key'];
     const expectedKey = process.env.SEED_WEB_KEY;
     
+    console.log('[SEED-DIRECT] Key check - provided:', !!providedKey, 'expected:', !!expectedKey);
+    
     if (!expectedKey) {
+      console.log('[SEED-DIRECT] No SEED_WEB_KEY configured - using centralized debug');
       const error = new Error('SEED_WEB_KEY not configured');
       return respondWithError(req, res, error, { where: 'seed-direct', phase: 'config-check' });
     }
     
     if (providedKey !== expectedKey) {
+      console.log('[SEED-DIRECT] Invalid key - using centralized debug');
       const error = new Error('Invalid or missing x-seed-key header');
       return respondWithError(req, res, error, { where: 'seed-direct', phase: 'auth-check' });
     }
@@ -1017,10 +1027,14 @@ router.post('/auth/seed-direct', async (req, res) => {
     console.log('[SEED-DIRECT] Direct seeding completed successfully');
     console.log('[SEED-DIRECT] SECURITY: Remove this endpoint after success');
     
+    // Generate requestId for consistency
+    const requestId = require('crypto').randomBytes(8).toString('hex');
+    
     const response = {
       ok: true,
       rolesUpserted: result.rolesUpserted,
       admin: result.admin,
+      requestId,
       ts: new Date().toISOString(),
       warning: 'Remove this endpoint and SEED_WEB_KEY after success'
     };
@@ -1033,11 +1047,18 @@ router.post('/auth/seed-direct', async (req, res) => {
       response.columnMapping = result.schemaInfo.columnMapping;
     }
     
+    // Set requestId header for consistency
+    res.set('x-request-id', requestId);
+    
     res.json(response);
     
   } catch (error) {
-    console.error('[SEED-DIRECT] Error:', error.name, error.message);
-    console.error('[SEED-DIRECT] Stack:', error.stack);
+    console.error('[SEED-DIRECT] ===== ERROR CAUGHT =====');
+    console.error('[SEED-DIRECT] Error name:', error.name);
+    console.error('[SEED-DIRECT] Error message:', error.message);
+    console.error('[SEED-DIRECT] Error stack:', error.stack);
+    console.error('[SEED-DIRECT] SEED_DEBUG:', process.env.SEED_DEBUG);
+    console.error('[SEED-DIRECT] isDebugEnabled():', isDebugEnabled());
     
     // Create context with schema probe information if available
     const context = { 
@@ -1051,6 +1072,8 @@ router.post('/auth/seed-direct', async (req, res) => {
       context.requiredNoDefault = error.schemaInfo.requiredNoDefault;
       context.columnMapping = error.schemaInfo.columnMapping;
     }
+    
+    console.error('[SEED-DIRECT] About to call respondWithError with context:', context);
     
     // Use centralized debug error handling
     return respondWithError(req, res, error, context);
