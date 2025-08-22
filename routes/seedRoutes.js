@@ -7,81 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { runSeed, checkSeedStatus } = require('../lib/seeding');
 const { getMigrationStatus, migrateOnBoot, baselineMigrations, baselineAndRunAllowlist } = require('../lib/migrations');
-
-/**
- * Create verbose error response when SEED_DEBUG=1 is set
- * @param {Error} error - The error object
- * @param {string} where - Function or file where error occurred
- * @param {Object} context - Additional context (e.g., schema info)
- * @returns {Object} Verbose error object
- */
-function createVerboseError(error, where, context = {}) {
-  const DEBUG = coerceBool(process.env.SEED_DEBUG);
-  
-  if (!DEBUG) {
-    // Return generic error when SEED_DEBUG is not enabled
-    return {
-      success: false,
-      message: "Server error",
-      error: "Internal server error",
-      timestamp: new Date().toISOString()
-    };
-  }
-  
-  const verboseError = {
-    success: false,
-    message: "Server error",
-    error: {
-      name: error.name || 'UnknownError',
-      message: error.message || 'No error message',
-      code: error.code || null,
-      sql: error.parent?.sql || error.sql || null,
-      parameters: error.parent?.parameters || null,
-      detail: error.parent?.detail || null,
-      schema: error.parent?.schema || null,
-      table: error.parent?.table || null,
-      constraint: error.parent?.constraint || null,
-      stackTop: error.stack ? error.stack.split('\n').slice(0, 3).join('\n') : null
-    },
-    where: where || 'unknown',
-    ts: new Date().toISOString()
-  };
-  
-  // Add dynamic schema probe context if available
-  if (context.availableColumns) {
-    verboseError.schemaInfo = {
-      availableColumns: context.availableColumns,
-      requiredNoDefault: context.requiredNoDefault,
-      columnMapping: context.columnMapping
-    };
-  }
-  
-  // Generate request ID for tracking
-  const requestId = require('crypto').randomBytes(8).toString('hex');
-  verboseError.requestId = requestId;
-  
-  // Log to Railway logs for debugging
-  console.error(`[MIGRATION-ERROR] RequestID: ${requestId}`, JSON.stringify(verboseError, null, 2));
-  
-  return verboseError;
-}
-
-/**
- * Check if verbose error mode is enabled
- * @returns {boolean} True if SEED_DEBUG=1 is set
- */
-function isVerboseMode() {
-  return coerceBool(process.env.SEED_DEBUG);
-}
-
-/**
- * Coerce environment variable to boolean
- * @param {string} value - Environment variable value
- * @returns {boolean} True if value is truthy
- */
-function coerceBool(value) {
-  return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
-}
+const { respondError, isDebug, coerceBool } = require('../lib/debug');
 
 /**
  * @route GET /admindashboard/auth/diag/version
@@ -531,9 +457,8 @@ router.post('/auth/seed-run', async (req, res) => {
     console.error('[SEED-RUN] Unexpected error:', error.name, error.message);
     console.error('[SEED-RUN] Stack trace:', error.stack);
     
-    // Use enhanced verbose error function
-    const verboseError = createVerboseError(error, 'seed-run');
-    return res.status(500).json(verboseError);
+    // Use centralized debug error handling
+    return respondError(res, error, 'seed-run');
   }
 });
 
@@ -934,9 +859,8 @@ router.post('/auth/run-allowlist-server', async (req, res) => {
     console.error('[RUN-ALLOWLIST-SERVER] Error:', error.name, error.message);
     console.error('[RUN-ALLOWLIST-SERVER] Stack:', error.stack);
     
-    // Use enhanced verbose error function
-    const verboseError = createVerboseError(error, 'run-allowlist-server');
-    return res.status(500).json(verboseError);
+    // Use centralized debug error handling
+    return respondError(res, error, 'run-allowlist-server');
   }
 });
 
@@ -1019,7 +943,7 @@ router.post('/auth/seed-direct', async (req, res) => {
     };
     
     // Include schema info in verbose mode for debugging
-    if (isVerboseMode()) {
+    if (isDebug()) {
       response.schemaInfo = result.schemaInfo;
       response.availableColumns = result.schemaInfo.availableColumns;
       response.requiredNoDefault = result.schemaInfo.requiredNoDefault;
@@ -1032,10 +956,37 @@ router.post('/auth/seed-direct', async (req, res) => {
     console.error('[SEED-DIRECT] Error:', error.name, error.message);
     console.error('[SEED-DIRECT] Stack:', error.stack);
     
-    // Use enhanced verbose error function with schema context
-    const schemaContext = error.schemaInfo || {};
-    const verboseError = createVerboseError(error, 'seed-direct', schemaContext);
-    return res.status(500).json(verboseError);
+    // Attach schema context if available from error or result
+    if (error.schemaInfo) {
+      error.context = error.schemaInfo;
+    }
+    
+    // Use centralized debug error handling
+    return respondError(res, error, 'seed-direct');
+  }
+});
+
+/**
+ * @route GET /admindashboard/auth/debug/throw
+ * @desc Temporary debug endpoint - plain throw test
+ * @access Public (for testing verbose errors)
+ */
+router.get('/debug/throw', (req, res) => {
+  throw new Error('Manual throw test');
+});
+
+/**
+ * @route GET /admindashboard/auth/debug/sql
+ * @desc Temporary debug endpoint - simulate Sequelize DB error
+ * @access Public (for testing verbose errors)
+ */
+router.get('/debug/sql', async (req, res) => {
+  try {
+    const { sequelize } = require('../models');
+    await sequelize.query('SELECT * FROM definitely_not_a_table');
+    res.json({ ok: true });
+  } catch (err) {
+    return respondError(res, err, 'debug-sql');
   }
 });
 
