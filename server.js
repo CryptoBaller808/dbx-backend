@@ -1268,25 +1268,25 @@ io.on('connection', (socket) => {
 // Make io available globally for transaction updates
 global.io = io;
 
-// Global Express error handler to catch unhandled errors
-app.use((err, req, res, next) => {
-  console.error('🚨 Global Error Handler Triggered:', err);
-  console.error('🚨 Request URL:', req.url);
-  console.error('🚨 Request Method:', req.method);
-  console.error('🚨 Error Message:', err.message);
-  console.error('🚨 Error Name:', err.name);
-  console.error('🚨 Stack trace:', err.stack);
-  
-  // Don't send error details in production for security
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  
-  res.status(500).json({ 
-    success: false, 
-    message: 'Server error', 
-    error: isDevelopment ? err.message : 'Internal server error',
-    timestamp: new Date().toISOString()
-  });
-});
+// Global Express error handler to catch unhandled errors - DISABLED (conflicts with centralized debug)
+// app.use((err, req, res, next) => {
+//   console.error('🚨 Global Error Handler Triggered:', err);
+//   console.error('🚨 Request URL:', req.url);
+//   console.error('🚨 Request Method:', req.method);
+//   console.error('🚨 Error Message:', err.message);
+//   console.error('🚨 Error Name:', err.name);
+//   console.error('🚨 Stack trace:', err.stack);
+//   
+//   // Don't send error details in production for security
+//   const isDevelopment = process.env.NODE_ENV === 'development';
+//   
+//   res.status(500).json({ 
+//     success: false, 
+//     message: 'Server error', 
+//     error: isDevelopment ? err.message : 'Internal server error',
+//     timestamp: new Date().toISOString()
+//   });
+// });
 
 // Enhanced Initialization with Database and Blockchain Services
 const initializeServices = async ({ skipDBDependent = false } = {}) => {
