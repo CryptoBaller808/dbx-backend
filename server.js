@@ -1141,6 +1141,29 @@ app.use('/api/creator', creatorRoutes);
 // Mount Bitcoin Routes
 app.use('/api/bitcoin', bitcoinRoutes);
 
+// ================================
+// ROUTE INVENTORY FOR DEBUGGING
+// ================================
+function listRoutes(app) {
+  const routes = [];
+  const src = r => Object.keys(r.methods).join(',').toUpperCase();
+  app._router?.stack?.forEach(layer => {
+    if (layer.route) {
+      routes.push({ path: layer.route.path, methods: src(layer.route) });
+    } else if (layer.name === 'router' && layer.handle?.stack) {
+      layer.handle.stack.forEach(r => {
+        if (r.route) routes.push({ path: r.route.path, methods: src(r.route) });
+      });
+    }
+  });
+  const filtered = routes.filter(r => r.path?.toString().toLowerCase().includes('seed-direct'));
+  console.log('[[ROUTES]] seed-direct mounts:', filtered);
+  console.log('[[ROUTES]] Total routes found:', routes.length);
+}
+listRoutes(app);
+
+console.log("✅ [STARTUP] Route inventory completed");
+
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
   console.log(`[Socket.io] Client connected: ${socket.id}`);
@@ -1620,7 +1643,18 @@ console.log("✅ [SHUTDOWN] Graceful shutdown handlers configured");
 app.use((err, req, res, next) => {
   const { respondWithError } = require('./lib/debug');
   if (res.headersSent) return next(err);
-  return respondWithError(req, res, err, { where: 'global' });
+  
+  console.error('🚨 Global Error Handler Triggered:', err);
+  console.error('🚨 Request URL:', req.url);
+  console.error('🚨 Request Method:', req.method);
+  
+  const context = { 
+    where: 'global', 
+    url: req.originalUrl, 
+    method: req.method 
+  };
+  
+  return respondWithError(req, res, err, context);
 });
 
 console.log("🚀 [STARTUP] DBX Backend fully initialized and ready!");

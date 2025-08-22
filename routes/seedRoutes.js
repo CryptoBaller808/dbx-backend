@@ -964,10 +964,17 @@ router.post('/auth/seed-direct', async (req, res) => {
   console.log('[SEED-DIRECT] ===== ENDPOINT ENTRY =====');
   console.log('[SEED-DIRECT] Method:', req.method);
   console.log('[SEED-DIRECT] Headers:', req.headers);
+  console.log('[SEED-DIRECT] Query:', req.query);
   console.log('[SEED-DIRECT] SEED_DEBUG:', process.env.SEED_DEBUG);
   console.log('[SEED-DIRECT] isDebugEnabled():', isDebugEnabled());
   
   try {
+    // Smoke toggle for debug flow verification
+    if (req.query.probe === '1') {
+      console.log('[SEED-DIRECT] PROBE MODE - throwing test error');
+      throw new Error('seed-direct probe throw');
+    }
+    
     console.log('[SEED-DIRECT] Direct seed fallback request received');
     
     // Verify secret key
