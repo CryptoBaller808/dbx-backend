@@ -9,6 +9,9 @@ const { runSeed, checkSeedStatus } = require('../lib/seeding');
 const { getMigrationStatus, migrateOnBoot, baselineMigrations, baselineAndRunAllowlist } = require('../lib/migrations');
 const { respondWithError, isDebugEnabled, withContext, coerceBool } = require('../lib/debug');
 
+// Async wrapper to ensure all errors hit centralized debug
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 /**
  * @route GET /admindashboard/auth/diag/version
  * @desc Get version information including commit SHA and branch
@@ -960,132 +963,109 @@ router.post('/auth/run-allowlist-server', async (req, res) => {
  * @desc Direct seed fallback endpoint with comprehensive schema adaptation
  * @access Protected (requires SEED_WEB_KEY)
  */
-router.post('/auth/seed-direct', async (req, res) => {
-  console.log('[SEED-DIRECT] ===== ENDPOINT ENTRY =====');
-  console.log('[SEED-DIRECT] Method:', req.method);
+router.post('/auth/seed-direct', wrap(async (req, res) => {
+  console.log('[SEED-DIRECT] ===== ENDPOINT ENTRY =====', { method: req.method, query: req.query });
+  
+  // Probe toggle for debug flow verification
+  if (req.query.probe === '1') {
+    console.log('[SEED-DIRECT] PROBE MODE - throwing test error');
+    throw new Error('seed-direct probe throw');
+  }
+  
   console.log('[SEED-DIRECT] Headers:', req.headers);
-  console.log('[SEED-DIRECT] Query:', req.query);
   console.log('[SEED-DIRECT] SEED_DEBUG:', process.env.SEED_DEBUG);
   console.log('[SEED-DIRECT] isDebugEnabled():', isDebugEnabled());
   
-  try {
-    // Smoke toggle for debug flow verification
-    if (req.query.probe === '1') {
-      console.log('[SEED-DIRECT] PROBE MODE - throwing test error');
-      throw new Error('seed-direct probe throw');
-    }
+  console.log('[SEED-DIRECT] Direct seed fallback request received');
     
-    console.log('[SEED-DIRECT] Direct seed fallback request received');
-    
-    // Verify secret key
-    const providedKey = req.headers['x-seed-key'];
-    const expectedKey = process.env.SEED_WEB_KEY;
-    
-    console.log('[SEED-DIRECT] Key check - provided:', !!providedKey, 'expected:', !!expectedKey);
-    
-    if (!expectedKey) {
-      console.log('[SEED-DIRECT] No SEED_WEB_KEY configured - using centralized debug');
-      const error = new Error('SEED_WEB_KEY not configured');
-      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'config-check' });
-    }
-    
-    if (providedKey !== expectedKey) {
-      console.log('[SEED-DIRECT] Invalid key - using centralized debug');
-      const error = new Error('Invalid or missing x-seed-key header');
-      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'auth-check' });
-    }
-    
-    // Get required environment variables
-    const adminEmail = process.env.SEED_ADMIN_EMAIL;
-    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
-    
-    if (!adminEmail || !adminPassword) {
-      const error = new Error('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be configured');
-      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'env-check' });
-    }
-    
-    // Get sequelize instance
-    const { sequelize } = require('../models');
-    
-    if (!sequelize) {
-      const error = new Error('Database connection not available');
-      return respondWithError(req, res, error, { where: 'seed-direct', phase: 'db-check' });
-    }
-    
-    // Test database connection
-    await sequelize.authenticate();
-    console.log('[SEED-DIRECT] Database connection verified');
-    
-    // Use comprehensive seeding function with dynamic schema adaptation
-    const result = await sequelize.transaction(async (transaction) => {
-      const { ensureRolesAndAdmin } = require('../lib/seeding');
-      
-      console.log('[SEED-DIRECT] Using comprehensive schema adaptation...');
-      
-      return await ensureRolesAndAdmin({
-        sequelize,
-        email: adminEmail,
-        plainPassword: adminPassword,
-        roleName: 'Admin',
-        transaction
-      });
-    });
-    
-    console.log('[SEED-DIRECT] Direct seeding completed successfully');
-    console.log('[SEED-DIRECT] SECURITY: Remove this endpoint after success');
-    
-    // Generate requestId for consistency
-    const requestId = require('crypto').randomBytes(8).toString('hex');
-    
-    const response = {
-      ok: true,
-      rolesUpserted: result.rolesUpserted,
-      admin: result.admin,
-      requestId,
-      ts: new Date().toISOString(),
-      warning: 'Remove this endpoint and SEED_WEB_KEY after success'
-    };
-    
-    // Include schema info in verbose mode for debugging
-    if (isDebugEnabled()) {
-      response.schemaInfo = result.schemaInfo;
-      response.availableColumns = result.schemaInfo.availableColumns;
-      response.requiredNoDefault = result.schemaInfo.requiredNoDefault;
-      response.columnMapping = result.schemaInfo.columnMapping;
-    }
-    
-    // Set requestId header for consistency
-    res.set('x-request-id', requestId);
-    
-    res.json(response);
-    
-  } catch (error) {
-    console.error('[SEED-DIRECT] ===== ERROR CAUGHT =====');
-    console.error('[SEED-DIRECT] Error name:', error.name);
-    console.error('[SEED-DIRECT] Error message:', error.message);
-    console.error('[SEED-DIRECT] Error stack:', error.stack);
-    console.error('[SEED-DIRECT] SEED_DEBUG:', process.env.SEED_DEBUG);
-    console.error('[SEED-DIRECT] isDebugEnabled():', isDebugEnabled());
-    
-    // Create context with schema probe information if available
-    const context = { 
-      where: 'seed-direct', 
-      phase: 'admin-upsert'
-    };
-    
-    // Attach schema context if available from error or result
-    if (error.schemaInfo) {
-      context.availableColumns = error.schemaInfo.availableColumns;
-      context.requiredNoDefault = error.schemaInfo.requiredNoDefault;
-      context.columnMapping = error.schemaInfo.columnMapping;
-    }
-    
-    console.error('[SEED-DIRECT] About to call respondWithError with context:', context);
-    
-    // Use centralized debug error handling
-    return respondWithError(req, res, error, context);
+  // Verify secret key
+  const providedKey = req.headers['x-seed-key'];
+  const expectedKey = process.env.SEED_WEB_KEY;
+  
+  console.log('[SEED-DIRECT] Key check - provided:', !!providedKey, 'expected:', !!expectedKey);
+  
+  if (!expectedKey) {
+    console.log('[SEED-DIRECT] No SEED_WEB_KEY configured - throwing error');
+    const error = new Error('SEED_WEB_KEY not configured');
+    error.context = { where: 'seed-direct', phase: 'config-check' };
+    throw error;
   }
-});
+  
+  if (providedKey !== expectedKey) {
+    console.log('[SEED-DIRECT] Invalid key - throwing error');
+    const error = new Error('Invalid or missing x-seed-key header');
+    error.context = { where: 'seed-direct', phase: 'auth-check' };
+    throw error;
+  }
+  
+  // Get required environment variables
+  const adminEmail = process.env.SEED_ADMIN_EMAIL;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  
+  if (!adminEmail || !adminPassword) {
+    console.log('[SEED-DIRECT] Missing env vars - throwing error');
+    const error = new Error('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be configured');
+    error.context = { where: 'seed-direct', phase: 'env-check' };
+    throw error;
+  }
+  
+  // Get sequelize instance
+  const { sequelize } = require('../models');
+  
+  if (!sequelize) {
+    console.log('[SEED-DIRECT] No database connection - throwing error');
+    const error = new Error('Database connection not available');
+    error.context = { where: 'seed-direct', phase: 'db-check' };
+    throw error;
+  }
+  
+  // Test database connection
+  await sequelize.authenticate();
+  console.log('[SEED-DIRECT] Database connection verified');
+  
+  // Use comprehensive seeding function with dynamic schema adaptation
+  const result = await sequelize.transaction(async (transaction) => {
+    const { ensureRolesAndAdmin } = require('../lib/seeding');
+    
+    console.log('[SEED-DIRECT] Using comprehensive schema adaptation...');
+    
+    return await ensureRolesAndAdmin({
+      sequelize,
+      email: adminEmail,
+      plainPassword: adminPassword,
+      roleName: 'Admin',
+      transaction
+    });
+  });
+  
+  console.log('[SEED-DIRECT] Direct seeding completed successfully');
+  console.log('[SEED-DIRECT] SECURITY: Remove this endpoint after success');
+  
+  // Generate requestId for consistency
+  const requestId = require('crypto').randomBytes(8).toString('hex');
+  
+  const response = {
+    ok: true,
+    rolesUpserted: result.rolesUpserted,
+    admin: result.admin,
+    requestId,
+    ts: new Date().toISOString(),
+    warning: 'Remove this endpoint and SEED_WEB_KEY after success'
+  };
+  
+  // Include schema info in verbose mode for debugging
+  if (isDebugEnabled()) {
+    response.schemaInfo = result.schemaInfo;
+    response.availableColumns = result.schemaInfo.availableColumns;
+    response.requiredNoDefault = result.schemaInfo.requiredNoDefault;
+    response.columnMapping = result.schemaInfo.columnMapping;
+  }
+  
+  // Set requestId header for consistency
+  res.set('x-request-id', requestId);
+  
+  res.json(response);
+}));
 
 /**
  * @route GET /admindashboard/auth/debug/throw
