@@ -13,6 +13,16 @@ const { respondWithError, isDebugEnabled, withContext, coerceBool } = require('.
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 /**
+ * @route GET /admindashboard/auth/seed-ping
+ * @desc Simple ping endpoint to test route mounting
+ * @access Public (for debugging)
+ */
+router.get('/auth/seed-ping', (req, res) => {
+  console.log('[SEED-PING] Ping endpoint hit');
+  res.json({ ok: true, at: 'seed-ping', timestamp: new Date().toISOString() });
+});
+
+/**
  * @route GET /admindashboard/auth/diag/version
  * @desc Get version information including commit SHA and branch
  * @access Public (for deployment verification)
