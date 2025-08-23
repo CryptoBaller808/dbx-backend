@@ -18,7 +18,7 @@ console.log(`🔍 [SQL Logging] DBX_LOG_SQL=${process.env.DBX_LOG_SQL}, enableSt
 let sequelize;
 
 if (process.env.DATABASE_URL) {
-  // Production: Use DATABASE_URL from environment
+  // Production: Use DATABASE_URL from environment with optimized pool settings
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
     dialectOptions: {
@@ -29,14 +29,15 @@ if (process.env.DATABASE_URL) {
     },
     logging: enableStartupSQL ? console.log : (env === 'development' ? console.log : false),
     pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
+      max: 10,        // Increased from 5 for better concurrency
+      min: 1,         // Always keep 1 connection alive
+      acquire: 20000, // 20 seconds to acquire connection
+      idle: 10000,    // 10 seconds before closing idle connections
+      evict: 10000    // 10 seconds eviction timeout
     }
   });
 } else {
-  // Development: Use individual connection parameters
+  // Development: Use individual connection parameters with optimized pool
   sequelize = new Sequelize(
     process.env.DB_NAME || 'dbx_development',
     process.env.DB_USER || 'postgres',
@@ -47,10 +48,11 @@ if (process.env.DATABASE_URL) {
       dialect: 'postgres',
       logging: enableStartupSQL ? console.log : (env === 'development' ? console.log : false),
       pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
+        max: 10,        // Increased from 5 for better concurrency
+        min: 1,         // Always keep 1 connection alive
+        acquire: 20000, // 20 seconds to acquire connection
+        idle: 10000,    // 10 seconds before closing idle connections
+        evict: 10000    // 10 seconds eviction timeout
       }
     }
   );

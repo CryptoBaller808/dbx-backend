@@ -59,8 +59,10 @@ console.log('[ENV] SEED_DEBUG raw="%s" coerced=%s SEED_ADMIN_NAME="%s" SEED_ADMI
   process.env.SEED_ADMIN_USERNAME || 'undefined'
 );
 
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { initializeBlockchainServices } = require('./services/blockchain');
-const { initializeDatabase } = require('./models');
+const { initializeDatabase, sequelize } = require('./models');
 const { 
   secureConnection, 
   validateQuery, 
@@ -71,6 +73,62 @@ const {
 
 const { createHealthCheckEndpoint } = require('./health-check');
 console.log("✅ [STARTUP] Service modules imported successfully");
+
+// ================================
+// DB READINESS & PRODUCTION HARDENING
+// ================================
+let dbReady = false;
+let bcryptWarmed = false;
+const startTime = Date.now();
+
+// Transient error classifier
+function isTransientDbError(err) {
+  if (!err) return false;
+  const transientTypes = [
+    'SequelizeConnectionError',
+    'SequelizeConnectionRefusedError', 
+    'SequelizeHostNotFoundError',
+    'SequelizeHostNotReachableError',
+    'SequelizeInvalidConnectionError',
+    'SequelizeConnectionTimedOutError'
+  ];
+  const transientCodes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND'];
+  
+  return transientTypes.includes(err.name) || 
+         transientCodes.includes(err.code) ||
+         (err.message && err.message.includes('timeout')) ||
+         (err.message && err.message.includes('connection'));
+}
+
+// Auth metrics counters
+const authMetrics = {
+  loginAttempts: 0,
+  loginSuccess: 0,
+  login503: 0,
+  loginLatencySum: 0,
+  loginLatencyCount: 0
+};
+
+// Audit log helper
+function auditLog(stage, emailHash, outcome, requestId, latencyMs = null) {
+  const logEntry = {
+    where: "auth-login",
+    stage,
+    emailHash,
+    outcome,
+    requestId,
+    timestamp: new Date().toISOString()
+  };
+  if (latencyMs !== null) logEntry.latencyMs = latencyMs;
+  console.log('[AUDIT]', JSON.stringify(logEntry));
+}
+
+// Make functions globally available for routes
+global.isTransientDbError = isTransientDbError;
+global.authMetrics = authMetrics;
+global.auditLog = auditLog;
+
+console.log("✅ [STARTUP] Production hardening modules loaded");
 
 // Import your route files
 console.log("📦 [PROBE] ========================================");
@@ -371,7 +429,20 @@ app.use((req, res, next) => {
 });
 console.log("✅ [VERSION] X-App-Commit header middleware enabled");
 
-// 2. Helmet for security headers
+// 3. DB Readiness Gate Middleware
+app.use('/admindashboard', (req, res, next) => {
+  if (!dbReady) {
+    return res.status(503).json({
+      retryable: true,
+      message: 'Database not ready',
+      requestId: req.id
+    }).header('Retry-After', '2');
+  }
+  next();
+});
+console.log("✅ [READINESS] DB readiness gate middleware enabled for /admindashboard");
+
+// 4. Helmet for security headers
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -390,7 +461,24 @@ app.use(helmet({
 }));
 console.log("✅ [SECURITY] Helmet security headers enabled");
 
-// 3. CORS allowlist from environment
+// 5. Rate limiting for login endpoint
+const loginRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 requests per minute per IP
+  message: {
+    error: 'Too many login attempts',
+    retryAfter: 60,
+    requestId: (req) => req.id
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  skip: (req) => req.path !== '/admindashboard/auth/login'
+});
+app.use('/admindashboard/auth/login', loginRateLimit);
+console.log("✅ [SECURITY] Login rate limiting enabled (5 req/min/IP)");
+
+// 6. CORS allowlist from environment
 const corsOrigins = process.env.CORS_ORIGINS 
   ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
   : [
@@ -477,7 +565,90 @@ console.log("🚀 [LIGHT START] Starting HTTP server before database initializat
 const serverInstance = server.listen(PORT, HOST, () => {
   console.log(`[BOOT] listening on ${PORT}`);
   console.log("✅ [LIGHT START] Server started successfully - /health endpoint available");
+  
+  // Initialize database readiness after server starts
+  initializeDbReadiness();
 });
+
+// ================================
+// DB READINESS INITIALIZATION
+// ================================
+async function initializeDbReadiness() {
+  console.log("🔄 [DB-READY] Starting database readiness initialization...");
+  
+  try {
+    // 1. Database authentication
+    console.log("🔄 [DB-READY] Testing database authentication...");
+    await sequelize.authenticate();
+    console.log("✅ [DB-READY] Database authentication successful");
+    
+    // 2. Basic query test
+    console.log("🔄 [DB-READY] Testing basic database query...");
+    await sequelize.query('SELECT 1 as test');
+    console.log("✅ [DB-READY] Basic database query successful");
+    
+    // 3. Sequelize pool configuration
+    console.log("🔄 [DB-READY] Configuring Sequelize connection pool...");
+    if (sequelize.options.pool) {
+      console.log("✅ [DB-READY] Pool config:", {
+        max: sequelize.options.pool.max,
+        min: sequelize.options.pool.min,
+        acquire: sequelize.options.pool.acquire,
+        idle: sequelize.options.pool.idle
+      });
+    }
+    
+    // 4. Bcrypt warmup
+    console.log("🔄 [DB-READY] Warming up bcrypt...");
+    await bcrypt.compare('warmup-test', '$2b$10$C6UzMDM.H6dfI/f/IKcEeOa8H5CwZrZ8Yk9l2eG5E6b1mV5EXy7Bi');
+    bcryptWarmed = true;
+    console.log("✅ [DB-READY] Bcrypt warmup complete");
+    
+    // 5. Mark as ready
+    dbReady = true;
+    console.log("🎉 [DB-READY] Database readiness initialization complete!");
+    
+  } catch (error) {
+    console.error("❌ [DB-READY] Database readiness initialization failed:", error.message);
+    console.error("❌ [DB-READY] Stack:", error.stack);
+    
+    // Retry after 5 seconds
+    setTimeout(() => {
+      console.log("🔄 [DB-READY] Retrying database readiness initialization...");
+      initializeDbReadiness();
+    }, 5000);
+  }
+}
+
+// ================================
+// READINESS ENDPOINT
+// ================================
+app.get('/diag/ready', (req, res) => {
+  const poolStats = sequelize.connectionManager?.pool ? {
+    max: sequelize.options.pool?.max || 'unknown',
+    min: sequelize.options.pool?.min || 'unknown',
+    used: sequelize.connectionManager.pool.used?.length || 0,
+    waiting: sequelize.connectionManager.pool.pending?.length || 0
+  } : { status: 'no-pool-info' };
+  
+  res.json({
+    ready: dbReady,
+    dbAuthenticated: dbReady,
+    bcryptWarmed,
+    pool: poolStats,
+    uptime: Math.floor(process.uptime()),
+    startTime: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+    metrics: {
+      loginAttempts: authMetrics.loginAttempts,
+      loginSuccess: authMetrics.loginSuccess,
+      login503: authMetrics.login503,
+      avgLoginLatency: authMetrics.loginLatencyCount > 0 
+        ? Math.round(authMetrics.loginLatencySum / authMetrics.loginLatencyCount) 
+        : 0
+    }
+  });
+});
+console.log("✅ [READINESS] /diag/ready endpoint configured");
 
 // Enhanced health check route for Render deployment - COMMENTED OUT FOR LIGHT START
 /*

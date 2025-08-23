@@ -56,108 +56,189 @@ async function resolvePasswordColumn(sequelize, tableName) {
 
 /**
  * @route POST /admindashboard/auth/login
- * @desc Admin login with JWT token generation
+ * @desc Admin login with JWT token generation and production hardening
  * @access Public
  */
 router.post('/auth/login', wrap(async (req, res) => {
+  const startTime = Date.now();
   const { email, username, password } = req.body || {};
   
+  // Increment login attempt counter
+  if (global.authMetrics) {
+    global.authMetrics.loginAttempts++;
+  }
+  
+  // Create email hash for audit logging (never log raw email)
+  const identifier = (email || username)?.toLowerCase().trim();
+  const emailHash = identifier ? require('crypto').createHash('sha256').update(identifier).digest('hex').substring(0, 16) : 'unknown';
+  
   console.log('🔐 [AdminAuth] Login attempt:', { 
-    email: email ? email.substring(0, 3) + '***' : undefined,
-    username: username ? username.substring(0, 3) + '***' : undefined 
+    emailHash,
+    hasPassword: !!password,
+    requestId: req.id
   });
   
-  // Validate required fields
-  if (!password || (!email && !username)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Email/username and password are required'
+  // Audit log: attempt started
+  if (global.auditLog) {
+    global.auditLog('attempt', emailHash, 'started', req.id);
+  }
+  
+  try {
+    // Validate required fields
+    if (!password || (!email && !username)) {
+      if (global.auditLog) {
+        global.auditLog('validation', emailHash, '400', req.id);
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Email/username and password are required',
+        requestId: req.id
+      });
+    }
+    
+    // Get database connection
+    const { sequelize } = require('../models');
+    
+    // Ensure database connection is available
+    if (!sequelize) {
+      throw new Error('Database connection not available');
+    }
+    
+    // Resolve password column dynamically
+    const { availableColumns, resolvedPasswordField } = await resolvePasswordColumn(sequelize, 'Admins');
+    
+    // Audit log: database stage
+    if (global.auditLog) {
+      global.auditLog('db', emailHash, 'querying', req.id);
+    }
+    
+    // Find admin user with dynamic password column
+    const rows = await sequelize.query(`
+      SELECT id, email, role_id, ${resolvedPasswordField} AS password_value
+      FROM "Admins"
+      WHERE email = :email
+      LIMIT 1
+    `, {
+      replacements: { email: identifier },
+      type: sequelize.QueryTypes.SELECT,
+      logging: false
     });
-  }
-  
-  // Normalize identifier (email takes precedence if both provided)
-  const identifier = (email || username).toLowerCase().trim();
-  
-  // Get database connection
-  const { sequelize } = require('../models');
-  
-  // Ensure database connection is available
-  if (!sequelize) {
-    throw new Error('Database connection not available');
-  }
-  
-  // Resolve password column dynamically
-  const { availableColumns, resolvedPasswordField } = await resolvePasswordColumn(sequelize, 'Admins');
-  
-  // Build context for error reporting
-  const context = {
-    where: 'auth-login',
-    availableColumns,
-    resolvedPasswordField,
-    seedDebug: isDebugEnabled()
-  };
-  
-  // Find admin user with dynamic password column
-  const rows = await sequelize.query(`
-    SELECT id, email, role_id, ${resolvedPasswordField} AS password_value
-    FROM "Admins"
-    WHERE email = :email
-    LIMIT 1
-  `, {
-    replacements: { email: identifier },
-    type: sequelize.QueryTypes.SELECT,
-    logging: false
-  });
-  
-  const admin = Array.isArray(rows) ? rows[0] : rows;
-  if (!admin || !admin.password_value) {
-    console.log('❌ [AdminAuth] Admin user not found:', identifier);
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid credentials',
-      ...(isDebugEnabled() && { requestId: req.requestId })
-    });
-  }
-  
-  // Verify password using resolved password field
-  const isValidPassword = await bcrypt.compare(password, admin.password_value);
-  
-  if (!isValidPassword) {
-    console.log('❌ [AdminAuth] Invalid password for:', identifier);
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid credentials',
-      ...(isDebugEnabled() && { requestId: req.requestId })
-    });
-  }
-  
-  // Generate JWT token with backward compatibility
-  const tokenPayload = {
-    sub: admin.id,
-    id: admin.id,  // Backward compatibility
-    email: admin.email,
-    role_id: admin.role_id,
-    typ: 'admin'
-  };
-  
-  const token = jwt.sign(tokenPayload, JWT_SECRET, { 
-    expiresIn: '12h',
-    issuer: 'dbx-backend',
-    audience: 'dbx-admin'
-  });
-  
-  console.log('✅ [AdminAuth] Login successful for:', identifier);
-  
-  res.json({
-    success: true,
-    token,
-    user: {
-      id: admin.id,
+    
+    const admin = Array.isArray(rows) ? rows[0] : rows;
+    if (!admin || !admin.password_value) {
+      console.log('❌ [AdminAuth] Admin user not found:', emailHash);
+      if (global.auditLog) {
+        global.auditLog('db', emailHash, '401-not-found', req.id, Date.now() - startTime);
+      }
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials',
+        requestId: req.id
+      });
+    }
+    
+    // Audit log: bcrypt stage
+    if (global.auditLog) {
+      global.auditLog('bcrypt', emailHash, 'comparing', req.id);
+    }
+    
+    // Verify password using resolved password field - ALWAYS await
+    const isValidPassword = await bcrypt.compare(password, admin.password_value);
+    
+    if (!isValidPassword) {
+      console.log('❌ [AdminAuth] Invalid password for:', emailHash);
+      if (global.auditLog) {
+        global.auditLog('bcrypt', emailHash, '401-invalid', req.id, Date.now() - startTime);
+      }
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials',
+        requestId: req.id
+      });
+    }
+    
+    // Generate JWT token with backward compatibility
+    const tokenPayload = {
+      sub: admin.id,
+      id: admin.id,  // Backward compatibility
       email: admin.email,
-      role_id: admin.role_id
-    },
-    ...(isDebugEnabled() && { requestId: req.requestId })
-  });
+      role_id: admin.role_id,
+      typ: 'admin'
+    };
+    
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { 
+      expiresIn: '12h',
+      issuer: 'dbx-backend',
+      audience: 'dbx-admin'
+    });
+    
+    const latencyMs = Date.now() - startTime;
+    
+    // Update metrics
+    if (global.authMetrics) {
+      global.authMetrics.loginSuccess++;
+      global.authMetrics.loginLatencySum += latencyMs;
+      global.authMetrics.loginLatencyCount++;
+    }
+    
+    // Audit log: success
+    if (global.auditLog) {
+      global.auditLog('done', emailHash, '200', req.id, latencyMs);
+    }
+    
+    console.log('✅ [AdminAuth] Login successful for:', emailHash, `(${latencyMs}ms)`);
+    
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: admin.id,
+        email: admin.email,
+        role_id: admin.role_id
+      },
+      requestId: req.id
+    });
+    
+  } catch (error) {
+    const latencyMs = Date.now() - startTime;
+    
+    // Check if this is a transient database error
+    const isTransient = global.isTransientDbError ? global.isTransientDbError(error) : false;
+    
+    if (isTransient) {
+      console.error('⚠️ [AdminAuth] Transient database error:', error.message);
+      
+      // Update 503 metrics
+      if (global.authMetrics) {
+        global.authMetrics.login503++;
+      }
+      
+      // Audit log: transient error
+      if (global.auditLog) {
+        global.auditLog('db', emailHash, '503-transient', req.id, latencyMs);
+      }
+      
+      return res.status(503).json({
+        retryable: true,
+        message: 'Database temporarily unavailable',
+        requestId: req.id
+      }).header('Retry-After', '2').header('X-Retryable', '1');
+    }
+    
+    // Non-transient error - log and return generic 401
+    console.error('❌ [AdminAuth] Login error:', error.message);
+    
+    // Audit log: error
+    if (global.auditLog) {
+      global.auditLog('error', emailHash, '401-error', req.id, latencyMs);
+    }
+    
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid credentials',
+      requestId: req.id
+    });
+  }
 }));
 
 /**
