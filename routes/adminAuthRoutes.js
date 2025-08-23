@@ -98,7 +98,7 @@ router.post('/auth/login', wrap(async (req, res) => {
   };
   
   // Find admin user with dynamic password column
-  const [admins] = await sequelize.query(`
+  const admins = await sequelize.query(`
     SELECT a.id, a.email, a.role_id,
            ${resolvedPasswordField} AS pw,
            r.name as role_name
