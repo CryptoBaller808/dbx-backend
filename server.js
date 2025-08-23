@@ -132,16 +132,18 @@ console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
 
 // ================================
+// RAILWAY HEALTH ENDPOINT - MUST BE FIRST
+// ================================
+// Simple health endpoint that bypasses all middleware, CORS, auth, etc.
+app.get('/health', (_req, res) => res.status(200).json({ ok: true, ts: new Date().toISOString() }));
+console.log("✅ [HEALTH] Railway health endpoint added (bypasses all middleware)");
+
+// ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
 // ================================
 // HEALTH & STATUS ENDPOINTS
 // ================================
 console.log("🚀 [HEALTH] Adding health and status endpoints...");
-
-// Shallow health check (existing)
-app.get('/health', (req, res) => {
-  res.status(200).json({ ok: true, service: 'dbx-backend', ts: Date.now() });
-});
 
 // Deep status check with comprehensive information
 app.get('/status', async (req, res) => {
@@ -418,11 +420,11 @@ console.log("🛡️ [SECURITY] Security hardening complete");
 // LIGHT START BYPASS - START SERVER EARLY
 // ================================
 const HOST = '0.0.0.0';
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log(`[STARTUP] API listening on ${HOST}:${PORT}`);
+  console.log(`[BOOT] listening on ${PORT}`);
   console.log("✅ [LIGHT START] Server started successfully - /health endpoint available");
 });
 
