@@ -378,6 +378,7 @@ router.get('/auth/seed-check', async (req, res) => {
       migrationStatus = { error: migrationError.message };
     }
     
+    res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
       timestamp: new Date().toISOString(),

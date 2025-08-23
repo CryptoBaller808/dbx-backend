@@ -7,6 +7,10 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { respondWithError, isDebugEnabled, withContext } = require('../lib/debug');
+
+// Async wrapper to ensure all errors hit centralized debug
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // JWT secret - REQUIRED in production
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -17,124 +21,179 @@ if (!JWT_SECRET) {
 }
 
 /**
+ * Dynamic password column resolution helper
+ * @param {Object} sequelize - Sequelize instance
+ * @param {string} tableName - Table name to check
+ * @returns {Object} { availableColumns, resolvedPasswordField }
+ */
+async function resolvePasswordColumn(sequelize, tableName) {
+  const [columns] = await sequelize.query(`
+    SELECT column_name, data_type, is_nullable, column_default
+    FROM information_schema.columns 
+    WHERE table_name = :tableName OR LOWER(table_name) = LOWER(:tableName)
+    ORDER BY ordinal_position
+  `, {
+    replacements: { tableName },
+    type: sequelize.QueryTypes.SELECT
+  });
+  
+  const availableColumns = columns.map(col => col.column_name);
+  
+  // Detect password column in order of preference
+  let resolvedPasswordField;
+  if (availableColumns.includes('passwordHash')) {
+    resolvedPasswordField = '"passwordHash"'; // Quoted camelCase
+  } else if (availableColumns.includes('password_hash')) {
+    resolvedPasswordField = 'password_hash';
+  } else if (availableColumns.includes('password')) {
+    resolvedPasswordField = 'password';
+  } else {
+    throw new Error('No password column found in Admins table');
+  }
+  
+  return { availableColumns, resolvedPasswordField };
+}
+
+/**
  * @route POST /admindashboard/auth/login
  * @desc Admin login with JWT token generation
  * @access Public
  */
-router.post('/auth/login', async (req, res) => {
-  try {
-    const { email, username, password } = req.body || {};
-    
-    console.log('🔐 [AdminAuth] Login attempt:', { 
-      email: email ? email.substring(0, 3) + '***' : undefined,
-      username: username ? username.substring(0, 3) + '***' : undefined 
-    });
-    
-    // Validate required fields
-    if (!password || (!email && !username)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email/username and password are required'
-      });
-    }
-    
-    // Normalize identifier (email takes precedence if both provided)
-    const identifier = (email || username).toLowerCase().trim();
-    
-    // Get database connection
-    const { sequelize } = require('../models');
-    
-    // Ensure database connection is available
-    if (!sequelize) {
-      console.error('❌ [AdminAuth] Database connection not available');
-      return res.status(500).json({
-        success: false,
-        message: 'Database connection error'
-      });
-    }
-    
-    // Find admin user by email or username in Admins table
-    const [admins] = await sequelize.query(`
-      SELECT a.id, a.username, a.email, a.password_hash, a.role_id,
-             r.name as role_name
-      FROM "Admins" a
-      LEFT JOIN roles r ON a.role_id = r.id
-      WHERE (a.username = :identifier OR a.email = :identifier)
-      AND r.name = 'Admin'
-    `, {
-      replacements: { identifier },
-      type: sequelize.QueryTypes.SELECT
-    });
-    
-    if (admins.length === 0) {
-      console.log('❌ [AdminAuth] Admin user not found:', identifier);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-    
-    const admin = admins[0];
-    
-    // Verify password using password_hash field
-    const isValidPassword = await bcrypt.compare(password, admin.password_hash);
-    
-    if (!isValidPassword) {
-      console.log('❌ [AdminAuth] Invalid password for user:', identifier);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-    
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        id: admin.id,
-        username: admin.username,
-        email: admin.email,
-        role: admin.role_name,
-        role_id: admin.role_id
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    
-    console.log('✅ [AdminAuth] Login successful for:', identifier);
-    
-    res.json({
-      success: true,
-      message: 'Login successful',
-      token,
-      admin: {
-        id: admin.id,
-        username: admin.username,
-        email: admin.email,
-        role: admin.role_name,
-        roleId: admin.role_id
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ [AdminAuth] Login error:', error);
-    
-    // Only return 500 for true server errors, not validation errors
-    if (error.name === 'SequelizeConnectionError' || 
-        error.name === 'SequelizeDatabaseError' ||
-        error.message.includes('JWT_SECRET')) {
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
-    }
-    
-    // For other errors, return 401 (likely authentication related)
-    res.status(401).json({
+router.post('/auth/login', wrap(async (req, res) => {
+  const { email, username, password } = req.body || {};
+  
+  console.log('🔐 [AdminAuth] Login attempt:', { 
+    email: email ? email.substring(0, 3) + '***' : undefined,
+    username: username ? username.substring(0, 3) + '***' : undefined 
+  });
+  
+  // Validate required fields
+  if (!password || (!email && !username)) {
+    return res.status(400).json({
       success: false,
-      message: 'Authentication failed'
+      message: 'Email/username and password are required'
     });
   }
-});
+  
+  // Normalize identifier (email takes precedence if both provided)
+  const identifier = (email || username).toLowerCase().trim();
+  
+  // Get database connection
+  const { sequelize } = require('../models');
+  
+  // Ensure database connection is available
+  if (!sequelize) {
+    throw new Error('Database connection not available');
+  }
+  
+  // Resolve password column dynamically
+  const { availableColumns, resolvedPasswordField } = await resolvePasswordColumn(sequelize, 'Admins');
+  
+  // Build context for error reporting
+  const context = {
+    where: 'auth-login',
+    availableColumns,
+    resolvedPasswordField,
+    seedDebug: isDebugEnabled()
+  };
+  
+  // Find admin user with dynamic password column
+  const [admins] = await sequelize.query(`
+    SELECT a.id, a.email, a.role_id,
+           ${resolvedPasswordField} AS pw,
+           r.name as role_name
+    FROM "Admins" a
+    LEFT JOIN roles r ON a.role_id = r.id
+    WHERE a.email = :identifier
+    AND r.name = 'Admin'
+    LIMIT 1
+  `, {
+    replacements: { identifier },
+    type: sequelize.QueryTypes.SELECT
+  });
+  
+  if (admins.length === 0) {
+    console.log('❌ [AdminAuth] Admin user not found:', identifier);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid credentials',
+      ...(isDebugEnabled() && { requestId: req.requestId })
+    });
+  }
+  
+  const admin = admins[0];
+  
+  // Verify password using resolved password field
+  const isValidPassword = await bcrypt.compare(password, admin.pw);
+  
+  if (!isValidPassword) {
+    console.log('❌ [AdminAuth] Invalid password for:', identifier);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid credentials',
+      ...(isDebugEnabled() && { requestId: req.requestId })
+    });
+  }
+  
+  // Generate JWT token
+  const tokenPayload = {
+    id: admin.id,
+    email: admin.email,
+    role_id: admin.role_id,
+    role_name: admin.role_name
+  };
+  
+  const token = jwt.sign(tokenPayload, JWT_SECRET, { 
+    expiresIn: '24h',
+    issuer: 'dbx-backend',
+    audience: 'dbx-admin'
+  });
+  
+  console.log('✅ [AdminAuth] Login successful for:', identifier);
+  
+  res.json({
+    success: true,
+    token,
+    user: {
+      id: admin.id,
+      email: admin.email,
+      role_id: admin.role_id,
+      role_name: admin.role_name
+    },
+    ...(isDebugEnabled() && { requestId: req.requestId })
+  });
+}));
+
+/**
+ * @route GET /admindashboard/auth/login-preflight
+ * @desc Get login schema information for debugging
+ * @access Public (only when DEBUG_ENDPOINTS=1)
+ */
+router.get('/auth/login-preflight', wrap(async (req, res) => {
+  // Only available when DEBUG_ENDPOINTS is enabled
+  if (process.env.DEBUG_ENDPOINTS !== '1') {
+    return res.status(404).json({
+      success: false,
+      message: 'Not found'
+    });
+  }
+  
+  const { sequelize } = require('../models');
+  
+  if (!sequelize) {
+    throw new Error('Database connection not available');
+  }
+  
+  const { availableColumns, resolvedPasswordField } = await resolvePasswordColumn(sequelize, 'Admins');
+  
+  res.json({
+    resolvedPasswordField,
+    availableColumns,
+    where: 'auth-login-preflight',
+    debugEnabled: isDebugEnabled(),
+    timestamp: new Date().toISOString()
+  });
+}));
 
 /**
  * @route GET /admindashboard/auth/profile
