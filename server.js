@@ -135,8 +135,11 @@ const app = express();
 // RAILWAY HEALTH ENDPOINT - MUST BE FIRST
 // ================================
 // Simple health endpoint that bypasses all middleware, CORS, auth, etc.
-app.get('/health', (_req, res) => res.status(200).json({ ok: true, ts: new Date().toISOString() }));
-console.log("✅ [HEALTH] Railway health endpoint added (bypasses all middleware)");
+// Supports both GET and HEAD methods for Railway health checks
+const healthHandler = (_req, res) => res.status(200).json({ ok: true, ts: new Date().toISOString() });
+app.get('/health', healthHandler);
+app.head('/health', healthHandler);
+console.log("✅ [HEALTH] Railway health endpoint added (GET/HEAD, bypasses all middleware)");
 
 // ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
@@ -1313,27 +1316,9 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       await db.authenticate();
       console.log('✅ DB connection established');
       
-      // BOOT MIGRATIONS (if enabled)
-      const { runOnBootIfEnv } = require('./lib/migrations');
-      const migrationResult = await runOnBootIfEnv(db);
-      
-      if (migrationResult) {
-        console.log(`[MIGRATIONS] baselined:${migrationResult.baselined} executed:${migrationResult.executed} files:[${migrationResult.files?.executed?.join(', ') || 'none'}]`);
-        if (!migrationResult.success) {
-          console.warn('[MIGRATIONS] Boot migration warning:', migrationResult.error);
-        }
-      }
-      
-      // BOOT SEEDING (if enabled)
-      if (process.env.RUN_SEEDS_ON_BOOT === 'true') {
-        console.log('[BOOT] Running seeds on boot...');
-        const { runSeed } = require('./lib/seeding');
-        const seedResult = await runSeed(db);
-        console.log(`[SEED] roles: ${seedResult.success ? 'ok' : 'failed'}, admin: ${seedResult.admin ? 'ok' : 'failed'}`);
-        if (!seedResult.success) {
-          console.warn('[SEED] Boot seeding warning:', seedResult.error);
-        }
-      }
+      // BOOT MIGRATIONS AND SEEDING DISABLED FOR RAILWAY DEPLOYMENT
+      // These operations now run only via endpoints to prevent startup blocking
+      console.log('[BOOT] Migrations and seeding disabled on boot - use endpoints for operations');
       
       // MIGRATION-FIRST APPROACH: Database schema managed by migrations only
       if (process.env.DBX_STARTUP_MODE === 'light') {
