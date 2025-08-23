@@ -98,21 +98,19 @@ router.post('/auth/login', wrap(async (req, res) => {
   };
   
   // Find admin user with dynamic password column
-  const admins = await sequelize.query(`
-    SELECT a.id, a.email, a.role_id,
-           ${resolvedPasswordField} AS pw,
-           r.name as role_name
-    FROM "Admins" a
-    LEFT JOIN roles r ON a.role_id = r.id
-    WHERE a.email = :identifier
-    AND r.name = 'Admin'
+  const rows = await sequelize.query(`
+    SELECT id, email, role_id, ${resolvedPasswordField} AS password_value
+    FROM "Admins"
+    WHERE email = :email
     LIMIT 1
   `, {
-    replacements: { identifier },
-    type: sequelize.QueryTypes.SELECT
+    replacements: { email: identifier },
+    type: sequelize.QueryTypes.SELECT,
+    logging: false
   });
   
-  if (admins.length === 0) {
+  const admin = Array.isArray(rows) ? rows[0] : rows;
+  if (!admin || !admin.password_value) {
     console.log('❌ [AdminAuth] Admin user not found:', identifier);
     return res.status(401).json({
       success: false,
@@ -121,10 +119,8 @@ router.post('/auth/login', wrap(async (req, res) => {
     });
   }
   
-  const admin = admins[0];
-  
   // Verify password using resolved password field
-  const isValidPassword = await bcrypt.compare(password, admin.pw);
+  const isValidPassword = await bcrypt.compare(password, admin.password_value);
   
   if (!isValidPassword) {
     console.log('❌ [AdminAuth] Invalid password for:', identifier);
@@ -137,14 +133,14 @@ router.post('/auth/login', wrap(async (req, res) => {
   
   // Generate JWT token
   const tokenPayload = {
-    id: admin.id,
+    sub: admin.id,
     email: admin.email,
     role_id: admin.role_id,
-    role_name: admin.role_name
+    typ: 'admin'
   };
   
   const token = jwt.sign(tokenPayload, JWT_SECRET, { 
-    expiresIn: '24h',
+    expiresIn: '12h',
     issuer: 'dbx-backend',
     audience: 'dbx-admin'
   });
@@ -157,8 +153,7 @@ router.post('/auth/login', wrap(async (req, res) => {
     user: {
       id: admin.id,
       email: admin.email,
-      role_id: admin.role_id,
-      role_name: admin.role_name
+      role_id: admin.role_id
     },
     ...(isDebugEnabled() && { requestId: req.requestId })
   });
