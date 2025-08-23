@@ -103,9 +103,19 @@ const adminCrudRoutes = require('./routes/adminCrudRoutes');
 console.log("✅ [DEBUG] adminCrudRoutes imported successfully");
 console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
 console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
-// Temporary admin setup routes removed for security
-const { router: adminAuthRoutes } = require('./routes/adminAuthRoutes');
-const seedRoutes = require('./routes/seedRoutes');
+
+// Feature flags for optional routes
+const enableDebug = on(process.env.DEBUG_ENDPOINTS);
+const enableSeedDirect = on(process.env.ALLOW_SEED_DIRECT);
+console.log(`[MOUNT-FLAGS] DEBUG_ENDPOINTS=${enableDebug}, ALLOW_SEED_DIRECT=${enableSeedDirect}`);
+
+// Always-on routes
+const adminAuthRoutes = require('./routes/adminAuthRoutes');
+console.log("🔍 [DEBUG] adminAuthRoutes type:", typeof adminAuthRoutes);
+
+// Optional routes (only import if enabled)
+const seedRoutes = enableSeedDirect ? require('./routes/seedRoutes') : undefined;
+console.log("🔍 [DEBUG] seedRoutes type:", typeof seedRoutes, "enabled:", enableSeedDirect);
 const { migrateOnBoot } = require('./lib/migrations');
 const { runSeed } = require('./lib/seeding');
 console.log("✅ [STARTUP] Route modules imported successfully");
@@ -132,6 +142,32 @@ console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
 
 // ================================
+// SAFE ROUTER MOUNTING HELPER
+// ================================
+function on(v) {
+  return ['1','true','yes','on'].includes(String(v).toLowerCase());
+}
+
+function safeUse(path, router, name = 'router') {
+  if (!router) {
+    console.warn(`[MOUNT-SKIP] ${name} is undefined; skipping ${path}`);
+    return;
+  }
+  const isMw = typeof router === 'function' || (router && (router.handle || router.stack));
+  if (!isMw) {
+    console.error(`[MOUNT-ERROR] ${name} at ${path} is not a middleware/router. typeof=`, typeof router);
+    console.error(`[MOUNT-ERROR] Value:`, router);
+    console.warn(`[MOUNT-SKIP] Skipping mount to avoid boot crash.`);
+    return;
+  }
+  console.log(`[MOUNT-OK] ${name} mounted at ${path}`);
+  app.use(path, router);
+}
+
+const maybeFactory = (mod) => (typeof mod === 'function' && !mod.handle && !mod.stack) ? mod() : mod;
+console.log("✅ [MOUNT] Safe mounting helper configured");
+
+// ================================
 // RAILWAY HEALTH ENDPOINT - MUST BE FIRST
 // ================================
 // Simple health endpoint that bypasses all middleware, CORS, auth, etc.
@@ -140,6 +176,18 @@ const healthHandler = (_req, res) => res.status(200).json({ ok: true, ts: new Da
 app.get('/health', healthHandler);
 app.head('/health', healthHandler);
 console.log("✅ [HEALTH] Railway health endpoint added (GET/HEAD, bypasses all middleware)");
+
+// Version endpoint for deployment verification (also bypasses middleware)
+app.get('/diag/version', (_req, res) => {
+  const packageJson = require('./package.json');
+  res.json({
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    branch: process.env.RAILWAY_GIT_BRANCH || 'unknown',
+    builtAt: new Date().toISOString(),
+    version: packageJson.version
+  });
+});
+console.log("✅ [HEALTH] Version endpoint added for deployment verification");
 
 // ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
@@ -978,9 +1026,8 @@ console.log("🚀 [STARTUP] MOUNTING API ADMIN ROUTES (GHOST BYPASS)");
 console.log("🚀 [STARTUP] ========================================");
 console.log("🔍 [STARTUP] apiAdminRoutes object type:", typeof apiAdminRoutes);
 console.log("🔍 [STARTUP] apiAdminRoutes is function:", typeof apiAdminRoutes === 'function');
-
 try {
-  app.use('/api/admin', apiAdminRoutes);
+  safeUse('/api/admin', maybeFactory(apiAdminRoutes), 'apiAdminRoutes');
   console.log("✅ [STARTUP] apiAdminRoutes mounted successfully at /api/admin!");
   console.log("🎯 [STARTUP] GHOST BYPASS SYSTEM ACTIVE - Clean isolated CRUD!");
   console.log("🔍 [STARTUP] Individual endpoint confirmations:");
@@ -989,7 +1036,7 @@ try {
   console.log("✅ [STARTUP] Mounted PUT    /api/admin/token/update/:id");
   console.log("✅ [STARTUP] Mounted DELETE /api/admin/token/delete/:id");
   console.log("✅ [STARTUP] Mounted GET    /api/admin/banner/list");
-  console.log("✅ [STARTUP] Mounted POST   /api/admin/banner/create");
+  console.log("✅ [STARTUP] Mounted POST   /api/admin/banner/create");;
   console.log("✅ [STARTUP] Mounted PUT    /api/admin/banner/update/:id");
   console.log("✅ [STARTUP] Mounted DELETE /api/admin/banner/delete/:id");
   console.log("✅ [STARTUP] Mounted GET    /api/admin/health");
@@ -1007,9 +1054,8 @@ console.log("🚀 [STARTUP] MOUNTING ADMIN CRUD ROUTES (BYPASS)");
 console.log("🚀 [STARTUP] ========================================");
 console.log("🔍 [STARTUP] adminCrudRoutes object type:", typeof adminCrudRoutes);
 console.log("🔍 [STARTUP] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
-
 try {
-  app.use('/admin-api', adminCrudRoutes);
+  safeUse('/admin-api', maybeFactory(adminCrudRoutes), 'adminCrudRoutes');
   console.log("✅ [STARTUP] adminCrudRoutes mounted successfully at /admin-api!");
   console.log("🎯 [STARTUP] BYPASS CRUD ROUTES ACTIVE - Ghost route bypassed!");
   console.log("🔍 [STARTUP] Available endpoints:");
@@ -1031,7 +1077,7 @@ try {
 
 console.log("🚀 [STARTUP] ========================================");
 
-app.use('/admindashboard', adminRoutes);
+safeUse('/admindashboard', maybeFactory(adminRoutes), 'adminRoutes');
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
 // ================================
@@ -1086,10 +1132,14 @@ app.post('/admindashboard/auth/seed-run', internalOpsCors, (req, res, next) => {
 
 console.log("✅ [CORS] Relaxed CORS configured for admin operations endpoints");
 
-// Mount Admin Authentication Routes
-app.use('/admindashboard', adminAuthRoutes);
-app.use('/admindashboard', seedRoutes);
-console.log("✅ [STARTUP] adminAuthRoutes and seedRoutes mounted successfully!");
+// Mount Admin Authentication Routes with safe mounting
+console.log('[MOUNT-TRY]', { path: '/admindashboard', name: 'adminAuthRoutes', enabled: true });
+safeUse('/admindashboard', maybeFactory(adminAuthRoutes), 'adminAuthRoutes');
+
+console.log('[MOUNT-TRY]', { path: '/admindashboard', name: 'seedRoutes', enabled: enableSeedDirect });
+safeUse('/admindashboard', maybeFactory(seedRoutes), 'seedRoutes');
+
+console.log("✅ [STARTUP] Router mounting completed safely!");
 
 // 🔍 VERIFY ROUTE REGISTRATION
 console.log("🔍 [DEBUG] Checking app routes after mounting...");
