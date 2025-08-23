@@ -27,7 +27,7 @@ if (!JWT_SECRET) {
  * @returns {Object} { availableColumns, resolvedPasswordField }
  */
 async function resolvePasswordColumn(sequelize, tableName) {
-  const [columns] = await sequelize.query(`
+  const columns = await sequelize.query(`
     SELECT column_name, data_type, is_nullable, column_default
     FROM information_schema.columns 
     WHERE table_name = :tableName OR LOWER(table_name) = LOWER(:tableName)
