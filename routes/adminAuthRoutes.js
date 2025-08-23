@@ -131,9 +131,10 @@ router.post('/auth/login', wrap(async (req, res) => {
     });
   }
   
-  // Generate JWT token
+  // Generate JWT token with backward compatibility
   const tokenPayload = {
     sub: admin.id,
+    id: admin.id,  // Backward compatibility
     email: admin.email,
     role_id: admin.role_id,
     typ: 'admin'
@@ -195,236 +196,70 @@ router.get('/auth/login-preflight', wrap(async (req, res) => {
  * @desc Get admin profile from JWT token
  * @access Private (requires valid JWT)
  */
-router.get('/auth/profile', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    
-    // Verify JWT token
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
-    // Get fresh admin data from database
-    const { sequelize } = require('../models');
-    
-    // Ensure database connection is available
-    if (!sequelize) {
-      console.error('❌ [AdminAuth] Database connection not available');
-      return res.status(500).json({
-        success: false,
-        message: 'Database connection error'
-      });
-    }
-    
-    const [admins] = await sequelize.query(`
-      SELECT a.id, a.username, a.email, a.role_id,
-             r.name as role_name
-      FROM "Admins" a
-      LEFT JOIN roles r ON a.role_id = r.id
-      WHERE a.id = :adminId
-      AND r.name = 'Admin'
-    `, {
-      replacements: { adminId: decoded.id },
-      type: sequelize.QueryTypes.SELECT
-    });
-    
-    if (admins.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Admin user not found or inactive'
-      });
-    }
-    
-    const admin = admins[0];
-    
-    res.json({
-      success: true,
-      admin: {
-        id: admin.id,
-        username: admin.username,
-        email: admin.email,
-        role: admin.role_name,
-        roleId: admin.role_id
-      }
-    });
-    
-  } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token'
-      });
-    }
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired'
-      });
-    }
-    
-    console.error('❌ [AdminAuth] Profile error:', error);
-    
-    // Only return 500 for true server errors
-    if (error.name === 'SequelizeConnectionError' || 
-        error.name === 'SequelizeDatabaseError') {
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
-    }
-    
-    // For other errors, return 401 (likely authentication related)
-    res.status(401).json({
-      success: false,
-      message: 'Authentication failed'
-    });
-  }
-});
-
-/**
- * @route POST /admindashboard/auth/refresh
- * @desc Refresh JWT token
- * @access Private (requires valid JWT)
- */
-router.post('/auth/refresh', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
-    
-    const token = authHeader.substring(7);
-    
-    // Verify current token (even if expired, we can still decode it)
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        // Allow refresh of expired tokens within a reasonable time window
-        decoded = jwt.decode(token);
-        const now = Math.floor(Date.now() / 1000);
-        const expiredTime = decoded.exp;
-        
-        // Allow refresh within 7 days of expiration
-        if (now - expiredTime > 7 * 24 * 60 * 60) {
-          return res.status(401).json({
-            success: false,
-            message: 'Token too old to refresh'
-          });
-        }
-      } else {
-        throw error;
-      }
-    }
-    
-    // Generate new token
-    const newToken = jwt.sign(
-      {
-        id: decoded.id,
-        username: decoded.username,
-        email: decoded.email,
-        role: decoded.role,
-        role_id: decoded.role_id
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    
-    res.json({
-      success: true,
-      message: 'Token refreshed successfully',
-      token: newToken
-    });
-    
-  } catch (error) {
-    console.error('❌ [AdminAuth] Token refresh error:', error);
-    res.status(401).json({
-      success: false,
-      message: 'Failed to refresh token',
-      error: error.message
-    });
-  }
-});
-
-/**
- * @route POST /admindashboard/auth/logout
- * @desc Admin logout (client-side token removal)
- * @access Private
- */
-router.post('/auth/logout', (req, res) => {
-  // In a stateless JWT system, logout is handled client-side by removing the token
-  // In a more sophisticated system, you might maintain a blacklist of tokens
-  
-  res.json({
-    success: true,
-    message: 'Logout successful'
-  });
-});
-
-/**
- * Middleware to authenticate JWT tokens
- */
-const authenticateToken = (req, res, next) => {
+router.get('/auth/profile', wrap(async (req, res) => {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
-      message: 'Access denied. No token provided.'
+      message: 'No token provided'
     });
   }
   
-  const token = authHeader.substring(7);
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired'
-      });
-    }
-    
+  // Verify JWT token
+  const decoded = jwt.verify(token, JWT_SECRET);
+  
+  // Resolve admin ID from token (support both sub and id)
+  const adminId = decoded?.sub ?? decoded?.id;
+  if (!adminId) {
     return res.status(401).json({
       success: false,
-      message: 'Invalid token'
+      message: 'Invalid token payload'
     });
   }
-};
-
-/**
- * Middleware to require admin role
- */
-const requireAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({
+  
+  // Get fresh admin data from database
+  const { sequelize } = require('../models');
+  
+  if (!sequelize) {
+    throw new Error('Database connection not available');
+  }
+  
+  const rows = await sequelize.query(`
+    SELECT "id", "email", "role_id", "name", "createdAt", "updatedAt"
+    FROM "Admins"
+    WHERE "id" = :adminId
+    LIMIT 1
+  `, {
+    replacements: { adminId: Number(adminId) },
+    type: sequelize.QueryTypes.SELECT,
+    logging: false
+  });
+  
+  const admin = Array.isArray(rows) ? rows[0] : rows;
+  if (!admin) {
+    return res.status(404).json({
       success: false,
-      message: 'Access denied. Admin role required.'
+      message: 'Admin user not found'
     });
   }
-  next();
-};
+  
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    admin: {
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role_id: admin.role_id,
+      createdAt: admin.createdAt,
+      updatedAt: admin.updatedAt
+    },
+    ...(isDebugEnabled() && { requestId: req.requestId })
+  });
+}));
 
-// Export router and middleware
-module.exports = {
-  router,
-  authenticateToken,
-  requireAdmin
-};
+module.exports = router;
 
