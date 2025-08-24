@@ -1252,11 +1252,11 @@ safeUse('/admindashboard', maybeFactory(adminRoutes), 'adminRoutes');
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
 // ================================
-// CORS FIX FOR ADMIN OPERATIONS
+// PRODUCTION CORS CONFIGURATION
 // ================================
-console.log("🌐 [CORS] Setting up relaxed CORS for admin operations...");
+console.log("🌐 [CORS] Setting up production CORS for admin operations...");
 
-const internalOpsCors = cors({
+const productionCors = cors({
   origin(origin, cb) {
     // Allow same-origin or missing origin (curl, server-side, service worker)
     if (!origin) {
@@ -1264,12 +1264,10 @@ const internalOpsCors = cors({
       return cb(null, true);
     }
     
+    // Production-only allowlist - no dev/local origins
     const allowlist = [
       'https://dbx-admin.onrender.com',
-      'https://dbx-frontend.onrender.com',
-      'https://dbx-backend-api-production-98f3.up.railway.app',
-      'http://localhost:3000',
-      'http://localhost:3001'
+      'https://dbx-frontend.onrender.com'
     ];
     
     if (allowlist.includes(origin)) {
@@ -1280,28 +1278,14 @@ const internalOpsCors = cors({
       cb(new Error(`Not allowed by CORS policy: ${origin}`));
     }
   },
-  methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'x-seed-key', 'authorization'],
+  methods: ['POST', 'GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: false
 });
 
-// Apply relaxed CORS to specific admin operation endpoints
-app.post('/admindashboard/auth/run-allowlist-server', internalOpsCors, (req, res, next) => {
-  console.log("🔧 [ADMIN-OPS] run-allowlist-server endpoint hit with relaxed CORS");
-  next();
-});
-
-app.post('/admindashboard/auth/run-migrations', internalOpsCors, (req, res, next) => {
-  console.log("🔧 [ADMIN-OPS] run-migrations endpoint hit with relaxed CORS");
-  next();
-});
-
-app.post('/admindashboard/auth/seed-run', internalOpsCors, (req, res, next) => {
-  console.log("🔧 [ADMIN-OPS] seed-run endpoint hit with relaxed CORS");
-  next();
-});
-
-console.log("✅ [CORS] Relaxed CORS configured for admin operations endpoints");
+// Apply production CORS to admin endpoints
+app.use('/admindashboard/auth', productionCors);
+console.log("✅ [CORS] Production CORS configured for admin operations endpoints");
 
 // Mount Admin Authentication Routes with safe mounting
 console.log('[MOUNT-TRY]', { path: '/admindashboard', name: 'adminAuthRoutes', enabled: true });

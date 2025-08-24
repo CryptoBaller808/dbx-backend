@@ -241,36 +241,7 @@ router.post('/auth/login', wrap(async (req, res) => {
   }
 }));
 
-/**
- * @route GET /admindashboard/auth/login-preflight
- * @desc Get login schema information for debugging
- * @access Public (only when DEBUG_ENDPOINTS=1)
- */
-router.get('/auth/login-preflight', wrap(async (req, res) => {
-  // Only available when DEBUG_ENDPOINTS is enabled
-  if (process.env.DEBUG_ENDPOINTS !== '1') {
-    return res.status(404).json({
-      success: false,
-      message: 'Not found'
-    });
-  }
-  
-  const { sequelize } = require('../models');
-  
-  if (!sequelize) {
-    throw new Error('Database connection not available');
-  }
-  
-  const { availableColumns, resolvedPasswordField } = await resolvePasswordColumn(sequelize, 'Admins');
-  
-  res.json({
-    resolvedPasswordField,
-    availableColumns,
-    where: 'auth-login-preflight',
-    debugEnabled: isDebugEnabled(),
-    timestamp: new Date().toISOString()
-  });
-}));
+// Debug endpoints removed for production security
 
 /**
  * @route GET /admindashboard/auth/profile
