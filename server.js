@@ -483,6 +483,7 @@ const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
   : [
       "https://dbx-frontend.onrender.com",
+      "https://dbx-frontend-staging.onrender.com", // Staging frontend
       "https://dbx-admin.onrender.com",
       "https://dbx-backend-api-production-98f3.up.railway.app", // Railway backend for testing
       "http://localhost:3000", // Development
@@ -506,8 +507,17 @@ app.use(cors({
   credentials: false, // Using Bearer tokens, not cookies
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key'],
-  exposedHeaders: ['X-Request-Id']
+  exposedHeaders: ['X-Request-Id'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
+
+// Add Vary: Origin header to all responses to avoid cache issues
+app.use((req, res, next) => {
+  res.header('Vary', 'Origin');
+  next();
+});
+
 console.log("✅ [SECURITY] CORS allowlist configured");
 
 // Handle preflight OPTIONS requests
@@ -523,7 +533,9 @@ app.options('*', cors({
   credentials: false,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  exposedHeaders: ['X-Request-Id']
+  exposedHeaders: ['X-Request-Id'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
 console.log("✅ [SECURITY] CORS preflight handler configured");
 
