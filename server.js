@@ -1364,6 +1364,11 @@ app.use('/api/creator', creatorRoutes);
 // Mount Bitcoin Routes
 app.use('/api/bitcoin', bitcoinRoutes);
 
+// Mount API Routes for frontend integration
+const apiRoutes = require('./routes/apiRoutes');
+app.use('/api', apiRoutes);
+console.log("✅ [STARTUP] API routes mounted at /api (banners, tokens, exchangeRates)");
+
 // ================================
 // ROUTE INVENTORY FOR DEBUGGING
 // ================================
