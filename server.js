@@ -43,7 +43,6 @@ const { router: realTimeAnalyticsRoutes, initializeRealTimeAnalytics } = require
 const { router: userManagementRoutes, initializeUserManagementService } = require('./routes/userManagementRoutes');
 const { router: systemHealthRoutes, initializeHealthMonitoringService } = require('./routes/systemHealthRoutes');
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
-const exchangeRoutes = require('./routes/exchangeRoutes');
 
 console.log("🏗️ [STARTUP] About to create Express app...");
 const app = express();
@@ -76,28 +75,14 @@ console.log("✅ [STARTUP] Basic health test route added");
 
 // CORS and Middleware - SECURE PRODUCTION CONFIG
 console.log("🛡️ [STARTUP] Setting up CORS and middleware...");
-
-// Allowed origins (staging/prod/admin)
-const allowed = new Set([
-  'https://dbx-frontend-staging.onrender.com',
-  'https://dbx-frontend.onrender.com',
-  'https://dbx-admin.onrender.com',
-]);
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowed.has(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin'); // caches per origin
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    // Optional: res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
-  }
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
-
+app.use(cors({
+  origin: [
+    "https://dbx-admin.onrender.com", 
+    "https://dbx-frontend.onrender.com",
+    "https://3000-ih2gkwnpbh66k77cohrr1-0e7cf462.manusvm.computer"  // Local development domain
+  ],  // SECURE: Allow both admin and frontend domains + local dev
+  credentials: true
+}));
 app.use(bodyParser.json());
 console.log("✅ [STARTUP] CORS and middleware configured successfully");
 
@@ -677,9 +662,6 @@ app.use('/temp-admin', tempAdminSetup);
 
 // Mount Bitcoin Routes
 app.use('/api/bitcoin', bitcoinRoutes);
-
-// Mount Exchange Routes (for TradingView chart data)
-app.use('/api/exchangeRates', exchangeRoutes);
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
