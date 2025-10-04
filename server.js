@@ -191,6 +191,7 @@ const { router: realTimeAnalyticsRoutes, initializeRealTimeAnalytics } = require
 const { router: userManagementRoutes, initializeUserManagementService } = require('./routes/userManagementRoutes');
 const { router: systemHealthRoutes, initializeHealthMonitoringService } = require('./routes/systemHealthRoutes');
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
+const exchangeRoutes = require('./routes/exchangeRoutes');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -398,10 +399,32 @@ app.get('/basic-health', (req, res) => {
 });
 console.log("✅ [STARTUP] Basic health test route added");
 
-// ================================
-// SECURITY HARDENING & MIDDLEWARE
-// ================================
-console.log("🛡️ [SECURITY] Setting up production security hardening...");
+// CORS and Middleware - SECURE PRODUCTION CONFIG
+console.log("🛡️ [STARTUP] Setting up CORS and middleware...");
+
+// Allowed origins (staging/prod/admin)
+const allowed = new Set([
+  'https://dbx-frontend-staging.onrender.com',
+  'https://dbx-frontend.onrender.com',
+  'https://dbx-admin.onrender.com',
+]);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowed.has(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin'); // caches per origin
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // Optional: res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+app.use(bodyParser.json());
+console.log("✅ [STARTUP] CORS and middleware configured successfully");
 
 // 1. Request logging with pino-http
 const logger = pinoHttp({
@@ -1364,33 +1387,8 @@ app.use('/api/creator', creatorRoutes);
 // Mount Bitcoin Routes
 app.use('/api/bitcoin', bitcoinRoutes);
 
-// Mount API Routes for frontend integration
-const apiRoutes = require('./routes/apiRoutes');
-app.use('/api', apiRoutes);
-console.log("✅ [STARTUP] API routes mounted at /api (banners, tokens, exchangeRates)");
-
-// ================================
-// ROUTE INVENTORY FOR DEBUGGING
-// ================================
-function listRoutes(app) {
-  const routes = [];
-  const src = r => Object.keys(r.methods).join(',').toUpperCase();
-  app._router?.stack?.forEach(layer => {
-    if (layer.route) {
-      routes.push({ path: layer.route.path, methods: src(layer.route) });
-    } else if (layer.name === 'router' && layer.handle?.stack) {
-      layer.handle.stack.forEach(r => {
-        if (r.route) routes.push({ path: r.route.path, methods: src(r.route) });
-      });
-    }
-  });
-  const filtered = routes.filter(r => r.path?.toString().toLowerCase().includes('seed-direct'));
-  console.log('[[ROUTES]] seed-direct mounts:', filtered);
-  console.log('[[ROUTES]] Total routes found:', routes.length);
-}
-listRoutes(app);
-
-console.log("✅ [STARTUP] Route inventory completed");
+// Mount Exchange Routes (for TradingView chart data)
+app.use('/api/exchangeRates', exchangeRoutes);
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
