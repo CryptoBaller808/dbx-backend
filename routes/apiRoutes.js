@@ -62,13 +62,22 @@ router.get('/tokens', (req, res) => {
   }
 });
 
-// Exchange rates endpoint
+// Exchange rates endpoint - Updated for TradingView compatibility
 router.get('/exchangeRates', (req, res) => {
-  res.json({
-    success: true,
-    data: mockExchangeRates,
-    timestamp: new Date().toISOString()
-  });
+  // Always set JSON content type
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+  try {
+    const { base='ETH', quote='USDT', resolution='60', from, to } = req.query;
+
+    // TODO: plug real provider here; for now return empty bars gracefully
+    const bars = []; // or build mock bars [{time: 1696200000000, open:..., high:..., low:..., close:..., volume:...}]
+
+    return res.status(200).json({ bars, meta: { base, quote, resolution, from, to }});
+  } catch (e) {
+    console.error('exchangeRates error', e);
+    return res.status(200).json({ bars: [], error: 'no_data' });
+  }
 });
 
 module.exports = router;
