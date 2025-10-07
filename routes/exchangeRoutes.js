@@ -1,15 +1,32 @@
 const express = require('express');
 const router = express.Router();
 
+// CORS allowlist for TradingView datafeed
+const allowedOrigins = [
+  'https://dbx-frontend-staging.onrender.com',
+  'https://dbx-frontend.onrender.com',
+  'http://localhost:3000' // for local testing
+];
+
 // CORS middleware for exchange routes
 router.use((req, res, next) => {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', 'https://dbx-frontend.onrender.com');
+  const origin = req.headers.origin;
+  
+  // Check if origin is in allowlist
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
   
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
+    console.log('📊 [ExchangeRates] OPTIONS preflight:', {
+      origin,
+      allowed: allowedOrigins.includes(origin)
+    });
     return res.status(204).end();
   }
   
@@ -24,7 +41,8 @@ router.get('/', async (req, res) => {
   try {
     console.log('📊 [ExchangeRates] Request received:', {
       query: req.query,
-      origin: req.headers.origin
+      origin: req.headers.origin,
+      allowed: allowedOrigins.includes(req.headers.origin)
     });
 
     const { base='ETH', quote='USDT', resolution='60', from, to } = req.query;
@@ -40,6 +58,7 @@ router.get('/', async (req, res) => {
     return res.status(200).json({ bars, meta: { base, quote, resolution, from, to }});
   } catch (e) {
     console.error('❌ [ExchangeRates] Error:', e);
+    // Always return JSON, never HTML
     return res.status(200).json({ bars: [], error: 'no_data' });
   }
 });

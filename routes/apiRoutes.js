@@ -31,14 +31,44 @@ const mockExchangeRates = [
   { pair: 'BTC/USD', rate: 43500.00, change24h: 0.8, volume24h: 15000000 }
 ];
 
+// CORS allowlist for TradingView datafeed
+const allowedOrigins = [
+  'https://dbx-frontend-staging.onrender.com',
+  'https://dbx-frontend.onrender.com',
+  'http://localhost:3000' // for local testing
+];
+
 // CORS middleware for API routes
 router.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+  const origin = req.headers.origin;
+  
+  // For exchangeRates endpoint, use specific allowlist
+  if (req.path === '/exchangeRates') {
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Vary', 'Origin');
+    
+    if (req.method === 'OPTIONS') {
+      console.log('📊 [API ExchangeRates] OPTIONS preflight:', {
+        origin,
+        allowed: allowedOrigins.includes(origin)
+      });
+      return res.status(204).end();
+    }
   } else {
+    // For other endpoints, keep existing CORS policy
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(200);
+    }
+  }
+  
+  if (req.method !== 'OPTIONS') {
     next();
   }
 });
@@ -68,14 +98,26 @@ router.get('/exchangeRates', (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
   try {
+    console.log('📊 [API ExchangeRates] Request received:', {
+      query: req.query,
+      origin: req.headers.origin,
+      allowed: allowedOrigins.includes(req.headers.origin)
+    });
+
     const { base='ETH', quote='USDT', resolution='60', from, to } = req.query;
 
     // TODO: plug real provider here; for now return empty bars gracefully
     const bars = []; // or build mock bars [{time: 1696200000000, open:..., high:..., low:..., close:..., volume:...}]
 
+    console.log('📊 [API ExchangeRates] Returning data:', { 
+      base, quote, resolution, 
+      dataPoints: bars.length 
+    });
+
     return res.status(200).json({ bars, meta: { base, quote, resolution, from, to }});
   } catch (e) {
-    console.error('exchangeRates error', e);
+    console.error('❌ [API ExchangeRates] Error:', e);
+    // Always return JSON, never HTML
     return res.status(200).json({ bars: [], error: 'no_data' });
   }
 });
