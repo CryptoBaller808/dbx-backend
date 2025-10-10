@@ -23,6 +23,23 @@ const QUOTE_ALIAS = {
 const priceCache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
+// Binance configuration
+const BINANCE_BASE_URL = 'https://api.binance.com';
+const BINANCE_CACHE_TTL = 60 * 1000; // 60 seconds for rate limit compliance
+const binanceCache = new Map();
+
+// Binance symbol mapping - supported pairs
+const BINANCE_SYMBOLS = {
+  'BTC': ['BTCUSDT', 'BTCUSDC'],
+  'ETH': ['ETHUSDT', 'ETHUSDC'], 
+  'XRP': ['XRPUSDT', 'XRPUSDC'],
+  'XLM': ['XLMUSDT'],
+  'MATIC': ['MATICUSDT'],
+  'BNB': ['BNBUSDT', 'BNBUSDC'],
+  'SOL': ['SOLUSDT', 'SOLUSDC']
+  // XDC not on Binance - will skip to CoinGecko path
+};
+
 /**
  * Get spot price for a trading pair with expanded fallback chain
  * Route: GET /api/price?base=ETH&quote=USDT
@@ -87,33 +104,40 @@ exports.getSpotPrice = async (req, res) => {
       const baseCoinId = ID[baseUpper];
       ids = [baseCoinId];
       
-      // 1. Try simple/price first
+      // 1. Try CoinGecko simple/price first
       finalPrice = await fetchSimplePrice([baseCoinId]);
       if (Number.isFinite(finalPrice)) {
         source = 'coingecko';
       } else {
-        // 2. Try coins/markets endpoint
-        finalPrice = await fetchCoinsMarkets(baseCoinId);
-        if (Number.isFinite(finalPrice)) {
-          source = 'markets';
+        // 2. Try Binance as secondary provider
+        const binanceResult = await fetchBinancePrice(baseUpper, quoteUpper);
+        if (Number.isFinite(binanceResult.price)) {
+          finalPrice = binanceResult.price;
+          source = binanceResult.source; // 'binance' or 'binance_cross'
         } else {
-          // 3. Try market_chart fallback
+          // 3. Try coins/markets endpoint
+          finalPrice = await fetchCoinsMarkets(baseCoinId);
+          if (Number.isFinite(finalPrice)) {
+            source = 'markets';
+          } else {
+            // 4. Try market_chart fallback
           finalPrice = await fetchMarketChartFallback(baseCoinId);
           if (Number.isFinite(finalPrice)) {
             source = 'market_chart';
           } else {
-            // 4. Try legacy ID fallback (no cache)
+            // 5. Try legacy ID fallback (no cache)
             finalPrice = await fetchLegacyIdFallback(baseUpper);
             if (Number.isFinite(finalPrice)) {
               source = 'legacy';
             } else {
-              // 5. Try tickers fallback (highest-volume ticker)
+              // 6. Try tickers fallback (highest-volume ticker)
               finalPrice = await fetchTickersFallback(baseUpper);
               if (Number.isFinite(finalPrice)) {
                 source = 'tickers';
               }
             }
           }
+        }
         }
       }
       
@@ -143,27 +167,38 @@ exports.getSpotPrice = async (req, res) => {
       
       // Apply fallback chain for missing prices
       if (!Number.isFinite(basePrice)) {
-        basePrice = await fetchCoinsMarkets(baseCoinId);
-        if (!Number.isFinite(basePrice)) {
-          basePrice = await fetchMarketChartFallback(baseCoinId);
+        // Try Binance for base currency
+        const baseBinanceResult = await fetchBinancePrice(baseUpper, 'USDT');
+        if (Number.isFinite(baseBinanceResult.price)) {
+          basePrice = baseBinanceResult.price;
+        } else {
+          basePrice = await fetchCoinsMarkets(baseCoinId);
           if (!Number.isFinite(basePrice)) {
-            basePrice = await fetchLegacyIdFallback(baseUpper);
+            basePrice = await fetchMarketChartFallback(baseCoinId);
             if (!Number.isFinite(basePrice)) {
-              basePrice = await fetchTickersFallback(baseUpper);
+              basePrice = await fetchLegacyIdFallback(baseUpper);
+              if (!Number.isFinite(basePrice)) {
+                basePrice = await fetchTickersFallback(baseUpper);
+              }
             }
           }
         }
       }
       
       if (!Number.isFinite(quotePrice)) {
-        quotePrice = await fetchCoinsMarkets(quoteCoinId);
-        if (!Number.isFinite(quotePrice)) {
-          quotePrice = await fetchMarketChartFallback(quoteCoinId);
+        // Try Binance for quote currency
+        const quoteBinanceResult = await fetchBinancePrice(quoteUpper, 'USDT');
+        if (Number.isFinite(quoteBinanceResult.price)) {
+          quotePrice = quoteBinanceResult.price;
+        } else {
+          quotePrice = await fetchCoinsMarkets(quoteCoinId);
           if (!Number.isFinite(quotePrice)) {
-            quotePrice = await fetchLegacyIdFallback(quoteUpper);
+            quotePrice = await fetchMarketChartFallback(quoteCoinId);
             if (!Number.isFinite(quotePrice)) {
-              quotePrice = await fetchTickersFallback(quoteUpper);
-            }
+              quotePrice = await fetchLegacyIdFallback(quoteUpper);
+              if (!Number.isFinite(quotePrice)) {
+                quotePrice = await fetchTickersFallback(quoteUpper);
+              }
           }
         }
       }
@@ -530,6 +565,133 @@ async function fetchTickersFallback(baseSymbol) {
 }
 
 /**
+ * Fetch price from Binance API
+ * @param {string} baseSymbol - Base currency symbol (e.g., 'ETH', 'BTC')
+ * @param {string} quoteSymbol - Quote currency symbol (e.g., 'USDT', 'USDC')
+ * @returns {Promise<{price: number|null, source: string, symbol?: string, note?: string}>}
+ */
+async function fetchBinancePrice(baseSymbol, quoteSymbol) {
+  const startTime = Date.now();
+  
+  // Check if base is supported on Binance
+  if (!BINANCE_SYMBOLS[baseSymbol]) {
+    return { price: null, source: 'none' };
+  }
+  
+  // Normalize quote to USDT/USDC for Binance
+  let targetQuote = quoteSymbol;
+  if (quoteSymbol === 'USD') {
+    targetQuote = 'USDT'; // Default USD to USDT on Binance
+  }
+  
+  const supportedSymbols = BINANCE_SYMBOLS[baseSymbol];
+  let binanceSymbol = null;
+  let usesCross = false;
+  
+  // Find exact match first
+  for (const symbol of supportedSymbols) {
+    if (symbol.endsWith(targetQuote)) {
+      binanceSymbol = symbol;
+      break;
+    }
+  }
+  
+  // If no exact match and looking for USDC, try USDT with cross-rate note
+  if (!binanceSymbol && targetQuote === 'USDC') {
+    for (const symbol of supportedSymbols) {
+      if (symbol.endsWith('USDT')) {
+        binanceSymbol = symbol;
+        usesCross = true;
+        break;
+      }
+    }
+  }
+  
+  if (!binanceSymbol) {
+    return { price: null, source: 'none' };
+  }
+  
+  // Check cache first
+  const cacheKey = `binance:${binanceSymbol}`;
+  const cached = binanceCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < BINANCE_CACHE_TTL) {
+    const duration = Date.now() - startTime;
+    const result = {
+      price: cached.price,
+      source: usesCross ? 'binance_cross' : 'binance',
+      symbol: binanceSymbol
+    };
+    if (usesCross) {
+      result.note = 'usdt≈usdc';
+    }
+    console.log(`[PRICE] pair=${baseSymbol}/${quoteSymbol} source=${result.source} symbol=${binanceSymbol} price=${cached.price} cache=hit dur=${duration}ms${result.note ? ` note=${result.note}` : ''}`);
+    return result;
+  }
+  
+  try {
+    const url = `${BINANCE_BASE_URL}/api/v3/ticker/price`;
+    const params = { symbol: binanceSymbol };
+    
+    const response = await axios.get(url, { 
+      params,
+      timeout: 2500 // 2.5s timeout per requirement
+    });
+    
+    if (response.data && response.data.price) {
+      const price = parseFloat(response.data.price);
+      
+      if (Number.isFinite(price) && price > 0) {
+        // Cache the result
+        binanceCache.set(cacheKey, {
+          price: price,
+          timestamp: Date.now()
+        });
+        
+        const duration = Date.now() - startTime;
+        const result = {
+          price: price,
+          source: usesCross ? 'binance_cross' : 'binance',
+          symbol: binanceSymbol
+        };
+        if (usesCross) {
+          result.note = 'usdt≈usdc';
+        }
+        
+        console.log(`[PRICE] pair=${baseSymbol}/${quoteSymbol} source=${result.source} symbol=${binanceSymbol} price=${price} cache=miss dur=${duration}ms${result.note ? ` note=${result.note}` : ''}`);
+        return result;
+      }
+    }
+    
+    return { price: null, source: 'none' };
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[PRICE] binance error for ${baseSymbol}/${quoteSymbol} (${binanceSymbol}): ${error.message} dur=${duration}ms`);
+    return { price: null, source: 'none' };
+  }
+}
+
+/**
+ * Check Binance service health
+ * @returns {Promise<string>} Status: 'ok', 'degraded', or 'down'
+ */
+async function checkBinanceHealth() {
+  try {
+    const response = await axios.get(`${BINANCE_BASE_URL}/api/v3/ticker/price`, {
+      params: { symbol: 'BTCUSDT' },
+      timeout: 3000
+    });
+    
+    if (response.data && response.data.price) {
+      return 'ok';
+    }
+    return 'degraded';
+  } catch (error) {
+    return 'down';
+  }
+}
+
+/**
  * Health check endpoint for price service
  */
 exports.healthCheck = async (req, res) => {
@@ -537,14 +699,25 @@ exports.healthCheck = async (req, res) => {
     const apiKey = process.env.COINGECKO_API_KEY;
     const hasApiKey = !!apiKey;
     
-    // Test a simple price fetch
-    let testResult = null;
+    // Test provider health
+    let coinGeckoStatus = 'unknown';
+    let binanceStatus = 'unknown';
+    
     if (hasApiKey) {
       try {
-        testResult = await fetchSimplePrice(['bitcoin']);
+        const testResult = await fetchSimplePrice(['bitcoin']);
+        coinGeckoStatus = testResult ? 'ok' : 'degraded';
       } catch (error) {
-        testResult = `Error: ${error.message}`;
+        coinGeckoStatus = 'down';
       }
+    } else {
+      coinGeckoStatus = 'missing_api_key';
+    }
+    
+    try {
+      binanceStatus = await checkBinanceHealth();
+    } catch (error) {
+      binanceStatus = 'down';
     }
     
     // Get last source per pair from cache
@@ -555,16 +728,32 @@ exports.healthCheck = async (req, res) => {
       }
     }
     
+    // Calculate cache stats
+    const cacheStats = {
+      coingecko: { hit: 0, miss: 0 },
+      binance: { hit: 0, miss: 0 }
+    };
+    
+    // Note: In a production system, you'd track hit/miss stats during operations
+    // For now, we'll show cache sizes
+    cacheStats.coingecko.size = priceCache.size;
+    cacheStats.binance.size = binanceCache.size;
+    
     const result = {
       service: 'price',
       status: hasApiKey ? 'configured' : 'missing_api_key',
       timestamp: Date.now(),
+      providers: {
+        coingecko: coinGeckoStatus,
+        binance: binanceStatus
+      },
       supportedBases: Object.keys(ID),
       supportedQuotes: Object.keys(QUOTE_ALIAS),
-      fallbackTiers: ['coingecko', 'markets', 'market_chart', 'legacy', 'tickers', 'cross'],
+      binanceSymbols: BINANCE_SYMBOLS,
+      fallbackTiers: ['coingecko', 'binance', 'markets', 'market_chart', 'legacy', 'tickers', 'cross'],
       cacheSize: priceCache.size,
-      lastSources: lastSources,
-      testPrice: testResult
+      cacheStats: cacheStats,
+      lastSources: lastSources
     };
     
     console.log(`[PRICE] /api/price/health result=${result.status}`);
