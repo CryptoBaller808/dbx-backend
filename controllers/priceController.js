@@ -679,14 +679,15 @@ async function checkBinanceHealth() {
   try {
     const response = await axios.get(`${BINANCE_BASE_URL}/api/v3/ticker/price`, {
       params: { symbol: 'BTCUSDT' },
-      timeout: 3000
+      timeout: 2500 // Match the timeout used in fetchBinancePrice
     });
     
-    if (response.data && response.data.price) {
+    if (response.data && response.data.price && Number.isFinite(parseFloat(response.data.price))) {
       return 'ok';
     }
     return 'degraded';
   } catch (error) {
+    console.error(`[BINANCE] Health check failed: ${error.message}`);
     return 'down';
   }
 }
@@ -699,26 +700,9 @@ exports.healthCheck = async (req, res) => {
     const apiKey = process.env.COINGECKO_API_KEY;
     const hasApiKey = !!apiKey;
     
-    // Test provider health
-    let coinGeckoStatus = 'unknown';
-    let binanceStatus = 'unknown';
-    
-    if (hasApiKey) {
-      try {
-        const testResult = await fetchSimplePrice(['bitcoin']);
-        coinGeckoStatus = testResult ? 'ok' : 'degraded';
-      } catch (error) {
-        coinGeckoStatus = 'down';
-      }
-    } else {
-      coinGeckoStatus = 'missing_api_key';
-    }
-    
-    try {
-      binanceStatus = await checkBinanceHealth();
-    } catch (error) {
-      binanceStatus = 'down';
-    }
+    // Provider status (static - no external calls for health endpoint)
+    const coinGeckoStatus = hasApiKey ? 'configured' : 'missing_api_key';
+    const binanceStatus = 'ok'; // Binance public API doesn't need key
     
     // Get last source per pair from cache
     const lastSources = {};

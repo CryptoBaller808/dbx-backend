@@ -599,10 +599,16 @@ const PORT = process.env.PORT || 3000;
 
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log(`[BOOT] listening on ${PORT}`);
+  const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "unknown";
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  
+  console.log(`API listening on :${PORT} (env PORT=${process.env.PORT || 'default'})`);
+  console.log(`[BOOT] commit=${commitSha} NODE_ENV=${nodeEnv} PORT=${PORT}`);
+  console.log(`[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tickers,cross`);
+  console.log(`[BOOT] CORS allowlist: ${Array.from(allowed).join(',')}`);
   console.log("✅ [LIGHT START] Server started successfully - /health endpoint available");
   
-  // Initialize database readiness after server starts
+  // Initialize database readiness after server starts (non-blocking)
   initializeDbReadiness();
 });
 
@@ -686,386 +692,59 @@ app.get('/diag/ready', (req, res) => {
 });
 console.log("✅ [READINESS] /diag/ready endpoint configured");
 
-// Enhanced health check route for Render deployment - COMMENTED OUT FOR LIGHT START
-/*
-app.get('/health', async (req, res) => {
+// Instant health check endpoint for Railway deployment - NO EXTERNAL CALLS
+app.get('/health', (req, res) => {
   try {
-    console.log('🏥 [Health] Health endpoint called!');
-    console.log('🌐 [Health] Request origin:', req.headers.origin);
-    console.log('🔍 [Health] Request query:', req.query);
-    console.log('📡 [Health] Request method:', req.method);
+    // Get commit SHA and environment info
+    const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "unknown";
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const port = process.env.PORT || 3000;
     
-    const startTime = Date.now();
-    const healthStatus = {
-      success: true,
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-      db: 'unknown',
-      adapters: {},
-      services: 'running'
+    // Provider status (static - no external calls)
+    const providers = {
+      coingecko: process.env.COINGECKO_API_KEY ? 'configured' : 'missing_key',
+      binance: 'ok' // Binance public API doesn't need key
     };
     
-    console.log('📋 [Health] Initial healthStatus.adapters:', JSON.stringify(healthStatus.adapters, null, 2));
-
-    // EMERGENCY: Admin creation via health route
-    if (req.query.createAdmin === 'emergency') {
-      try {
-        console.log('🚨 [Emergency] Creating admin via health route...');
-        const { Sequelize, DataTypes } = require('sequelize');
-        
-        // Create direct Sequelize connection
-        const sequelize = new Sequelize(process.env.DATABASE_URL, {
-          dialect: 'postgres',
-          dialectOptions: {
-            ssl: {
-              require: true,
-              rejectUnauthorized: false
-            }
-          },
-          logging: false
-        });
-        
-        await sequelize.authenticate();
-        console.log('✅ [Emergency] Database connected');
-        
-        // Define models
-        const Role = sequelize.define('Role', {
-          id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-          name: { type: DataTypes.STRING(255), unique: true, allowNull: false },
-          description: { type: DataTypes.TEXT },
-          permissions: { type: DataTypes.JSONB, defaultValue: {} }
-        }, { tableName: 'roles', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
-        
-        const User = sequelize.define('User', {
-          id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-          username: { type: DataTypes.STRING(255), unique: true },
-          email: { type: DataTypes.STRING(255), unique: true, allowNull: false },
-          password: { type: DataTypes.STRING(255), allowNull: false },
-          first_name: { type: DataTypes.STRING(255) },
-          last_name: { type: DataTypes.STRING(255) },
-          role_id: { type: DataTypes.INTEGER },
-          status: { type: DataTypes.STRING(50), defaultValue: 'active' },
-          email_verified: { type: DataTypes.BOOLEAN, defaultValue: false }
-        }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
-        
-        User.belongsTo(Role, { foreignKey: 'role_id' });
-        Role.hasMany(User, { foreignKey: 'role_id' });
-        
-        // await sequelize.sync({ alter: false });
-        console.log('✅ [Emergency] Tables synced');
-        
-        const [adminRole] = await Role.findOrCreate({
-          where: { name: 'admin' },
-          defaults: { name: 'admin', description: 'Administrator role with full access', permissions: { all: true } }
-        });
-        
-        const [adminUser, userCreated] = await User.findOrCreate({
-          where: { email: 'admin@dbx.com' },
-          defaults: {
-            username: 'admin',
-            email: 'admin@dbx.com',
-            password: '$2a$10$rOvHjHcw/c1q.Aq8Q2FdUeJ8H7ScqXxqWxG7tJ9kGqE8mNvZxQK4G',
-            first_name: 'Admin',
-            last_name: 'User',
-            role_id: adminRole.id,
-            status: 'active',
-            email_verified: true
-          }
-        });
-        
-        await sequelize.close();
-        
-        healthStatus.admin_creation = {
-          success: true,
-          user_created: userCreated,
-          admin_id: adminUser.id,
-          message: userCreated ? 'Admin user created successfully' : 'Admin user already exists'
-        };
-        
-        console.log('✅ [Emergency] Admin creation completed:', healthStatus.admin_creation);
-      } catch (adminError) {
-        console.error('❌ [Emergency] Admin creation failed:', adminError);
-        healthStatus.admin_creation = {
-          success: false,
-          error: adminError.message
-        };
-      }
-    }
-
-    // Check database connection
-    try {
-      const db = require('./models');
-      if (db && db.sequelize) {
-        await db.sequelize.authenticate();
-        // Test a simple query
-        await db.sequelize.query('SELECT 1+1 as result');
-        healthStatus.db = 'connected';
-      } else {
-        healthStatus.db = 'unavailable';
-      }
-    } catch (dbError) {
-      console.error('[Health] Database check failed:', dbError.message);
-      healthStatus.db = 'error';
-      healthStatus.dbError = dbError.message;
-    }
-
-
-    // Check blockchain adapters - Enhanced with debug logging
-    console.log('🔍 [Health] Starting adapter status check...');
-    const adapters = ['ETH', 'BNB', 'AVAX', 'MATIC', 'SOL', 'BTC', 'XDC', 'XRP', 'XLM'];
-    console.log('📋 [Health] Checking adapters:', adapters);
+    // Fallback tiers including Binance as 2nd tier
+    const fallbackTiers = [
+      'coingecko', 
+      'binance', 
+      'markets', 
+      'market_chart', 
+      'legacy', 
+      'tickers', 
+      'cross'
+    ];
     
-    for (const adapter of adapters) {
-      try {
-        console.log(`🔧 [Health] Checking adapter: ${adapter}`);
-        // Check if adapter file exists
-        const adapterPath = `./services/blockchain/adapters/${adapter}Adapter.js`;
-        console.log(`📁 [Health] Looking for: ${adapterPath}`);
-        require.resolve(adapterPath);
-        // All adapters are now available for wallet connections
-        healthStatus.adapters[adapter] = 'available';
-        console.log(`✅ [Health] ${adapter} adapter: AVAILABLE`);
-      } catch (error) {
-        console.warn(`❌ [Health] Adapter ${adapter} not found:`, error.message);
-        healthStatus.adapters[adapter] = 'unavailable';
-        console.log(`❌ [Health] ${adapter} adapter: UNAVAILABLE`);
-      }
-    }
-    
-    console.log('📊 [Health] Final adapter status:', JSON.stringify(healthStatus.adapters, null, 2));
-
-    const responseTime = Date.now() - startTime;
-    healthStatus.responseTime = `${responseTime}ms`;
-
-    // Format uptime
-    const uptimeSeconds = Math.floor(healthStatus.uptime);
-    const uptimeMinutes = Math.floor(uptimeSeconds / 60);
-    const uptimeHours = Math.floor(uptimeMinutes / 60);
-    
-    if (uptimeHours > 0) {
-      healthStatus.uptime = `${uptimeHours}h ${uptimeMinutes % 60}m`;
-    } else if (uptimeMinutes > 0) {
-      healthStatus.uptime = `${uptimeMinutes}m`;
-    } else {
-      healthStatus.uptime = `${uptimeSeconds}s`;
-    }
-
-    // SECURE TEMPORARY LOGIN: Admin authentication via health endpoint - v3.0
-    // Usage: /health?login=true&email=admin@dbx.com&password=Admin@2025
-    // Security: Rate limiting, IP restrictions, secure flag requirement
-    if (req.query.login === 'true') {
-      try {
-        console.log('🔐 [SECURE LOGIN] Login attempt detected');
-        console.log('🔍 [SECURE LOGIN] Request details:', {
-          ip: req.ip || req.connection.remoteAddress,
-          userAgent: req.headers['user-agent'],
-          origin: req.headers.origin,
-          timestamp: new Date().toISOString()
-        });
-
-        // Basic brute force protection - simple in-memory rate limiting
-        const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-        const now = Date.now();
-        const windowMs = 60 * 1000; // 1 minute window
-        const maxAttempts = 5;
-
-        // Initialize rate limiting storage if not exists
-        if (!global.loginAttempts) {
-          global.loginAttempts = new Map();
-        }
-
-        // Clean old attempts
-        for (const [ip, attempts] of global.loginAttempts.entries()) {
-          global.loginAttempts.set(ip, attempts.filter(time => now - time < windowMs));
-          if (global.loginAttempts.get(ip).length === 0) {
-            global.loginAttempts.delete(ip);
-          }
-        }
-
-        // Check rate limit
-        const attempts = global.loginAttempts.get(clientIP) || [];
-        if (attempts.length >= maxAttempts) {
-          console.log('🚨 [SECURE LOGIN] Rate limit exceeded for IP:', clientIP);
-          return res.status(429).json({
-            ...healthStatus,
-            loginResult: false,
-            message: 'Too many login attempts. Please try again later.',
-            rateLimited: true
-          });
-        }
-
-        // Record this attempt
-        attempts.push(now);
-        global.loginAttempts.set(clientIP, attempts);
-
-        const { email, password } = req.query;
-
-        // Validate input
-        if (!email || !password) {
-          console.log('❌ [SECURE LOGIN] Missing credentials');
-          return res.status(200).json({
-            ...healthStatus,
-            loginResult: false,
-            message: 'Email and password are required'
-          });
-        }
-
-        // Validate admin email
-        if (email !== 'admin@dbx.com') {
-          console.log('❌ [SECURE LOGIN] Invalid email:', email);
-          return res.status(200).json({
-            ...healthStatus,
-            loginResult: false,
-            message: 'Invalid credentials'
-          });
-        }
-
-        console.log('🔍 [SECURE LOGIN] Attempting authentication for:', email);
-
-        // Use direct SQL approach (proven working)
-        const bcrypt = require('bcrypt');
-        const jwt = require('jsonwebtoken');
-        const { Sequelize } = require('sequelize');
-        
-        // Create direct database connection
-        const sequelize = new Sequelize(process.env.DATABASE_URL, {
-          dialect: 'postgres',
-          dialectOptions: {
-            ssl: {
-              require: true,
-              rejectUnauthorized: false
-            }
-          },
-          logging: false
-        });
-        
-        await sequelize.authenticate();
-        console.log('✅ [SECURE LOGIN] Database connected');
-        
-        // Find admin user using direct SQL
-        const [adminUsers] = await sequelize.query(`
-          SELECT id, email, password, role_id
-          FROM users 
-          WHERE email = $1
-        `, {
-          bind: [email]
-        });
-        
-        if (adminUsers.length === 0) {
-          console.log('❌ [SECURE LOGIN] User not found');
-          await sequelize.close();
-          return res.status(200).json({
-            ...healthStatus,
-            loginResult: false,
-            message: 'Invalid credentials'
-          });
-        }
-        
-        const admin = adminUsers[0];
-        console.log('✅ [SECURE LOGIN] User found:', {
-          id: admin.id,
-          email: admin.email,
-          role_id: admin.role_id
-        });
-        
-        // Verify password using bcrypt
-        const isValidPassword = await bcrypt.compare(password, admin.password);
-        console.log('🔍 [SECURE LOGIN] Password verification:', isValidPassword ? 'VALID' : 'INVALID');
-        
-        if (!isValidPassword) {
-          console.log('❌ [SECURE LOGIN] Invalid password');
-          await sequelize.close();
-          return res.status(200).json({
-            ...healthStatus,
-            loginResult: false,
-            message: 'Invalid credentials'
-          });
-        }
-        
-        // Generate JWT token
-        const jwtSecret = process.env.JWT_SECRET || 'dbx-temp-secret-2025';
-        const token = jwt.sign(
-          {
-            id: admin.id,
-            email: admin.email,
-            role_id: admin.role_id,
-            type: 'admin',
-            loginMethod: 'health_secure'
-          },
-          jwtSecret,
-          { expiresIn: '24h' }
-        );
-        
-        console.log('✅ [SECURE LOGIN] Login successful - JWT token generated');
-        await sequelize.close();
-        
-        // Clear rate limiting for successful login
-        global.loginAttempts.delete(clientIP);
-        
-        // Return successful login response
-        return res.status(200).json({
-          ...healthStatus,
-          loginResult: true,
-          message: 'Admin login successful',
-          token: token,
-          user: {
-            id: admin.id,
-            email: admin.email,
-            role_id: admin.role_id,
-            type: 'admin'
-          },
-          security: {
-            method: 'secure_health_login',
-            tokenExpiry: '24h',
-            rateLimitRemaining: maxAttempts - attempts.length
-          }
-        });
-        
-      } catch (loginError) {
-        console.error('❌ [SECURE LOGIN] Login error:', loginError.message);
-        return res.status(200).json({
-          ...healthStatus,
-          loginResult: false,
-          message: 'Authentication failed',
-          error: 'Internal authentication error'
-        });
-      }
-    }
-
-    // Add CORS headers for admin frontend
-    healthStatus.cors = {
-      enabled: true,
-      allowedOrigins: [
-        'https://dbx-frontend.onrender.com',
-        'https://dbx-admin.onrender.com'
-      ]
+    const healthResponse = {
+      service: 'price',
+      status: 'ok',
+      timestamp: Date.now(),
+      uptime: Math.floor(process.uptime()),
+      commit: commitSha,
+      env: nodeEnv,
+      port: port,
+      providers: providers,
+      fallbackTiers: fallbackTiers
     };
-
-    // Debug: Log final response before sending
-    console.log('🚀 [Health] Sending response to frontend...');
-    console.log('📊 [Health] Response status code:', healthStatus.db === 'connected' ? 200 : 503);
-    console.log('📋 [Health] Response adapters:', JSON.stringify(healthStatus.adapters, null, 2));
-    console.log('🌐 [Health] Response CORS:', JSON.stringify(healthStatus.cors, null, 2));
-    console.log('⏱️ [Health] Response time:', healthStatus.responseTime);
-
-    // Return appropriate status code
-    const statusCode = healthStatus.db === 'connected' ? 200 : 503;
-    res.status(statusCode).json(healthStatus);
+    
+    // Log health check (but don't block)
+    console.log(`[HEALTH] status=ok providers=${JSON.stringify(providers)} tiers=${fallbackTiers.length}`);
+    
+    return res.status(200).json(healthResponse);
   } catch (error) {
-    console.error('[Health] Health check failed:', error);
-    res.status(500).json({
-      success: false,
+    console.error('[HEALTH] Error:', error.message);
+    return res.status(500).json({
+      service: 'price',
+      status: 'error',
       error: error.message,
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime()
+      timestamp: Date.now()
     });
   }
 });
-*/
-// END OF COMMENTED OUT COMPLEX HEALTH ROUTE
 
 // Enhanced Database Security Middleware - TEMPORARILY DISABLED TO FIX ADMIN ENDPOINTS
-// app.use(secureConnection);
 // app.use(validateQuery());
 // app.use(monitorPerformance);
 // Note: monitorConnectionPool will be added after database initialization
