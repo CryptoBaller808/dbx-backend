@@ -632,10 +632,17 @@ async function fetchBinancePrice(baseSymbol, quoteSymbol) {
     const url = `${BINANCE_BASE_URL}/api/v3/ticker/price`;
     const params = { symbol: binanceSymbol };
     
+    // Use AbortController for better timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    
     const response = await axios.get(url, { 
       params,
-      timeout: 2500 // 2.5s timeout per requirement
+      timeout: 2500,
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (response.data && response.data.price) {
       const price = parseFloat(response.data.price);

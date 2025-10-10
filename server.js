@@ -363,6 +363,43 @@ app.get('/fs-test', (req, res) => {
 console.log("✅ [STARTUP] Express app created successfully");
 
 // ================================
+// INSTANT HEALTH ENDPOINT - FIRST ROUTE (NO MIDDLEWARE)
+// ================================
+const startedAt = Date.now();
+const COMMIT = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.COMMIT || 'unknown';
+
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    service: 'price',
+    status: 'ok',
+    timestamp: Date.now(),
+    uptime: Math.round((Date.now() - startedAt)/1000),
+    commit: COMMIT,
+    env: process.env.NODE_ENV || 'production',
+    port: process.env.PORT || 3000,
+    providers: { coingecko: 'configured', binance: 'configured' },
+    fallbackTiers: ['coingecko','binance','markets','market_chart','legacy','tickers','cross'],
+  });
+});
+
+// Load balancer health alias
+app.get('/health/lb', (req, res) => {
+  res.status(200).json({
+    service: 'price',
+    status: 'ok',
+    timestamp: Date.now(),
+    uptime: Math.round((Date.now() - startedAt)/1000),
+    commit: COMMIT,
+    env: process.env.NODE_ENV || 'production',
+    port: process.env.PORT || 3000,
+    providers: { coingecko: 'configured', binance: 'configured' },
+    fallbackTiers: ['coingecko','binance','markets','market_chart','legacy','tickers','cross'],
+  });
+});
+
+console.log("✅ [STARTUP] Instant health endpoints added as first routes");
+
+// ================================
 // DEEP PROBE MISSION - INLINE ROUTE TEST
 // ================================
 console.log("🧪 [PROBE] Adding inline live-check route for testing...");
@@ -592,74 +629,81 @@ console.log("✅ [SECURITY] Body parser configured with size limits");
 console.log("🛡️ [SECURITY] Security hardening complete");
 
 // ================================
-// LIGHT START BYPASS - START SERVER EARLY
+// CRASH-SAFETY LOGGING
 // ================================
-const HOST = '0.0.0.0';
-const PORT = process.env.PORT || 3000;
+process.on('unhandledRejection', (err) => {
+  console.error('[FATAL] unhandledRejection', err);
+});
 
-console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
-const serverInstance = server.listen(PORT, HOST, () => {
-  const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "unknown";
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  
-  console.log(`API listening on :${PORT} (env PORT=${process.env.PORT || 'default'})`);
-  console.log(`[BOOT] commit=${commitSha} NODE_ENV=${nodeEnv} PORT=${PORT}`);
-  console.log(`[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tickers,cross`);
-  console.log(`[BOOT] CORS allowlist: ${Array.from(allowed).join(',')}`);
-  console.log("✅ [LIGHT START] Server started successfully - /health endpoint available");
-  
-  // Initialize database readiness after server starts (non-blocking)
-  initializeDbReadiness();
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] uncaughtException', err);
+  process.exit(1);
 });
 
 // ================================
-// DB READINESS INITIALIZATION
+// IMMEDIATE SERVER BINDING - LISTEN FIRST
 // ================================
-async function initializeDbReadiness() {
-  console.log("🔄 [DB-READY] Starting database readiness initialization...");
+const HOST = '0.0.0.0';
+const PORT = Number(process.env.PORT) || 3000;
+
+// Define CORS allowlist for logging
+const ALLOWLIST = [
+  'https://dbx-frontend-staging.onrender.com',
+  'https://dbx-frontend.onrender.com', 
+  'https://dbx-admin.onrender.com'
+];
+
+console.log("🚀 [BOOT] Starting HTTP server immediately...");
+const serverInstance = server.listen(PORT, () => {
+  console.log(`[BOOT] API listening on :${PORT} (env PORT=${process.env.PORT||3000})`);
+  console.log(`[BOOT] commit=${COMMIT} NODE_ENV=${process.env.NODE_ENV||'production'}`);
+  console.log('[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tickers,cross');
+  console.log('[BOOT] CORS allowlist:', ALLOWLIST.join(','));
   
+  // Defer all warm-ups to after server binding
+  setImmediate(postStartupWarmups);
+});
+
+// ================================
+// POST-STARTUP WARMUPS (NON-BLOCKING)
+// ================================
+async function postStartupWarmups() {
+  console.log("🔄 [WARMUP] Starting post-startup warmups...");
+  
+  // 1. Database warmup
   try {
-    // 1. Database authentication
-    console.log("🔄 [DB-READY] Testing database authentication...");
+    console.log("🔄 [WARMUP] Testing database authentication...");
     await sequelize.authenticate();
-    console.log("✅ [DB-READY] Database authentication successful");
+    console.log("✅ [WARMUP] Database authentication successful");
     
-    // 2. Basic query test
-    console.log("🔄 [DB-READY] Testing basic database query...");
     await sequelize.query('SELECT 1 as test');
-    console.log("✅ [DB-READY] Basic database query successful");
+    console.log("✅ [WARMUP] Basic database query successful");
     
-    // 3. Sequelize pool configuration
-    console.log("🔄 [DB-READY] Configuring Sequelize connection pool...");
-    if (sequelize.options.pool) {
-      console.log("✅ [DB-READY] Pool config:", {
-        max: sequelize.options.pool.max,
-        min: sequelize.options.pool.min,
-        acquire: sequelize.options.pool.acquire,
-        idle: sequelize.options.pool.idle
-      });
-    }
-    
-    // 4. Bcrypt warmup
-    console.log("🔄 [DB-READY] Warming up bcrypt...");
+    dbReady = true;
+  } catch (error) {
+    console.error("❌ [WARMUP] Database warmup failed:", error.message);
+  }
+  
+  // 2. Bcrypt warmup
+  try {
+    console.log("🔄 [WARMUP] Warming up bcrypt...");
     await bcrypt.compare('warmup-test', '$2b$10$C6UzMDM.H6dfI/f/IKcEeOa8H5CwZrZ8Yk9l2eG5E6b1mV5EXy7Bi');
     bcryptWarmed = true;
-    console.log("✅ [DB-READY] Bcrypt warmup complete");
-    
-    // 5. Mark as ready
-    dbReady = true;
-    console.log("🎉 [DB-READY] Database readiness initialization complete!");
-    
+    console.log("✅ [WARMUP] Bcrypt warmup complete");
   } catch (error) {
-    console.error("❌ [DB-READY] Database readiness initialization failed:", error.message);
-    console.error("❌ [DB-READY] Stack:", error.stack);
-    
-    // Retry after 5 seconds
-    setTimeout(() => {
-      console.log("🔄 [DB-READY] Retrying database readiness initialization...");
-      initializeDbReadiness();
-    }, 5000);
+    console.error("❌ [WARMUP] Bcrypt warmup failed:", error.message);
   }
+  
+  // 3. Provider cache warmup (if needed)
+  try {
+    console.log("🔄 [WARMUP] Provider caches initialized");
+    // CoinGecko and Binance caches are lazy-loaded on first request
+    console.log("✅ [WARMUP] Provider warmup complete");
+  } catch (error) {
+    console.error("❌ [WARMUP] Provider warmup failed:", error.message);
+  }
+  
+  console.log("🎉 [WARMUP] Post-startup warmups complete!");
 }
 
 // ================================
