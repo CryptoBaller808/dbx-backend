@@ -106,6 +106,12 @@ exports.getSpotPrice = async (req, res) => {
             finalPrice = await fetchLegacyIdFallback(baseUpper);
             if (Number.isFinite(finalPrice)) {
               source = 'legacy';
+            } else {
+              // 5. Try tickers fallback (highest-volume ticker)
+              finalPrice = await fetchTickersFallback(baseUpper);
+              if (Number.isFinite(finalPrice)) {
+                source = 'tickers';
+              }
             }
           }
         }
@@ -142,6 +148,9 @@ exports.getSpotPrice = async (req, res) => {
           basePrice = await fetchMarketChartFallback(baseCoinId);
           if (!Number.isFinite(basePrice)) {
             basePrice = await fetchLegacyIdFallback(baseUpper);
+            if (!Number.isFinite(basePrice)) {
+              basePrice = await fetchTickersFallback(baseUpper);
+            }
           }
         }
       }
@@ -152,6 +161,9 @@ exports.getSpotPrice = async (req, res) => {
           quotePrice = await fetchMarketChartFallback(quoteCoinId);
           if (!Number.isFinite(quotePrice)) {
             quotePrice = await fetchLegacyIdFallback(quoteUpper);
+            if (!Number.isFinite(quotePrice)) {
+              quotePrice = await fetchTickersFallback(quoteUpper);
+            }
           }
         }
       }
@@ -403,6 +415,121 @@ async function fetchLegacyIdFallback(baseSymbol) {
 }
 
 /**
+ * Tickers fallback: fetch price from highest-volume ticker
+ * @param {string} baseSymbol - Base currency symbol (e.g., 'MATIC', 'XDC')
+ * @returns {Promise<number|null>} Price from highest-volume ticker or null
+ */
+async function fetchTickersFallback(baseSymbol) {
+  const primaryId = ID[baseSymbol];
+  const legacyIds = {
+    'MATIC': 'matic-network',
+    'XDC': 'xdce-crowd-sale'
+  };
+  
+  const idsToTry = [primaryId];
+  if (legacyIds[baseSymbol]) {
+    idsToTry.push(legacyIds[baseSymbol]);
+  }
+  
+  for (const coinId of idsToTry) {
+    if (!coinId) continue;
+    
+    try {
+      const apiKey = process.env.COINGECKO_API_KEY;
+      
+      if (!apiKey) {
+        continue;
+      }
+      
+      const url = `https://api.coingecko.com/api/v3/coins/${coinId}/tickers`;
+      const params = {
+        include_exchange_logo: false
+      };
+      
+      const headers = {
+        'x-cg-pro-api-key': apiKey,
+        'Accept': 'application/json'
+      };
+      
+      const response = await axios.get(url, { 
+        params, 
+        headers,
+        timeout: 10000
+      });
+      
+      if (response.data && response.data.tickers && Array.isArray(response.data.tickers)) {
+        const tickers = response.data.tickers;
+        
+        // Find highest-volume ticker with USD/USDT/USDC target
+        let bestTicker = null;
+        let highestVolume = 0;
+        
+        for (const ticker of tickers) {
+          if (!ticker.target || !ticker.last || !ticker.volume) continue;
+          
+          const target = ticker.target.toUpperCase();
+          if (['USD', 'USDT', 'USDC'].includes(target)) {
+            const volume = parseFloat(ticker.volume);
+            const price = parseFloat(ticker.last);
+            
+            if (volume > highestVolume && Number.isFinite(price) && price > 0) {
+              bestTicker = ticker;
+              highestVolume = volume;
+            }
+          }
+        }
+        
+        if (bestTicker) {
+          const price = parseFloat(bestTicker.last);
+          if (Number.isFinite(price)) {
+            return price;
+          }
+        }
+        
+        // If no USD quotes, try BTC quotes for cross-rate
+        let bestBtcTicker = null;
+        let highestBtcVolume = 0;
+        
+        for (const ticker of tickers) {
+          if (!ticker.target || !ticker.last || !ticker.volume) continue;
+          
+          const target = ticker.target.toUpperCase();
+          if (target === 'BTC') {
+            const volume = parseFloat(ticker.volume);
+            const price = parseFloat(ticker.last);
+            
+            if (volume > highestBtcVolume && Number.isFinite(price) && price > 0) {
+              bestBtcTicker = ticker;
+              highestBtcVolume = volume;
+            }
+          }
+        }
+        
+        if (bestBtcTicker) {
+          // Get BTC/USD price for cross-rate calculation
+          const btcUsdPrice = await fetchSimplePrice(['bitcoin']);
+          if (Number.isFinite(btcUsdPrice) && btcUsdPrice > 0) {
+            const btcPrice = parseFloat(bestBtcTicker.last);
+            if (Number.isFinite(btcPrice) && btcPrice > 0) {
+              const usdPrice = btcPrice * btcUsdPrice;
+              if (Number.isFinite(usdPrice)) {
+                return usdPrice;
+              }
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error(`[PRICE] tickers fallback error for ${baseSymbol} (${coinId}): ${error.message}`);
+      continue;
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Health check endpoint for price service
  */
 exports.healthCheck = async (req, res) => {
@@ -420,13 +547,23 @@ exports.healthCheck = async (req, res) => {
       }
     }
     
+    // Get last source per pair from cache
+    const lastSources = {};
+    for (const [key, value] of priceCache.entries()) {
+      if (value && value.source) {
+        lastSources[key] = value.source;
+      }
+    }
+    
     const result = {
       service: 'price',
       status: hasApiKey ? 'configured' : 'missing_api_key',
       timestamp: Date.now(),
       supportedBases: Object.keys(ID),
       supportedQuotes: Object.keys(QUOTE_ALIAS),
+      fallbackTiers: ['coingecko', 'markets', 'market_chart', 'legacy', 'tickers', 'cross'],
       cacheSize: priceCache.size,
+      lastSources: lastSources,
       testPrice: testResult
     };
     
