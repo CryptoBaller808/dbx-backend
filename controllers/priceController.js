@@ -1,22 +1,22 @@
 const axios = require('axios');
 
-// Robust CoinGecko ID mapping with updated identifiers
-const COIN_ID_MAP = {
+// Authoritative CoinGecko ID mapping
+const ID = {
   'ETH': 'ethereum',
-  'BTC': 'bitcoin', 
+  'BTC': 'bitcoin',
   'XRP': 'ripple',
   'XLM': 'stellar',
   'BNB': 'binancecoin',
-  'MATIC': 'polygon-pos', // Updated from matic-network
+  'MATIC': 'polygon-pos',   // (not matic-network)
   'SOL': 'solana',
-  'XDC': 'xdc-network' // Updated from xdce-crowd-sale
+  'XDC': 'xdc-network'      // (not xdce-crowd-sale)
 };
 
-// Quote currency aliases (USDT/USDC treated as USD)
-const QUOTE_ALIASES = {
-  'USD': 'usd',
-  'USDT': 'usd', 
-  'USDC': 'usd'
+// Quote currency aliases - USDT/USDC treated as USD
+const QUOTE_ALIAS = { 
+  'USDT': 'USD', 
+  'USDC': 'USD', 
+  'USD': 'USD' 
 };
 
 // 60-second in-memory cache
@@ -24,25 +24,23 @@ const priceCache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
 /**
- * Get spot price for a trading pair with caching and cross-rate support
+ * Get spot price for a trading pair with robust fallback system
  * Route: GET /api/price?base=ETH&quote=USDT
  */
 exports.getSpotPrice = async (req, res) => {
   const startTime = Date.now();
   const { base, quote } = req.query;
   
-  console.log(`[DBX API] /api/price base=${base} quote=${quote} request started`);
-
   // Validate required parameters
   if (!base || !quote) {
     const result = {
       price: null,
       base: base || '',
       quote: quote || '',
-      source: 'none',
+      source: 'coingecko',
       ts: Date.now()
     };
-    console.log(`[DBX API] /api/price result=error (missing params)`);
+    console.log(`[PRICE] pair=${base || ''}/${quote || ''} vs=usd ids=[] price=null source=error cache=miss`);
     return res.status(200).json(result);
   }
 
@@ -53,71 +51,91 @@ exports.getSpotPrice = async (req, res) => {
   // Check cache first
   const cached = priceCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-    const duration = Date.now() - startTime;
-    console.log(`[DBX API] /api/price ${cacheKey} result=cached price=${cached.price} duration=${duration}ms`);
+    console.log(`[PRICE] pair=${baseUpper}/${quoteUpper} vs=usd ids=[cached] price=${cached.price} source=cache cache=hit`);
     return res.status(200).json({
       price: cached.price,
       base: baseUpper,
       quote: quoteUpper,
-      source: 'coingecko',
+      source: cached.source || 'coingecko',
       ts: Date.now()
     });
   }
 
   // Validate supported currencies
-  if (!COIN_ID_MAP[baseUpper]) {
+  if (!ID[baseUpper]) {
     const result = {
       price: null,
       base: baseUpper,
       quote: quoteUpper,
-      source: 'none',
+      source: 'coingecko',
       ts: Date.now()
     };
-    console.log(`[DBX API] /api/price ${cacheKey} result=error (unsupported base)`);
+    console.log(`[PRICE] pair=${baseUpper}/${quoteUpper} vs=usd ids=[] price=null source=unsupported cache=miss`);
     return res.status(200).json(result);
   }
 
   try {
-    const baseCoinId = COIN_ID_MAP[baseUpper];
-    const targetQuote = QUOTE_ALIASES[quoteUpper] || quoteUpper.toLowerCase();
-    
+    const normalizedQuote = QUOTE_ALIAS[quoteUpper] || quoteUpper;
     let finalPrice = null;
+    let source = 'coingecko';
+    let ids = [];
     
-    if (targetQuote === 'usd') {
-      // Direct USD price fetch
-      finalPrice = await fetchCoinGeckoPriceOptimized([baseCoinId]);
-      finalPrice = finalPrice[baseCoinId];
+    if (normalizedQuote === 'USD') {
+      // Single-asset pricing: BASE / USD(T/C)
+      const baseCoinId = ID[baseUpper];
+      ids = [baseCoinId];
+      
+      // Try simple/price first
+      finalPrice = await fetchSimplePrice([baseCoinId]);
+      
+      if (finalPrice === null) {
+        // Robust fallback: try market_chart
+        finalPrice = await fetchMarketChartFallback(baseCoinId);
+        source = 'fallback';
+      }
+      
     } else {
-      // Cross-rate calculation for non-USD quotes
-      const quoteCoinId = COIN_ID_MAP[quoteUpper];
+      // Cross-rate logic: ETH/BTC = (ETH/USD) / (BTC/USD)
+      const quoteCoinId = ID[quoteUpper];
       
       if (!quoteCoinId) {
         const result = {
           price: null,
           base: baseUpper,
           quote: quoteUpper,
-          source: 'none',
+          source: 'coingecko',
           ts: Date.now()
         };
-        console.log(`[DBX API] /api/price ${cacheKey} result=error (unsupported quote)`);
+        console.log(`[PRICE] pair=${baseUpper}/${quoteUpper} vs=usd ids=[] price=null source=unsupported_quote cache=miss`);
         return res.status(200).json(result);
       }
       
-      // Fetch both prices in single API call
-      const prices = await fetchCoinGeckoPriceOptimized([baseCoinId, quoteCoinId]);
+      const baseCoinId = ID[baseUpper];
+      ids = [baseCoinId, quoteCoinId];
+      
+      // Fetch both prices for cross-rate calculation
+      const prices = await fetchSimplePrice([baseCoinId, quoteCoinId]);
       const basePrice = prices[baseCoinId];
       const quotePrice = prices[quoteCoinId];
       
-      if (basePrice && quotePrice && quotePrice > 0) {
+      if (basePrice !== null && quotePrice !== null && quotePrice > 0) {
         finalPrice = basePrice / quotePrice;
+      } else {
+        // Try fallback for missing prices
+        const fallbackBase = basePrice === null ? await fetchMarketChartFallback(baseCoinId) : basePrice;
+        const fallbackQuote = quotePrice === null ? await fetchMarketChartFallback(quoteCoinId) : quotePrice;
+        
+        if (fallbackBase !== null && fallbackQuote !== null && fallbackQuote > 0) {
+          finalPrice = fallbackBase / fallbackQuote;
+          source = 'fallback';
+        }
       }
     }
-    
-    const duration = Date.now() - startTime;
     
     // Cache the result (even if null)
     priceCache.set(cacheKey, {
       price: finalPrice,
+      source: source,
       timestamp: Date.now()
     });
     
@@ -125,39 +143,46 @@ exports.getSpotPrice = async (req, res) => {
       price: finalPrice,
       base: baseUpper,
       quote: quoteUpper,
-      source: finalPrice !== null ? 'coingecko' : 'none',
+      source: source,
       ts: Date.now()
     };
     
-    console.log(`[DBX API] /api/price ${cacheKey} result=${finalPrice !== null ? 'success' : 'null'} price=${finalPrice} duration=${duration}ms`);
+    console.log(`[PRICE] pair=${baseUpper}/${quoteUpper} vs=usd ids=[${ids.join(',')}] price=${finalPrice} source=${source} cache=miss`);
+    
+    // Log warning if price is null with raw payload info
+    if (finalPrice === null) {
+      console.warn(`[PRICE] WARN price:null for ${baseUpper}/${quoteUpper} - check CoinGecko data availability`);
+    }
+    
     return res.status(200).json(result);
     
   } catch (error) {
-    const duration = Date.now() - startTime;
     const result = {
       price: null,
       base: baseUpper,
       quote: quoteUpper,
-      source: 'none',
+      source: 'coingecko',
       ts: Date.now()
     };
-    console.error(`[DBX API] /api/price ${cacheKey} result=error duration=${duration}ms error=${error.message}`);
+    console.error(`[PRICE] pair=${baseUpper}/${quoteUpper} vs=usd ids=[] price=null source=error cache=miss error=${error.message}`);
     return res.status(200).json(result);
   }
 };
 
 /**
- * Fetch multiple prices from CoinGecko API in a single call
+ * Fetch prices using CoinGecko simple/price endpoint
  * @param {string[]} coinIds - Array of CoinGecko coin IDs
  * @returns {Promise<Object>} Object with coinId -> price mapping
  */
-async function fetchCoinGeckoPriceOptimized(coinIds) {
+async function fetchSimplePrice(coinIds) {
   try {
     const apiKey = process.env.COINGECKO_API_KEY;
     
     if (!apiKey) {
-      console.warn('[DBX API] CoinGecko API key not configured');
-      return {};
+      console.warn('[PRICE] CoinGecko API key not configured');
+      const result = {};
+      coinIds.forEach(id => result[id] = null);
+      return result;
     }
     
     const url = `https://api.coingecko.com/api/v3/simple/price`;
@@ -172,42 +197,82 @@ async function fetchCoinGeckoPriceOptimized(coinIds) {
       'Accept': 'application/json'
     };
     
-    console.log(`[DBX API] CoinGecko batch request: ${coinIds.join(',')}`);
-    
     const response = await axios.get(url, { 
       params, 
       headers,
-      timeout: 10000 // 10 second timeout
+      timeout: 10000
     });
     
     const prices = {};
     
     if (response.data) {
       for (const coinId of coinIds) {
-        if (response.data[coinId] && response.data[coinId].usd) {
+        if (response.data[coinId] && typeof response.data[coinId].usd === 'number') {
           prices[coinId] = response.data[coinId].usd;
-          console.log(`[DBX API] CoinGecko response: ${coinId}=${prices[coinId]} usd`);
         } else {
           prices[coinId] = null;
-          console.warn(`[DBX API] CoinGecko: No price data for ${coinId}`);
         }
       }
+    } else {
+      coinIds.forEach(id => prices[id] = null);
+    }
+    
+    // For single coin requests, return the price directly
+    if (coinIds.length === 1) {
+      return prices[coinIds[0]];
     }
     
     return prices;
     
   } catch (error) {
-    if (error.response) {
-      console.error(`[DBX API] CoinGecko API error: ${error.response.status} ${error.response.statusText}`);
-      if (error.response.data) {
-        console.error(`[DBX API] CoinGecko error details:`, error.response.data);
-      }
-    } else if (error.request) {
-      console.error(`[DBX API] CoinGecko network error: ${error.message}`);
-    } else {
-      console.error(`[DBX API] CoinGecko request error: ${error.message}`);
+    console.error(`[PRICE] simple/price error: ${error.message}`);
+    const result = {};
+    coinIds.forEach(id => result[id] = null);
+    return coinIds.length === 1 ? null : result;
+  }
+}
+
+/**
+ * Fallback: fetch price from market_chart endpoint (last close)
+ * @param {string} coinId - CoinGecko coin ID
+ * @returns {Promise<number|null>} Last close price or null
+ */
+async function fetchMarketChartFallback(coinId) {
+  try {
+    const apiKey = process.env.COINGECKO_API_KEY;
+    
+    if (!apiKey) {
+      return null;
     }
-    return {};
+    
+    const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`;
+    const params = {
+      vs_currency: 'usd',
+      days: 1
+    };
+    
+    const headers = {
+      'x-cg-pro-api-key': apiKey,
+      'Accept': 'application/json'
+    };
+    
+    const response = await axios.get(url, { 
+      params, 
+      headers,
+      timeout: 10000
+    });
+    
+    if (response.data && response.data.prices && response.data.prices.length > 0) {
+      // Get the last price point [timestamp, price]
+      const lastPrice = response.data.prices[response.data.prices.length - 1][1];
+      return typeof lastPrice === 'number' ? lastPrice : null;
+    }
+    
+    return null;
+    
+  } catch (error) {
+    console.error(`[PRICE] market_chart fallback error for ${coinId}: ${error.message}`);
+    return null;
   }
 }
 
@@ -223,8 +288,7 @@ exports.healthCheck = async (req, res) => {
     let testResult = null;
     if (hasApiKey) {
       try {
-        const prices = await fetchCoinGeckoPriceOptimized(['bitcoin']);
-        testResult = prices['bitcoin'];
+        testResult = await fetchSimplePrice(['bitcoin']);
       } catch (error) {
         testResult = `Error: ${error.message}`;
       }
@@ -234,17 +298,17 @@ exports.healthCheck = async (req, res) => {
       service: 'price',
       status: hasApiKey ? 'configured' : 'missing_api_key',
       timestamp: Date.now(),
-      supportedBases: Object.keys(COIN_ID_MAP),
-      supportedQuotes: Object.keys(QUOTE_ALIASES),
+      supportedBases: Object.keys(ID),
+      supportedQuotes: Object.keys(QUOTE_ALIAS),
       cacheSize: priceCache.size,
       testPrice: testResult
     };
     
-    console.log(`[DBX API] /api/price/health result=${result.status}`);
+    console.log(`[PRICE] /api/price/health result=${result.status}`);
     return res.status(200).json(result);
     
   } catch (error) {
-    console.error(`[DBX API] /api/price/health error=${error.message}`);
+    console.error(`[PRICE] /api/price/health error=${error.message}`);
     return res.status(500).json({
       service: 'price',
       status: 'error',
