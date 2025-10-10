@@ -1,0 +1,4 @@
+Railway deployment trigger - Force redeploy with new health endpoint
+Timestamp: 2025-10-10T12:23:30Z
+Commit: d00e866
+Purpose: Fix healthcheck timeout issues with instant health endpoint
