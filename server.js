@@ -192,6 +192,7 @@ const { router: userManagementRoutes, initializeUserManagementService } = requir
 const { router: systemHealthRoutes, initializeHealthMonitoringService } = require('./routes/systemHealthRoutes');
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
+const priceRoutes = require('./routes/priceRoute');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -1389,6 +1390,9 @@ app.use('/api/bitcoin', bitcoinRoutes);
 
 // Mount Exchange Routes (for TradingView chart data)
 app.use('/api/exchangeRates', exchangeRoutes);
+
+// Mount Price Routes (for spot price feed)
+app.use('/api/price', priceRoutes);
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
