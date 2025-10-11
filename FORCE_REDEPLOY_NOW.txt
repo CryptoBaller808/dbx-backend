@@ -1,0 +1,10 @@
+FORCE RAILWAY REDEPLOY - HEALTH ROUTE CONFLICT CRITICAL
+Timestamp: 2025-10-11T06:45:30Z
+Commit: 72a4eab
+Issue: Railway not deploying latest health route fixes
+Evidence: 
+- /live-check works (server.js running)
+- /_routes returns 404 (new routes not deployed)
+- /health returns old {"ok":true,"ts":"..."} format
+- Expected: {"service":"price","status":"ok","commit":"...","providers":{...},"fallbackTiers":[...]}
+Action: Force complete rebuild and deployment
