@@ -1,0 +1,8 @@
+RAILWAY REBUILD TRIGGER - DOCKER STARTUP FIX
+Timestamp: 2025-10-11T06:50:00Z
+Issue: App not starting - no port binding
+Fix: Added immediate [BOOT] logging at top of server.js
+Dockerfile: Verified WORKDIR /app and CMD ["node","server.js"]
+Package.json: Verified "start": "node server.js"
+Action: Force rebuild with clear build cache
+Expected: [BOOT] Starting DBX backend build logs should appear before healthcheck
