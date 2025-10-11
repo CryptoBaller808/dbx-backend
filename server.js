@@ -199,7 +199,10 @@ console.log("🌺 Route consolidation complete - Single source of truth architec
 console.log("⚡ Dual application conflict resolved - app.js deactivated");
 
 console.log("🏗️ [STARTUP] About to create Express app...");
-const app = express();
+
+// Wrap entire startup in try/catch for visibility
+try {
+  const app = express();
 
 // ================================
 // SAFE ROUTER MOUNTING HELPER
@@ -654,10 +657,10 @@ const ALLOWLIST = [
 ];
 
 console.log("🚀 [BOOT] Starting HTTP server immediately...");
-const serverInstance = server.listen(PORT, () => {
+const serverInstance = server.listen(PORT, HOST, () => {
   console.log(`[BOOT] API listening on :${PORT} (env PORT=${process.env.PORT||3000})`);
   console.log(`[BOOT] commit=${COMMIT} NODE_ENV=${process.env.NODE_ENV||'production'}`);
-  console.log('[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tickers,cross');
+  console.log('[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tiers,cross');
   console.log('[BOOT] CORS allowlist:', ALLOWLIST.join(','));
   
   // Defer all warm-ups to after server binding
@@ -1593,4 +1596,10 @@ app.use((err, req, res, next) => {
 });
 
 console.log("🚀 [STARTUP] DBX Backend fully initialized and ready!");
+
+} catch (error) {
+  console.error('[FATAL] Startup failed:', error);
+  console.error('[FATAL] Stack:', error.stack);
+  process.exit(1);
+}
 
