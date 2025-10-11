@@ -1,0 +1,28 @@
+RAILWAY DIAGNOSTIC DEPLOYMENT - DEFINITIVE HEALTH ROUTE FIX
+Timestamp: 2025-10-11T08:00:00Z
+
+CHANGES MADE:
+1. Added X-Health-Handler: server.js:new header to /health endpoint
+2. Added Cache-Control: no-store to /health and /_routes endpoints  
+3. Enhanced boot logging: [BOOT] server.js mounted /health FIRST
+4. Enhanced boot logging: [BOOT] commit=SHA node=version port=PORT
+
+PROJECT STRUCTURE VERIFIED:
+- Root Directory: /home/ubuntu/dbx-backend (contains server.js, package.json, Dockerfile)
+- Start Command: node server.js (verified in package.json)
+- Monorepo: Detected (dbx-backend and dbx-frontend folders)
+
+RAILWAY SERVICE SETTINGS REQUIRED:
+- Root Directory: Should point to backend folder (not repo root)
+- Start Command: node server.js
+- Healthcheck Path: /live-check (temporarily, switch to /health after verification)
+- Clear Build Cache: ENABLED
+
+EXPECTED HEADERS:
+- X-Health-Handler: server.js:new (proves new handler active)
+- Cache-Control: no-store (prevents caching issues)
+
+DIAGNOSTIC ENDPOINTS:
+- /_routes: Shows route registration order
+- /health-fix-test: Deployment verification
+- /live-check: Known working endpoint

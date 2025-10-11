@@ -209,6 +209,8 @@ try {
 // AUTHORITATIVE HEALTH ENDPOINT - MUST BE FIRST ROUTE
 // ================================
 app.get('/health', (req, res) => {
+  res.set('X-Health-Handler', 'server.js:new');
+  res.set('Cache-Control', 'no-store');
   res.status(200).json({
     service: 'price',
     status: 'ok',
@@ -222,10 +224,12 @@ app.get('/health', (req, res) => {
 // Alias for LB:
 app.get('/health/lb', (req, res) => res.redirect(307, '/health'));
 
-console.log('[BOOT] /health mounted first');
+console.log('[BOOT] server.js mounted /health FIRST');
+console.log(`[BOOT] commit=${process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown'} node=${process.version} port=${process.env.PORT || 3000}`);
 
 // Temporary route-dump endpoint to inspect order
 app.get('/_routes', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const stack = (app._router?.stack||[])
     .filter(l => l.route && l.route.path)
     .map(l => ({ method: Object.keys(l.route.methods)[0], path: l.route.path }));
