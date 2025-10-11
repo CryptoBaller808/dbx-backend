@@ -205,6 +205,33 @@ try {
   const app = express();
 
 // ================================
+// AUTHORITATIVE HEALTH ENDPOINT - MUST BE FIRST ROUTE
+// ================================
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    service: 'price',
+    status: 'ok',
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown',
+    providers: { coingecko: 'configured', binance: 'configured' },
+    fallbackTiers: ['coingecko','binance','markets','market_chart','legacy','tickers','cross'],
+    timestamp: Date.now()
+  });
+});
+
+// Alias for LB:
+app.get('/health/lb', (req, res) => res.redirect(307, '/health'));
+
+console.log('[BOOT] /health mounted first');
+
+// Temporary route-dump endpoint to inspect order
+app.get('/_routes', (req, res) => {
+  const stack = (app._router?.stack||[])
+    .filter(l => l.route && l.route.path)
+    .map(l => ({ method: Object.keys(l.route.methods)[0], path: l.route.path }));
+  res.json(stack);
+});
+
+// ================================
 // SAFE ROUTER MOUNTING HELPER
 // ================================
 function on(v) {
@@ -233,12 +260,7 @@ console.log("✅ [MOUNT] Safe mounting helper configured");
 // ================================
 // RAILWAY HEALTH ENDPOINT - MUST BE FIRST
 // ================================
-// Simple health endpoint that bypasses all middleware, CORS, auth, etc.
-// Supports both GET and HEAD methods for Railway health checks
-const healthHandler = (_req, res) => res.status(200).json({ ok: true, ts: new Date().toISOString() });
-app.get('/health', healthHandler);
-app.head('/health', healthHandler);
-console.log("✅ [HEALTH] Railway health endpoint added (GET/HEAD, bypasses all middleware)");
+// REMOVED: Legacy health handler - replaced with authoritative handler below
 
 // Version endpoint for deployment verification (also bypasses middleware)
 app.get('/diag/version', (_req, res) => {
@@ -371,34 +393,7 @@ console.log("✅ [STARTUP] Express app created successfully");
 const startedAt = Date.now();
 const COMMIT = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.COMMIT || 'unknown';
 
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    service: 'price',
-    status: 'ok',
-    timestamp: Date.now(),
-    uptime: Math.round((Date.now() - startedAt)/1000),
-    commit: COMMIT,
-    env: process.env.NODE_ENV || 'production',
-    port: process.env.PORT || 3000,
-    providers: { coingecko: 'configured', binance: 'configured' },
-    fallbackTiers: ['coingecko','binance','markets','market_chart','legacy','tickers','cross'],
-  });
-});
-
-// Load balancer health alias
-app.get('/health/lb', (req, res) => {
-  res.status(200).json({
-    service: 'price',
-    status: 'ok',
-    timestamp: Date.now(),
-    uptime: Math.round((Date.now() - startedAt)/1000),
-    commit: COMMIT,
-    env: process.env.NODE_ENV || 'production',
-    port: process.env.PORT || 3000,
-    providers: { coingecko: 'configured', binance: 'configured' },
-    fallbackTiers: ['coingecko','binance','markets','market_chart','legacy','tickers','cross'],
-  });
-});
+// REMOVED: Second conflicting health handler - using authoritative handler at top of file
 
 console.log("✅ [STARTUP] Instant health endpoints added as first routes");
 
@@ -658,9 +653,9 @@ const ALLOWLIST = [
 
 console.log("🚀 [BOOT] Starting HTTP server immediately...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log(`[BOOT] API listening on :${PORT} (env PORT=${process.env.PORT||3000})`);
-  console.log(`[BOOT] commit=${COMMIT} NODE_ENV=${process.env.NODE_ENV||'production'}`);
-  console.log('[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tiers,cross');
+  console.log('[BOOT] API listening on :%s (env PORT=%s)', PORT, process.env.PORT);
+  console.log('[BOOT] commit=%s NODE_ENV=%s', process.env.RAILWAY_GIT_COMMIT_SHA||process.env.COMMIT||'unknown', process.env.NODE_ENV);
+  console.log('[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tickers,cross');
   console.log('[BOOT] CORS allowlist:', ALLOWLIST.join(','));
   
   // Defer all warm-ups to after server binding
@@ -739,57 +734,7 @@ app.get('/diag/ready', (req, res) => {
 });
 console.log("✅ [READINESS] /diag/ready endpoint configured");
 
-// Instant health check endpoint for Railway deployment - NO EXTERNAL CALLS
-app.get('/health', (req, res) => {
-  try {
-    // Get commit SHA and environment info
-    const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || "unknown";
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    const port = process.env.PORT || 3000;
-    
-    // Provider status (static - no external calls)
-    const providers = {
-      coingecko: process.env.COINGECKO_API_KEY ? 'configured' : 'missing_key',
-      binance: 'ok' // Binance public API doesn't need key
-    };
-    
-    // Fallback tiers including Binance as 2nd tier
-    const fallbackTiers = [
-      'coingecko', 
-      'binance', 
-      'markets', 
-      'market_chart', 
-      'legacy', 
-      'tickers', 
-      'cross'
-    ];
-    
-    const healthResponse = {
-      service: 'price',
-      status: 'ok',
-      timestamp: Date.now(),
-      uptime: Math.floor(process.uptime()),
-      commit: commitSha,
-      env: nodeEnv,
-      port: port,
-      providers: providers,
-      fallbackTiers: fallbackTiers
-    };
-    
-    // Log health check (but don't block)
-    console.log(`[HEALTH] status=ok providers=${JSON.stringify(providers)} tiers=${fallbackTiers.length}`);
-    
-    return res.status(200).json(healthResponse);
-  } catch (error) {
-    console.error('[HEALTH] Error:', error.message);
-    return res.status(500).json({
-      service: 'price',
-      status: 'error',
-      error: error.message,
-      timestamp: Date.now()
-    });
-  }
-});
+// REMOVED: Third conflicting health handler - using authoritative handler at top of file
 
 // Enhanced Database Security Middleware - TEMPORARILY DISABLED TO FIX ADMIN ENDPOINTS
 // app.use(validateQuery());
