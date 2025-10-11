@@ -232,6 +232,17 @@ app.get('/_routes', (req, res) => {
   res.json(stack);
 });
 
+// Unique test endpoint to verify deployment
+app.get('/health-fix-test', (req, res) => {
+  res.json({
+    message: 'Health route fix deployed successfully',
+    timestamp: Date.now(),
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    conflictsRemoved: ['health-check', 'basic-health'],
+    authoritativeHealthActive: true
+  });
+});
+
 // ================================
 // SAFE ROUTER MOUNTING HELPER
 // ================================
@@ -428,13 +439,13 @@ const io = socketIo(server, {
 });
 console.log("✅ [STARTUP] Socket.IO initialized successfully");
 
-// Add basic health test route at the very top
-console.log("🧪 [STARTUP] Adding basic health test route...");
-app.get('/basic-health', (req, res) => {
-  console.log("✅ [TEST] basic-health hit!");
-  res.send("✅ Backend up!");
-});
-console.log("✅ [STARTUP] Basic health test route added");
+// Add basic health test route at the very top - DISABLED to prevent /health conflicts
+console.log("🧪 [STARTUP] Basic health test route disabled to prevent conflicts...");
+// app.get('/basic-health', (req, res) => {
+//   console.log("✅ [TEST] basic-health hit!");
+//   res.send("✅ Backend up!");
+// });
+console.log("✅ [STARTUP] Basic health test route disabled");
 
 // CORS and Middleware - SECURE PRODUCTION CONFIG
 console.log("🛡️ [STARTUP] Setting up CORS and middleware...");
@@ -834,8 +845,8 @@ app.get('/admin/reset-password', async (req, res) => {
   }
 });
 
-// Comprehensive Health Check Endpoint
-app.use('/health-check', createHealthCheckEndpoint());
+// Comprehensive Health Check Endpoint - DISABLED to prevent /health route conflicts
+// app.use('/health-check', createHealthCheckEndpoint());
 
 // Safe root route handler with error handling and database readiness checks
 app.get('/', (req, res) => {
