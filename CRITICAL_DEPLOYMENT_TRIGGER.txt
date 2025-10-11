@@ -1,0 +1,6 @@
+CRITICAL Railway deployment trigger - Force redeploy with health endpoint fixes
+Timestamp: 2025-10-11T06:13:30Z
+Commit: f95379f
+Issue: Health endpoint still returning old format despite code deployment
+Evidence: /live-check works but /health shows old {"ok":true,"ts":"..."} format
+Required: New health format with service, status, commit, providers, fallbackTiers
