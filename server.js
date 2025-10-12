@@ -206,13 +206,31 @@ try {
   const app = express();
 
 // ================================
-// AUTHORITATIVE HEALTH ENDPOINT - MUST BE FIRST ROUTE
+// LIVE CHECK ENDPOINT - MUST BE FIRST ROUTE FOR RAILWAY HEALTH PROBE
+// ================================
+app.get('/live-check', (req, res) => {
+  console.log("🔥 [HEALTH] /live-check endpoint hit - Railway health probe successful!");
+  res.set('X-Health-Handler', 'server.js:live-check');
+  res.set('Cache-Control', 'no-store');
+  res.status(200).json({ 
+    status: "LIVE", 
+    timestamp: new Date().toISOString(),
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown',
+    node: process.version,
+    port: process.env.PORT || 3000,
+    message: "Railway health probe successful - server.js is executing!",
+    source: "server.js first route"
+  });
+});
+
+// ================================
+// AUTHORITATIVE HEALTH ENDPOINT - SECONDARY ROUTE
 // ================================
 app.get('/health', (req, res) => {
-  res.set('X-Health-Handler', 'server.js:new');
+  res.set('X-Health-Handler', 'server.js:health');
   res.set('Cache-Control', 'no-store');
   res.status(200).json({
-    service: 'price',
+    service: 'dbx-backend',
     status: 'ok',
     commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown',
     providers: { coingecko: 'configured', binance: 'configured' },
@@ -224,8 +242,9 @@ app.get('/health', (req, res) => {
 // Alias for LB:
 app.get('/health/lb', (req, res) => res.redirect(307, '/health'));
 
-console.log('[BOOT] server.js mounted /health FIRST');
+console.log('[BOOT] server.js mounted /live-check FIRST, /health SECOND');
 console.log(`[BOOT] commit=${process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown'} node=${process.version} port=${process.env.PORT || 3000}`);
+console.log('[BOOT] Railway health probe endpoint: /live-check');
 
 // Temporary route-dump endpoint to inspect order
 app.get('/_routes', (req, res) => {
@@ -414,20 +433,10 @@ const COMMIT = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || proces
 console.log("✅ [STARTUP] Instant health endpoints added as first routes");
 
 // ================================
-// DEEP PROBE MISSION - INLINE ROUTE TEST
+// DEEP PROBE MISSION - ROUTE VERIFICATION
 // ================================
-console.log("🧪 [PROBE] Adding inline live-check route for testing...");
-app.get('/live-check', (req, res) => {
-  console.log("🔥 [PROBE] /live-check endpoint hit - INLINE ROUTE WORKING!");
-  res.json({ 
-    status: "LIVE", 
-    timestamp: new Date().toISOString(),
-    message: "Inline route test successful - server.js is executing routes!",
-    source: "server.js inline route",
-    probe_mission: "SUCCESS"
-  });
-});
-console.log("✅ [PROBE] Inline live-check route added successfully!");
+console.log("✅ [PROBE] /live-check route already mounted as first route");
+console.log("✅ [PROBE] Railway health probe configuration complete");
 
 console.log("🌐 [STARTUP] About to create HTTP server...");
 const server = http.createServer(app);
