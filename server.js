@@ -1,3 +1,5 @@
+console.log('[BOOT] server.js loaded (pre-express)');
+try { require('fs').writeFileSync('/tmp/dbx-boot.txt', String(Date.now())); } catch {}
 console.log("🚀 SERVER.JS IS RUNNING ON RENDER - THIS IS THE TRUE ENGINE");
 console.log('[BOOT] Starting DBX backend build', process.env.RAILWAY_GIT_COMMIT_SHA || 'no_commit');
 console.log("🔥 OPERATION: SERVER RESURRECTION - PHANTOM APP BANISHED!");
@@ -163,6 +165,11 @@ console.log("✅ [DEBUG] adminCrudRoutes imported successfully");
 console.log("🔍 [DEBUG] adminCrudRoutes type:", typeof adminCrudRoutes);
 console.log("🔍 [DEBUG] adminCrudRoutes is function:", typeof adminCrudRoutes === 'function');
 
+// Helper function for boolean coercion
+function on(v) {
+  return ['1','true','yes','on'].includes(String(v).toLowerCase());
+}
+
 // Feature flags for optional routes
 const enableDebug = on(process.env.DEBUG_ENDPOINTS);
 const enableSeedDirect = on(process.env.ALLOW_SEED_DIRECT);
@@ -205,22 +212,21 @@ console.log("🏗️ [STARTUP] About to create Express app...");
 try {
   const app = express();
 
+console.log('[BOOT] express app created');
+app.get('/_routes', (req, res) => {
+  const stack = (app._router?.stack||[])
+    .filter(l => l.route)
+    .map(l => ({ method: Object.keys(l.route.methods)[0], path: l.route.path }));
+  res.set('Cache-Control', 'no-store');
+  res.json(stack);
+});
+
 // ================================
 // LIVE CHECK ENDPOINT - MUST BE FIRST ROUTE FOR RAILWAY HEALTH PROBE
 // ================================
 app.get('/live-check', (req, res) => {
-  console.log("🔥 [HEALTH] /live-check endpoint hit - Railway health probe successful!");
-  res.set('X-Health-Handler', 'server.js:live-check');
   res.set('Cache-Control', 'no-store');
-  res.status(200).json({ 
-    status: "LIVE", 
-    timestamp: new Date().toISOString(),
-    commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown',
-    node: process.version,
-    port: process.env.PORT || 3000,
-    message: "Railway health probe successful - server.js is executing!",
-    source: "server.js first route"
-  });
+  res.json({ status: 'LIVE', ts: Date.now(), pid: process.pid });
 });
 
 // ================================
@@ -269,9 +275,6 @@ app.get('/health-fix-test', (req, res) => {
 // ================================
 // SAFE ROUTER MOUNTING HELPER
 // ================================
-function on(v) {
-  return ['1','true','yes','on'].includes(String(v).toLowerCase());
-}
 
 function safeUse(path, router, name = 'router') {
   if (!router) {
