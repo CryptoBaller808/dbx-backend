@@ -1,15 +1,14 @@
-##
-# Docker Build: docker build . -t dbe-backend
-# Docker Run: docker run -p 3000:3000 dbe-backend
-# Docker PS: docker ps | grep dbe-backend
-# Docker Stop: docker stop IMAGE_ID
-##
-
 FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY . .
-EXPOSE 3000
-CMD ["node","server.js"]
 
+WORKDIR /app
+
+# If package-lock.json exists, npm ci is ideal; otherwise fall back to npm install.
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+
+COPY . .
+
+ENV NODE_ENV=production
+# Railway supplies PORT at runtime; we don't EXPOSE/HEALTHCHECK here.
+
+CMD ["node", "server.js"]

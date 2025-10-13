@@ -1,7 +1,6 @@
-console.log('[BOOT] server.js loaded (pre-express)');
-try { require('fs').writeFileSync('/tmp/dbx-boot.txt', String(Date.now())); } catch {}
-console.log("🚀 SERVER.JS IS RUNNING ON RENDER - THIS IS THE TRUE ENGINE");
-console.log('[BOOT] Starting DBX backend build', process.env.RAILWAY_GIT_COMMIT_SHA || 'no_commit');
+console.log('[BOOT] starting DBX backend… commit=%s node=%s',
+  process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown',
+  process.version);
 console.log("🔥 OPERATION: SERVER RESURRECTION - PHANTOM APP BANISHED!");
 console.log("⚡ DBX BACKEND TRUE HEART IS BEATING - GHOST SAGA ENDS HERE!");
 console.log("🌺 RENDER DEPLOYMENT TIMESTAMP:", new Date().toISOString());
@@ -213,20 +212,33 @@ try {
   const app = express();
 
 console.log('[BOOT] express app created');
-app.get('/_routes', (req, res) => {
-  const stack = (app._router?.stack||[])
-    .filter(l => l.route)
-    .map(l => ({ method: Object.keys(l.route.methods)[0], path: l.route.path }));
-  res.set('Cache-Control', 'no-store');
-  res.json(stack);
-});
 
 // ================================
 // LIVE CHECK ENDPOINT - MUST BE FIRST ROUTE FOR RAILWAY HEALTH PROBE
 // ================================
 app.get('/live-check', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ status: 'LIVE', ts: Date.now(), pid: process.pid });
+  res.set('X-Health-Handler', 'server.js:live-first');
+  res.status(200).json({
+    status: 'ok',
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT || 'unknown',
+    node: process.version,
+    portEnv: process.env.PORT || null,
+    ts: Date.now()
+  });
+});
+
+// ================================
+// ROUTE DUMP FOR DEBUG
+// ================================
+app.get('/_routes', (req, res) => {
+  const stack = (app._router && app._router.stack) || [];
+  const routes = stack
+    .filter(l => l.route && l.route.path)
+    .map(l => ({ method: Object.keys(l.route.methods)[0], path: l.route.path }));
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Health-Handler', 'server.js:routes');
+  res.json(routes);
 });
 
 // ================================
@@ -657,14 +669,8 @@ console.log("🛡️ [SECURITY] Security hardening complete");
 // ================================
 // CRASH-SAFETY LOGGING
 // ================================
-process.on('unhandledRejection', (err) => {
-  console.error('[FATAL] unhandledRejection', err);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('[FATAL] uncaughtException', err);
-  process.exit(1);
-});
+process.on('unhandledRejection', err => console.error('[BOOT] unhandledRejection', err));
+process.on('uncaughtException', err => { console.error('[BOOT] uncaughtException', err); process.exit(1); });
 
 // ================================
 // IMMEDIATE SERVER BINDING - LISTEN FIRST
@@ -681,13 +687,16 @@ const ALLOWLIST = [
 
 console.log("🚀 [BOOT] Starting HTTP server immediately...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log('[BOOT] API listening on :%s (env PORT=%s)', PORT, process.env.PORT);
-  console.log('[BOOT] commit=%s NODE_ENV=%s', process.env.RAILWAY_GIT_COMMIT_SHA||process.env.COMMIT||'unknown', process.env.NODE_ENV);
-  console.log('[BOOT] enabled fallback tiers: coingecko,binance,markets,market_chart,legacy,tickers,cross');
-  console.log('[BOOT] CORS allowlist:', ALLOWLIST.join(','));
-  
-  // Defer all warm-ups to after server binding
-  setImmediate(postStartupWarmups);
+  console.log('[BOOT] listening on :%s host=%s (env PORT=%s)', PORT, HOST, process.env.PORT);
+  setImmediate(() => {
+    console.log('[BOOT] post-start warmups begin');
+    // kick off any provider warmups here (wrapped in try/catch)
+    try {
+      postStartupWarmups();
+    } catch (err) {
+      console.error('[BOOT] warmup error:', err);
+    }
+  });
 });
 
 // ================================
