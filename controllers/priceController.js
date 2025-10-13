@@ -15,6 +15,18 @@ const COINGECKO_IDS = {
   'XDC': 'xdc-network'
 };
 
+// CoinCap ID mapping
+const COINCAP_IDS = {
+  'ETH': 'ethereum',
+  'BTC': 'bitcoin',
+  'XRP': 'xrp',
+  'XLM': 'stellar',
+  'MATIC': 'polygon',
+  'BNB': 'binance-coin',
+  'SOL': 'solana',
+  'XDC': 'xinfin-network'
+};
+
 // 60-second in-memory cache
 const priceCache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
@@ -94,7 +106,23 @@ exports.getSpotPrice = async (req, res) => {
       }
     }
     
-    // If Binance failed, try CoinGecko (if API key is available)
+    // If Binance failed, try CoinCap (no key required)
+    if (!Number.isFinite(price)) {
+      if (quoteUpper === 'USDT' || quoteUpper === 'USD') {
+        price = await fetchCoinCapPrice(baseUpper);
+        if (Number.isFinite(price)) {
+          source = 'coincap';
+        }
+      } else if (quoteUpper === 'USDC') {
+        // For USDC, get USD price and mark as coincap_cross
+        price = await fetchCoinCapPrice(baseUpper);
+        if (Number.isFinite(price)) {
+          source = 'coincap_cross';
+        }
+      }
+    }
+    
+    // If CoinCap failed, try CoinGecko (if API key is available)
     if (!Number.isFinite(price) && process.env.COINGECKO_API_KEY) {
       price = await fetchCoinGeckoPrice(baseUpper);
       if (Number.isFinite(price)) {
@@ -156,6 +184,43 @@ async function fetchBinancePrice(base) {
 }
 
 /**
+ * Fetch price from CoinCap (no API key required)
+ * @param {string} base - Base currency symbol
+ * @returns {Promise<number|null>} Price or null
+ */
+async function fetchCoinCapPrice(base) {
+  try {
+    const coinId = COINCAP_IDS[base];
+    if (!coinId) {
+      return null;
+    }
+    
+    const url = `https://api.coincap.io/v2/assets/${coinId}`;
+    
+    // Use AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    
+    const response = await axios.get(url, { 
+      signal: controller.signal,
+      timeout: 2500
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.data && response.data.data && response.data.data.priceUsd) {
+      const price = parseFloat(response.data.data.priceUsd);
+      return Number.isFinite(price) ? price : null;
+    }
+    
+    return null;
+    
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * Fetch price from CoinGecko (requires API key)
  * @param {string} base - Base currency symbol
  * @returns {Promise<number|null>} Price or null
@@ -203,9 +268,19 @@ async function fetchCoinGeckoPrice(base) {
 
 // Keep the health check for compatibility
 exports.healthCheck = async (req, res) => {
+  const providers = {
+    binance: "configured",
+    coincap: "configured"
+  };
+  
+  if (process.env.COINGECKO_API_KEY) {
+    providers.coingecko = "configured";
+  }
+  
   res.status(200).json({
     status: 'ok',
     service: 'price',
+    providers,
     ts: Date.now()
   });
 };
