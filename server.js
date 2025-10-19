@@ -1389,6 +1389,29 @@ app.use('/api/creator', creatorRoutes);
 app.use('/api/bitcoin', bitcoinRoutes);
 
 // Mount Exchange Routes (for TradingView chart data)
+// Temporary stub for OHLCV data - unblocks chart immediately
+app.get('/api/exchangeRates', async (req, res) => {
+  try {
+    const resMin = Number(req.query.resolution) || 60;      // e.g., "60"
+    const from   = Number(req.query.from) || Math.floor(Date.now()/1000) - 86400;
+    const to     = Number(req.query.to)   || Math.floor(Date.now()/1000);
+    const step   = resMin * 60;
+
+    const bars = [];
+    for (let t = from; t <= to; t += step) {
+      const base = 3800, wob = Math.sin(t/600)*10;
+      const open = base + wob;
+      const high = open + 5;
+      const low  = open - 5;
+      const close = open + Math.sin(t/300)*2;
+      bars.push({ time: t, open, high, low, close, volume: 100 });
+    }
+    res.json(bars); // TradingView expects time in **seconds**
+  } catch (e) {
+    res.status(500).json({ error: 'ohlcv_error', detail: String(e?.message || e) });
+  }
+});
+
 app.use('/api/exchangeRates', exchangeRoutes);
 
 // Mount Price Routes (for spot price feed)
