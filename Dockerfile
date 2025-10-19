@@ -1,7 +1,7 @@
 ##
-# Docker Build: docker build . -t dbe-backend
-# Docker Run: docker run -p 3000:3000 dbe-backend
-# Docker PS: docker ps | grep dbe-backend
+# Docker Build: docker build . -t dbx-backend
+# Docker Run: docker run -p 8080:8080 dbx-backend
+# Docker PS: docker ps | grep dbx-backend
 # Docker Stop: docker stop IMAGE_ID
 ##
 
@@ -11,14 +11,23 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Install app dependencies
-COPY package.json ./
-
-RUN npm i -f
+# Copy package files first for better caching
+COPY package*.json ./
+RUN npm ci --omit=dev
 
 # Bundle app source
 COPY . .
 
-EXPOSE 3000
+# Set production environment
+ENV NODE_ENV=production
+ENV PORT=8080
 
-CMD [ "node", "server.js" ]
+# Expose the port
+EXPOSE 8080
 
+# Health check for Railway
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:8080/live-check', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the server
+CMD ["node", "server.js"]
