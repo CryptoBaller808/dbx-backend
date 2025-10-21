@@ -136,7 +136,7 @@ exports.uploadBanner = [
       const uploadResult = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
-            folder: 'dbx/banners',
+            folder: 'dbx-banners',
             resource_type: 'image',
             transformation: [
               { quality: 'auto:good' },
