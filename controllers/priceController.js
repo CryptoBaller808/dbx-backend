@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Supported base currencies
-const SUPPORTED_BASES = ['ETH', 'BTC', 'XRP', 'XLM', 'MATIC', 'BNB', 'SOL', 'XDC'];
+const SUPPORTED_BASES = ['ETH', 'BTC', 'XRP', 'XLM', 'MATIC', 'BNB', 'SOL', 'XDC', 'AVAX'];
 
 // CoinGecko ID mapping (only if CoinGecko is available)
 const COINGECKO_IDS = {
@@ -12,7 +12,8 @@ const COINGECKO_IDS = {
   'BNB': 'binancecoin',
   'MATIC': 'polygon-pos',
   'SOL': 'solana',
-  'XDC': 'xdc-network'
+  'XDC': 'xdc-network',
+  'AVAX': 'avalanche-2'
 };
 
 // CoinCap ID mapping
@@ -24,7 +25,8 @@ const COINCAP_IDS = {
   'MATIC': 'polygon',
   'BNB': 'binance-coin',
   'SOL': 'solana',
-  'XDC': 'xinfin-network'
+  'XDC': 'xinfin-network',
+  'AVAX': 'avalanche'
 };
 
 // 60-second in-memory cache
@@ -166,7 +168,24 @@ exports.getSpotPrice = async (req, res) => {
  */
 async function fetchBinancePrice(base) {
   try {
-    const symbol = `${base}USDT`;
+    // Binance symbol mapping
+    const binanceMap = {
+      'BTC': 'BTCUSDT',
+      'ETH': 'ETHUSDT', 
+      'XRP': 'XRPUSDT',
+      'XLM': 'XLMUSDT',
+      'MATIC': 'MATICUSDT',
+      'BNB': 'BNBUSDT',
+      'SOL': 'SOLUSDT',
+      'AVAX': 'AVAXUSDT'
+      // XDC not available on Binance - will fallback to other providers
+    };
+    
+    const symbol = binanceMap[base];
+    if (!symbol) {
+      return null; // Not available on Binance
+    }
+    
     const url = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
     
     const response = await axios.get(url, { timeout: 2500 });
