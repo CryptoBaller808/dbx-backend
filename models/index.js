@@ -10,11 +10,15 @@ const { Sequelize, DataTypes } = require('sequelize');
 // Environment configuration
 const env = process.env.NODE_ENV || 'development';
 
+// Enable SQL logging for startup diagnostics
+const enableStartupSQL = process.env.DBX_LOG_SQL === 'true';
+console.log(`🔍 [SQL Logging] DBX_LOG_SQL=${process.env.DBX_LOG_SQL}, enableStartupSQL=${enableStartupSQL}`);
+
 // Database configuration
 let sequelize;
 
 if (process.env.DATABASE_URL) {
-  // Production: Use DATABASE_URL from environment
+  // Production: Use DATABASE_URL from environment with optimized pool settings
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
     dialectOptions: {
@@ -23,16 +27,17 @@ if (process.env.DATABASE_URL) {
         rejectUnauthorized: false
       }
     },
-    logging: env === 'development' ? console.log : false,
+    logging: enableStartupSQL ? console.log : (env === 'development' ? console.log : false),
     pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
+      max: 10,        // Increased from 5 for better concurrency
+      min: 1,         // Always keep 1 connection alive
+      acquire: 20000, // 20 seconds to acquire connection
+      idle: 10000,    // 10 seconds before closing idle connections
+      evict: 10000    // 10 seconds eviction timeout
     }
   });
 } else {
-  // Development: Use individual connection parameters
+  // Development: Use individual connection parameters with optimized pool
   sequelize = new Sequelize(
     process.env.DB_NAME || 'dbx_development',
     process.env.DB_USER || 'postgres',
@@ -41,12 +46,13 @@ if (process.env.DATABASE_URL) {
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
       dialect: 'postgres',
-      logging: env === 'development' ? console.log : false,
+      logging: enableStartupSQL ? console.log : (env === 'development' ? console.log : false),
       pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
+        max: 10,        // Increased from 5 for better concurrency
+        min: 1,         // Always keep 1 connection alive
+        acquire: 20000, // 20 seconds to acquire connection
+        idle: 10000,    // 10 seconds before closing idle connections
+        evict: 10000    // 10 seconds eviction timeout
       }
     }
   );
@@ -62,6 +68,7 @@ const basename = path.basename(__filename);
 const models = [
   'userModel.js',
   'roleModel.js',
+  'tokenModel.js',  // Added Token model for Phase 2
   'NFT.js',
   'NFTAuction.js',
   'NFTBid.js',
@@ -156,15 +163,20 @@ const initializeDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ [Database] Database connection established successfully');
     
-    // FIXED: Use alter: false to prevent conflicting ALTER queries
-    if (env === 'development') {
-      await sequelize.sync({ alter: false });
-      console.log('✅ [Database] Database models synchronized (development - no alter)');
+    // MIGRATION-FIRST APPROACH: Skip sync in light mode and production
+    if (process.env.DBX_STARTUP_MODE === 'light') {
+      console.log('🚀 [LIGHT START] Skipping database sync in light mode');
     } else if (env === 'production') {
-      // PRODUCTION: Use safest possible sync - no alter, no force
-      // This will only create tables if they don't exist, no modifications to existing tables
-      await sequelize.sync({ force: false, alter: false });
-      console.log('✅ [Database] Database models synchronized (production - safe mode, no alter)');
+      console.log('🏭 [PRODUCTION] Using migration-first approach - no sync/alter in production');
+      console.log('🏭 [PRODUCTION] Database schema managed by migrations only');
+      // REMOVED: sequelize.sync() in production - migrations handle schema changes
+    } else if (env === 'development' && process.env.DBX_STARTUP_MODE === 'full') {
+      // Only allow sync in development with explicit full mode for debugging
+      console.log('🔧 [DEVELOPMENT] Running sync with alter for debugging (full mode only)');
+      await sequelize.sync({ alter: true });
+      console.log('✅ [Database] Database models synchronized (development - with alter for debugging)');
+    } else {
+      console.log('🔧 [DEVELOPMENT] Skipping sync - use DBX_STARTUP_MODE=full to enable sync for debugging');
     }
     
     console.log('🎯 [Models] Available models:', Object.keys(db).filter(key => key !== 'Sequelize' && key !== 'sequelize'));

@@ -48,7 +48,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: true,
       },
-      userId: {
+      user_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
@@ -71,7 +71,7 @@ module.exports = (sequelize, DataTypes) => {
           fields: ['fromAddress']
         },
         {
-          fields: ['userId']
+          fields: ['user_id']
         }
       ]
     }

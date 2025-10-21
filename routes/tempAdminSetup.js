@@ -27,8 +27,8 @@ router.post('/createAdmin', async (req, res) => {
         name VARCHAR(255) UNIQUE NOT NULL,
         description TEXT,
         permissions JSONB DEFAULT '{}',
-        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
     
@@ -45,8 +45,8 @@ router.post('/createAdmin', async (req, res) => {
         role_id INTEGER DEFAULT 2,
         status VARCHAR(50) DEFAULT 'active',
         email_verified BOOLEAN DEFAULT false,
-        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
     
@@ -61,7 +61,7 @@ router.post('/createAdmin', async (req, res) => {
     if (roleResults.length === 0) {
       console.log('🔄 [TempAdmin] Creating admin role...');
       const [insertRoleResults] = await sequelize.query(`
-        INSERT INTO roles (name, description, permissions, "createdAt", "updatedAt")
+        INSERT INTO roles (name, description, permissions, created_at, updated_at)
         VALUES (?, ?, ?, NOW(), NOW())
       `, {
         replacements: ['admin', 'Administrator role with full access', JSON.stringify({ all: true })]
@@ -102,7 +102,7 @@ router.post('/createAdmin', async (req, res) => {
     await sequelize.query(`
       INSERT INTO users (
         username, email, password, first_name, last_name, 
-        role_id, status, email_verified, "createdAt", "updatedAt"
+        role_id, status, email_verified, created_at, updated_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `, {

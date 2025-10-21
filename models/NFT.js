@@ -214,7 +214,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       tableName: "nfts",
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
       timestamps: true,
+      underscored: true, // Ensure snake_case naming for all fields and associations
       indexes: [
         {
           fields: ['collection_id']
@@ -230,6 +233,9 @@ module.exports = (sequelize, DataTypes) => {
         },
         {
           fields: ['status']
+        },
+        {
+          fields: ['created_at']
         },
         {
           fields: ['token_id', 'blockchain', 'contract_address'],
@@ -269,6 +275,27 @@ module.exports = (sequelize, DataTypes) => {
       }
     }
   );
+
+  // Define associations
+  NFT.associate = function(models) {
+    // NFT belongs to User (creator)
+    NFT.belongsTo(models.User, {
+      foreignKey: 'creator_id',
+      as: 'creator'
+    });
+    
+    // NFT belongs to User (current owner)
+    NFT.belongsTo(models.User, {
+      foreignKey: 'current_owner_id',
+      as: 'currentOwner'
+    });
+    
+    // NFT belongs to NFTCollection
+    NFT.belongsTo(models.NFTCollection, {
+      foreignKey: 'collection_id',
+      as: 'collection'
+    });
+  };
 
   return NFT;
 };

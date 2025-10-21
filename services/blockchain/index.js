@@ -215,6 +215,40 @@ const createAdapterRegistry = async (configManager) => {
 // Initialize blockchain services
 const initializeBlockchainServices = async (db) => {
   try {
+    // Guard: Skip blockchain initialization if required tables don't exist or if disabled
+    if (process.env.DBX_SKIP_CHAIN_INIT === 'true') {
+      console.log('[Blockchain Services] Skipping blockchain initialization (DBX_SKIP_CHAIN_INIT=true)');
+      return null;
+    }
+    
+    // Check if required tables exist
+    if (!db || !db.models) {
+      console.log('[Blockchain Services] Database models not available, skipping blockchain initialization');
+      return null;
+    }
+    
+    // Check for blockchains table existence with proper guard
+    try {
+      if (db.models.Blockchain) {
+        // Use SELECT to_regclass to check table existence without causing errors
+        const [results] = await db.sequelize.query(
+          "SELECT to_regclass('public.blockchains') as table_exists"
+        );
+        
+        if (results && results[0] && results[0].table_exists) {
+          // Test if we can query the table
+          await db.models.Blockchain.findOne({ limit: 1 });
+          console.log('[Blockchain Services] Blockchain table exists and is accessible');
+        } else {
+          console.log('[Blockchain Services] Blockchain table does not exist, using default configurations');
+        }
+      } else {
+        console.log('[Blockchain Services] Blockchain model not found, using default configurations');
+      }
+    } catch (tableError) {
+      console.warn('[Blockchain Services] Blockchain table not accessible, using default configurations:', tableError.message);
+    }
+    
     // Create configuration manager
     const configManager = new ConfigurationManager(db?.models?.Blockchain);
     

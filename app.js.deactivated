@@ -21,6 +21,7 @@ const minter = require("./routes/mintNFTRoute.js");
 const saleRouter = require("./routes/saleRoute.js");
 const dashRouter = require("./routes/dashRoute.js");
 const adminRouter = require("./routes/adminRoute.js");
+const adminDashboardRouter = require("./routes/adminDashboardRoutes.js");
 const mailingRouter = require("./routes/malingRoute.js");
 const tempAdminRouter = require("./routes/tempAdminSetup.js");
 const versionRouter = require("./routes/versionCheck_simple.js");
@@ -32,6 +33,7 @@ const simpleDatabaseTestRouter = require("./routes/simpleDatabaseTest.js");
 const healthRouter = require("./routes/healthWithDiagnostics.js");
 const schemaDiagnosticsRouter = require("./routes/schemaDiagnosticsEndpoint.js");
 const testSchemaDiagnosticsRouter = require("./routes/testSchemaDiagnostics.js");
+const exchangeRouter = require("./routes/exchangeRoutes.js");
 
 //merge code
 // import path from "path";
@@ -939,7 +941,7 @@ app.use("/userdashboard", dashRouter);
 
 // Add explicit CORS headers for admin routes
 app.use("/admindashboard", (req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://dbx-admin.onrender.com");
+  res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Credentials", "true");
@@ -953,7 +955,12 @@ app.use("/admindashboard", (req, res, next) => {
   next();
 });
 
-app.use("/admindashboard", adminRouter);
+// 🚀 CRUD FIX: adminDashboardRouter FIRST to enable full CRUD functionality
+app.use("/admindashboard", adminDashboardRouter);
+
+// 🔧 LEGACY ROUTER: Commented out to prevent route conflicts
+// app.use("/admindashboard", adminRouter);
+
 app.use("/mail", mailingRouter);
 app.use("/temp-admin", tempAdminRouter);
 app.use("/simple-admin", simpleAdminRouter);
@@ -961,6 +968,7 @@ app.use("/debug-admin", debugAdminRouter);
 app.use("/simple-diagnostics", simpleDiagnosticsRouter);
 app.use("/safe-schema", safeSchemaRouter);
 app.use("/simple-db-test", simpleDatabaseTestRouter);
+app.use("/api", exchangeRouter);
 
 // const server = https.createServer(app).listen(PORT, function() {
 //     console.log('Https App started');

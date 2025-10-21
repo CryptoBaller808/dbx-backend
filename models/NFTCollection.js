@@ -83,19 +83,15 @@ module.exports = (sequelize, DataTypes) => {
       // Creator and Category
       creator_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'users',
-          key: 'id'
-        }
+        allowNull: false
+        // REMOVED: inline references to fix PostgreSQL REFERENCES syntax error
+        // Foreign key constraint will be handled by migrations instead
       },
       category_id: {
         type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-          model: 'categories',
-          key: 'id'
-        }
+        allowNull: true
+        // REMOVED: inline references to fix PostgreSQL REFERENCES syntax error
+        // Foreign key constraint will be handled by migrations instead
       },
       // Collection Configuration
       max_supply: {
@@ -260,6 +256,9 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "nft_collections",
       timestamps: true,
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      underscored: true, // Ensure snake_case naming for all fields and associations
       indexes: [
         {
           fields: ['creator_id']
@@ -277,6 +276,9 @@ module.exports = (sequelize, DataTypes) => {
           fields: ['is_verified']
         },
         {
+          fields: ['created_at']
+         },
+        {       
           fields: ['is_featured']
         },
         {
@@ -314,6 +316,21 @@ module.exports = (sequelize, DataTypes) => {
       }
     }
   );
+
+  // Define associations
+  NFTCollection.associate = function(models) {
+    // NFTCollection belongs to User (creator)
+    NFTCollection.belongsTo(models.User, {
+      foreignKey: 'creator_id',
+      as: 'creator'
+    });
+    
+    // NFTCollection has many NFTs
+    NFTCollection.hasMany(models.NFT, {
+      foreignKey: 'collection_id',
+      as: 'nfts'
+    });
+  };
 
   return NFTCollection;
 };

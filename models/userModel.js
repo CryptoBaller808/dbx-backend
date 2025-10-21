@@ -64,6 +64,8 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         defaultValue: 2
+        // REMOVED: inline references to fix PostgreSQL REFERENCES syntax error
+        // Foreign key constraint will be handled by migrations instead
       },
       status: {
         type: DataTypes.STRING,
@@ -125,6 +127,27 @@ module.exports = (sequelize, DataTypes) => {
       ]
     }
   );
+
+  // Define associations
+  User.associate = function(models) {
+    // User has many NFTs as creator
+    User.hasMany(models.NFT, {
+      foreignKey: 'creator_id',
+      as: 'createdNFTs'
+    });
+    
+    // User has many NFTs as current owner
+    User.hasMany(models.NFT, {
+      foreignKey: 'current_owner_id',
+      as: 'ownedNFTs'
+    });
+    
+    // User has many NFTCollections as creator
+    User.hasMany(models.NFTCollection, {
+      foreignKey: 'creator_id',
+      as: 'createdCollections'
+    });
+  };
 
   return User;
 };

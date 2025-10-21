@@ -4,14 +4,14 @@ const { DataTypes } = require('sequelize');
  * User MFA Model
  * Stores MFA configuration and recovery codes for users
  */
-module.exports = (sequelize) => {
+module.exports = (sequelize, DataTypes) => {
   const UserMFA = sequelize.define('UserMFA', {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
     },
-    userId: {
+    user_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
       unique: true,
@@ -82,7 +82,7 @@ module.exports = (sequelize) => {
     indexes: [
       {
         unique: true,
-        fields: ['userId']
+        fields: ['user_id']
       },
       {
         fields: ['isEnabled']
@@ -166,12 +166,12 @@ module.exports = (sequelize) => {
 
   // Class methods
   UserMFA.findByUserId = async function(userId) {
-    return await this.findOne({ where: { userId } });
+    return await this.findOne({ where: { user_id: userId } });
   };
 
   UserMFA.createForUser = async function(userId, secretEncrypted, backupCodes) {
     return await this.create({
-      userId,
+      user_id: userId,
       secretEncrypted,
       backupCodesEncrypted: JSON.stringify(backupCodes),
       isEnabled: true,
@@ -195,7 +195,7 @@ module.exports = (sequelize) => {
   // Associations will be defined in the main models/index.js file
   UserMFA.associate = function(models) {
     UserMFA.belongsTo(models.User, {
-      foreignKey: 'userId',
+      foreignKey: 'user_id',
       as: 'userMFA_primary',
       onDelete: 'CASCADE'
     });
