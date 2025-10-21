@@ -193,6 +193,7 @@ const { router: systemHealthRoutes, initializeHealthMonitoringService } = requir
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
 const priceRoutes = require('./routes/priceRoute');
+const bannerRoutes = require('./routes/bannerRoutes');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -536,7 +537,7 @@ app.use(cors({
   },
   credentials: false, // Using Bearer tokens, not cookies
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key', 'X-Admin-Key'],
   exposedHeaders: ['X-Request-Id'],
   preflightContinue: false,
   optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
@@ -1309,6 +1310,7 @@ const productionCors = cors({
     // Production-only allowlist - no dev/local origins
     const allowlist = [
       'https://dbx-admin.onrender.com',
+      'https://dbx-admin-staging.onrender.com',
       'https://dbx-frontend.onrender.com'
     ];
     
@@ -1321,12 +1323,14 @@ const productionCors = cors({
     }
   },
   methods: ['POST', 'GET', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key'],
   credentials: false
 });
 
 // Apply production CORS to admin endpoints
 app.use('/admindashboard/auth', productionCors);
+app.use('/admin/banner', productionCors);
+app.use('/admin/banners', productionCors);
 console.log("✅ [CORS] Production CORS configured for admin operations endpoints");
 
 // Mount Admin Authentication Routes with safe mounting
@@ -1507,6 +1511,11 @@ app.use('/api/exchangeRates', exchangeRoutes);
 
 // Mount Price Routes (for spot price feed)
 app.use('/api/price', priceRoutes);
+
+// Mount Banner Routes (for admin banner management)
+app.use('/admin/banner', bannerRoutes);
+app.use('/admin/banners', bannerRoutes);
+console.log("✅ [STARTUP] Banner routes mounted successfully!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
