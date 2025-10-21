@@ -42,12 +42,9 @@ exports.getSpotPrice = async (req, res) => {
   
   // Validate parameters
   if (!base || !quote) {
-    return res.status(200).json({
-      price: null,
-      base: base || '',
-      quote: quote || '',
-      source: 'none',
-      ts: Date.now()
+    return res.status(502).json({
+      error: 'missing_parameters',
+      detail: 'Both base and quote parameters are required'
     });
   }
 
@@ -56,23 +53,17 @@ exports.getSpotPrice = async (req, res) => {
   
   // Validate supported base
   if (!SUPPORTED_BASES.includes(baseUpper)) {
-    return res.status(200).json({
-      price: null,
-      base: baseUpper,
-      quote: quoteUpper,
-      source: 'none',
-      ts: Date.now()
+    return res.status(502).json({
+      error: 'unsupported_base',
+      detail: `Base currency ${baseUpper} is not supported`
     });
   }
   
   // Validate supported quote
   if (!['USD', 'USDT', 'USDC'].includes(quoteUpper)) {
-    return res.status(200).json({
-      price: null,
-      base: baseUpper,
-      quote: quoteUpper,
-      source: 'none',
-      ts: Date.now()
+    return res.status(502).json({
+      error: 'unsupported_quote',
+      detail: `Quote currency ${quoteUpper} is not supported`
     });
   }
 
@@ -91,72 +82,78 @@ exports.getSpotPrice = async (req, res) => {
   }
 
   try {
-    let price = null;
-    let source = 'none';
+    let result = null;
     
-    // Try Binance first (no key required)
-    if (quoteUpper === 'USDT' || quoteUpper === 'USD') {
-      price = await fetchBinancePrice(baseUpper);
-      if (Number.isFinite(price)) {
-        source = 'binance';
-      }
-    } else if (quoteUpper === 'USDC') {
-      // For USDC, get USDT price and mark as binance_cross
-      price = await fetchBinancePrice(baseUpper);
-      if (Number.isFinite(price)) {
-        source = 'binance_cross';
-      }
-    }
+    // Binance symbol mapping for direct support
+    const binanceMap = {
+      'BTC': 'BTCUSDT',
+      'ETH': 'ETHUSDT', 
+      'XRP': 'XRPUSDT',
+      'XLM': 'XLMUSDT',
+      'MATIC': 'MATICUSDT',
+      'BNB': 'BNBUSDT',
+      'SOL': 'SOLUSDT',
+      'AVAX': 'AVAXUSDT'
+    };
     
-    // If Binance failed, try CoinCap (no key required)
-    if (!Number.isFinite(price)) {
-      if (quoteUpper === 'USDT' || quoteUpper === 'USD') {
-        price = await fetchCoinCapPrice(baseUpper);
-        if (Number.isFinite(price)) {
-          source = 'coincap';
+    if (quoteUpper === 'USDT' && binanceMap[baseUpper]) {
+      // Try Binance first for supported pairs
+      try {
+        result = await fetchBinancePrice(baseUpper);
+      } catch {
+        // Binance failed, continue to fallbacks
+      }
+    } else if (baseUpper === 'XDC' && quoteUpper === 'USDT') {
+      // XDC fallback chain: KuCoin -> CoinGecko
+      try {
+        result = await fetchKuCoinPrice('XDC-USDT');
+      } catch {
+        try {
+          result = await fetchCoinGeckoPrice(baseUpper);
+        } catch {
+          result = await fetchCoinCapPrice(baseUpper);
         }
-      } else if (quoteUpper === 'USDC') {
-        // For USDC, get USD price and mark as coincap_cross
-        price = await fetchCoinCapPrice(baseUpper);
-        if (Number.isFinite(price)) {
-          source = 'coincap_cross';
+      }
+    } else {
+      // Try CoinCap and CoinGecko for other pairs
+      try {
+        result = await fetchCoinCapPrice(baseUpper);
+      } catch {
+        if (process.env.COINGECKO_API_KEY) {
+          try {
+            result = await fetchCoinGeckoPrice(baseUpper);
+          } catch {
+            // All providers failed
+          }
         }
       }
     }
     
-    // If CoinCap failed, try CoinGecko (if API key is available)
-    if (!Number.isFinite(price) && process.env.COINGECKO_API_KEY) {
-      price = await fetchCoinGeckoPrice(baseUpper);
-      if (Number.isFinite(price)) {
-        source = 'coingecko';
-      }
+    // Ensure we have a valid result
+    if (!result || !Number.isFinite(result.price) || result.price <= 0) {
+      throw new Error('no_valid_price_found');
     }
     
-    // Cache only finite numbers
-    if (Number.isFinite(price)) {
-      priceCache.set(cacheKey, {
-        price: price,
-        source: source,
-        timestamp: Date.now()
-      });
-    }
+    // Cache the successful result
+    priceCache.set(cacheKey, {
+      price: result.price,
+      source: result.source,
+      timestamp: Date.now()
+    });
     
     return res.status(200).json({
-      price: price,
+      price: result.price,
       base: baseUpper,
       quote: quoteUpper,
-      source: source,
+      source: result.source,
       ts: Date.now()
     });
     
   } catch (error) {
-    // Never throw - always return 200 with null price
-    return res.status(200).json({
-      price: null,
-      base: baseUpper,
-      quote: quoteUpper,
-      source: 'none',
-      ts: Date.now()
+    // Return 502 for price fetch failures (not 200 with null)
+    return res.status(502).json({
+      error: 'price_fetch_failed',
+      detail: String(error?.message || error)
     });
   }
 };
@@ -192,13 +189,15 @@ async function fetchBinancePrice(base) {
     
     if (response.data && response.data.price) {
       const price = parseFloat(response.data.price);
-      return Number.isFinite(price) ? price : null;
+      if (Number.isFinite(price) && price > 0) {
+        return { price, source: 'binance' };
+      }
     }
     
-    return null;
+    throw new Error('binance_no_price');
     
   } catch (error) {
-    return null;
+    throw new Error(`http_error_${error.response?.status || 'unknown'}`);
   }
 }
 
@@ -229,20 +228,47 @@ async function fetchCoinCapPrice(base) {
     
     if (response.data && response.data.data && response.data.data.priceUsd) {
       const price = parseFloat(response.data.data.priceUsd);
-      return Number.isFinite(price) ? price : null;
+      if (Number.isFinite(price) && price > 0) {
+        return { price, source: 'coincap' };
+      }
     }
     
-    return null;
+    throw new Error('cc_no_price');
     
   } catch (error) {
-    return null;
+    throw new Error(`http_error_${error.response?.status || 'unknown'}`);
+  }
+}
+
+/**
+ * Fetch price from KuCoin (no API key required)
+ * @param {string} symbol - Trading symbol (e.g., 'XDC-USDT')
+ * @returns {Promise<{price: number, source: string}>} Price and source
+ */
+async function fetchKuCoinPrice(symbol) {
+  try {
+    const url = `https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${symbol}`;
+    
+    const response = await axios.get(url, { timeout: 5000 });
+    
+    if (response.data && response.data.data && response.data.data.price) {
+      const price = parseFloat(response.data.data.price);
+      if (Number.isFinite(price) && price > 0) {
+        return { price, source: 'kucoin' };
+      }
+    }
+    
+    throw new Error('ku_bad_price');
+    
+  } catch (error) {
+    throw new Error(`ku_http_${error.response?.status || 'error'}`);
   }
 }
 
 /**
  * Fetch price from CoinGecko (requires API key)
  * @param {string} base - Base currency symbol
- * @returns {Promise<number|null>} Price or null
+ * @returns {Promise<{price: number, source: string}>} Price and source
  */
 async function fetchCoinGeckoPrice(base) {
   try {
@@ -275,13 +301,40 @@ async function fetchCoinGeckoPrice(base) {
     
     if (response.data && response.data[coinId] && response.data[coinId].usd) {
       const price = response.data[coinId].usd;
-      return Number.isFinite(price) ? price : null;
+      if (Number.isFinite(price) && price > 0) {
+        return { price, source: 'coingecko' };
+      }
     }
     
-    return null;
+    // Try alternative XDC IDs for CoinGecko
+    if (base === 'XDC') {
+      const altIds = ['xinfin-network', 'xdce-crowd-sale'];
+      for (const altId of altIds) {
+        try {
+          const altUrl = `https://api.coingecko.com/api/v3/simple/price`;
+          const altParams = { ids: altId, vs_currencies: 'usd' };
+          const altResponse = await axios.get(altUrl, { 
+            params: altParams, 
+            headers,
+            timeout: 2500
+          });
+          
+          if (altResponse.data && altResponse.data[altId] && altResponse.data[altId].usd) {
+            const altPrice = altResponse.data[altId].usd;
+            if (Number.isFinite(altPrice) && altPrice > 0) {
+              return { price: altPrice, source: 'coingecko' };
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+    
+    throw new Error('cg_no_price');
     
   } catch (error) {
-    return null;
+    throw new Error(`http_error_${error.response?.status || 'unknown'}`);
   }
 }
 
