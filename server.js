@@ -537,10 +537,10 @@ app.use(cors({
   },
   credentials: false, // Using Bearer tokens, not cookies
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key', 'X-Admin-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key', 'X-Admin-Key', 'x-admin-key'],
   exposedHeaders: ['X-Request-Id'],
   preflightContinue: false,
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 204 // Standard preflight response
 }));
 
 // Add Vary: Origin header to all responses to avoid cache issues
@@ -1322,15 +1322,14 @@ const productionCors = cors({
       cb(new Error(`Not allowed by CORS policy: ${origin}`));
     }
   },
-  methods: ['POST', 'GET', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key', 'x-admin-key'],
   credentials: false
 });
 
 // Apply production CORS to admin endpoints
 app.use('/admindashboard/auth', productionCors);
-app.use('/admin/banner', productionCors);
-app.use('/admin/banners', productionCors);
+app.use('/admin', productionCors);
 console.log("✅ [CORS] Production CORS configured for admin operations endpoints");
 
 // Mount Admin Authentication Routes with safe mounting
@@ -1513,9 +1512,8 @@ app.use('/api/exchangeRates', exchangeRoutes);
 app.use('/api/price', priceRoutes);
 
 // Mount Banner Routes (for admin banner management)
-app.use('/admin/banner', bannerRoutes);
-app.use('/admin/banners', bannerRoutes);
-console.log("✅ [STARTUP] Banner routes mounted successfully!");
+app.use('/admin', bannerRoutes);
+console.log("✅ [STARTUP] Banner routes mounted successfully at /admin!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
@@ -1974,7 +1972,16 @@ process.on('unhandledRejection', (reason, promise) => {
 
 console.log("✅ [SHUTDOWN] Graceful shutdown handlers configured");
 
-// Global Express error handler (must be last middleware)
+// Handle 404 routes with JSON response
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Global Error Handler
 app.use((err, req, res, next) => {
   const { respondWithError } = require('./lib/debug');
   if (res.headersSent) return next(err);
