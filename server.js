@@ -256,6 +256,16 @@ app.get('/live-check', (_req, res) => {
 });
 console.log("✅ [HEALTH] Live-check endpoint added for Railway health probes");
 
+// Version endpoint for quick deployment verification
+app.get('/version', (_req, res) => {
+  res.json({
+    branch: process.env.GIT_BRANCH || 'unknown',
+    commit: process.env.GIT_COMMIT || 'unknown',
+    ts: Date.now()
+  });
+});
+console.log("✅ [VERSION] Version endpoint added for deployment verification");
+
 // ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
 // ================================
