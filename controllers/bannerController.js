@@ -138,9 +138,11 @@ exports.uploadBanner = [
           {
             folder: 'dbx-banners',
             resource_type: 'image',
+            overwrite: false,
+            use_filename: true,
+            unique_filename: true,
             transformation: [
-              { quality: 'auto:good' },
-              { fetch_format: 'auto' }
+              { fetch_format: 'auto', quality: 'auto' }
             ]
           },
           (error, result) => {
@@ -150,6 +152,14 @@ exports.uploadBanner = [
         ).end(req.file.buffer);
       });
       
+      // Generate thumbnail URL for admin grid display
+      const thumbnailUrl = cloudinary.url(uploadResult.public_id, {
+        transformation: [
+          { crop: 'fill', width: 480, height: 160 },
+          { fetch_format: 'auto', quality: 'auto' }
+        ]
+      });
+      
       // Create banner record
       const banner = {
         id: uuidv4(),
@@ -157,6 +167,7 @@ exports.uploadBanner = [
         placement,
         altText: altText ? altText.trim() : '',
         url: uploadResult.secure_url,
+        thumbnailUrl,
         width: uploadResult.width,
         height: uploadResult.height,
         format: uploadResult.format,
