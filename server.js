@@ -573,10 +573,10 @@ app.options('*', cors({
   },
   credentials: false,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Admin-Key', 'x-admin-key'],
   exposedHeaders: ['X-Request-Id'],
   preflightContinue: false,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 204
 }));
 console.log("✅ [SECURITY] CORS preflight handler configured");
 
@@ -1522,8 +1522,10 @@ app.use('/api/exchangeRates', exchangeRoutes);
 app.use('/api/price', priceRoutes);
 
 // Mount Banner Routes (for admin banner management)
+// Add admin ping endpoint for debugging
+app.get('/admin/ping', (_req, res) => res.json({ ok: true }));
 app.use('/admin', bannerRoutes);
-console.log("✅ [STARTUP] Banner routes mounted successfully at /admin!");
+console.log("✅ [STARTUP] Admin ping endpoint and banner routes mounted successfully at /admin!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
