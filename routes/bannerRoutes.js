@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const bannerController = require('../controllers/bannerController');
 
-// Banner routes
-router.post('/upload', bannerController.uploadBanner);
-router.get('/', bannerController.getBanners);
-router.delete('/:id', bannerController.deleteBanner);
+// Banner routes (mounted at /admin, so these become /admin/banner/upload, /admin/banners, /admin/banner/:id)
+router.post('/banner/upload', bannerController.uploadBanner);
+router.get('/banners', bannerController.getBanners);
+router.delete('/banner/:id', bannerController.deleteBanner);
 
 module.exports = router;
