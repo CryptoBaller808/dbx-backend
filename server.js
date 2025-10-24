@@ -193,6 +193,7 @@ const { router: systemHealthRoutes, initializeHealthMonitoringService } = requir
 const bitcoinRoutes = require('./routes/bitcoinRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
 const priceRoutes = require('./routes/priceRoute');
+const bannerRoutes = require('./routes/bannerRoutes');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -254,6 +255,16 @@ app.get('/live-check', (_req, res) => {
   res.status(200).send('ok');
 });
 console.log("✅ [HEALTH] Live-check endpoint added for Railway health probes");
+
+// Version endpoint for quick deployment verification
+app.get('/version', (_req, res) => {
+  res.json({
+    branch: process.env.GIT_BRANCH || 'unknown',
+    commit: process.env.GIT_COMMIT || 'unknown',
+    ts: Date.now()
+  });
+});
+console.log("✅ [VERSION] Version endpoint added for deployment verification");
 
 // ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
@@ -409,26 +420,27 @@ console.log("✅ [STARTUP] Basic health test route added");
 // CORS and Middleware - SECURE PRODUCTION CONFIG
 console.log("🛡️ [STARTUP] Setting up CORS and middleware...");
 
-// Allowed origins (staging/prod/admin)
-const allowed = new Set([
-  'https://dbx-frontend-staging.onrender.com',
-  'https://dbx-frontend.onrender.com',
-  'https://dbx-admin.onrender.com',
-]);
+// CORS Configuration - Exact specification for banner upload with x-admin-key
+const corsOptions = {
+  origin: [
+    'https://dbx-admin.onrender.com',
+    'https://dbx-admin-staging.onrender.com',
+    'https://dbx-frontend.onrender.com',
+    'https://dbx-frontend-staging.onrender.com',
+  ],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Admin-Key',
+    'x-admin-key'
+  ],
+  optionsSuccessStatus: 204,
+};
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowed.has(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin'); // caches per origin
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    // Optional: res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
-  }
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Preflight handling
+console.log("✅ [STARTUP] CORS configured with x-admin-key support");
 
 app.use(bodyParser.json());
 console.log("✅ [STARTUP] CORS and middleware configured successfully");
@@ -508,66 +520,8 @@ const loginRateLimit = rateLimit({
 app.use('/admindashboard/auth/login', loginRateLimit);
 console.log("✅ [SECURITY] Login rate limiting enabled (5 req/min/IP)");
 
-// 6. CORS allowlist from environment
-const corsOrigins = process.env.CORS_ORIGINS 
-  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
-  : [
-      "https://dbx-frontend.onrender.com",
-      "https://dbx-frontend-staging.onrender.com", // Staging frontend
-      "https://dbx-admin.onrender.com",
-      "https://dbx-backend-api-production-98f3.up.railway.app", // Railway backend for testing
-      "http://localhost:3000", // Development
-      "http://localhost:3001"  // Development admin
-    ];
-
-console.log("🌐 [SECURITY] CORS allowlist:", corsOrigins);
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    if (corsOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`🚫 [SECURITY] Blocked CORS request from: ${origin}`);
-      callback(new Error('Not allowed by CORS policy'));
-    }
-  },
-  credentials: false, // Using Bearer tokens, not cookies
-  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-seed-key'],
-  exposedHeaders: ['X-Request-Id'],
-  preflightContinue: false,
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
-}));
-
-// Add Vary: Origin header to all responses to avoid cache issues
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
-});
-
-console.log("✅ [SECURITY] CORS allowlist configured");
-
-// Handle preflight OPTIONS requests
-app.options('*', cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (corsOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS policy'));
-    }
-  },
-  credentials: false,
-  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  exposedHeaders: ['X-Request-Id'],
-  preflightContinue: false,
-  optionsSuccessStatus: 200
-}));
-console.log("✅ [SECURITY] CORS preflight handler configured");
+// 6. CORS configuration already set above (lines 424-443)
+// Duplicate CORS middleware removed to prevent conflicts
 
 // 4. Rate limiting for auth routes
 const authRateLimit = rateLimit({
@@ -1294,40 +1248,9 @@ safeUse('/admindashboard', maybeFactory(adminRoutes), 'adminRoutes');
 console.log("✅ [STARTUP] adminRoutes mounted successfully!");
 
 // ================================
-// PRODUCTION CORS CONFIGURATION
+// PRODUCTION CORS - Using global CORS config from lines 424-443
 // ================================
-console.log("🌐 [CORS] Setting up production CORS for admin operations...");
-
-const productionCors = cors({
-  origin(origin, cb) {
-    // Allow same-origin or missing origin (curl, server-side, service worker)
-    if (!origin) {
-      console.log("🌐 [CORS] Allowing request with no origin (server-side/curl)");
-      return cb(null, true);
-    }
-    
-    // Production-only allowlist - no dev/local origins
-    const allowlist = [
-      'https://dbx-admin.onrender.com',
-      'https://dbx-frontend.onrender.com'
-    ];
-    
-    if (allowlist.includes(origin)) {
-      console.log(`✅ [CORS] Allowing admin operation from: ${origin}`);
-      cb(null, true);
-    } else {
-      console.log(`❌ [CORS] Blocking admin operation from: ${origin}`);
-      cb(new Error(`Not allowed by CORS policy: ${origin}`));
-    }
-  },
-  methods: ['POST', 'GET', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false
-});
-
-// Apply production CORS to admin endpoints
-app.use('/admindashboard/auth', productionCors);
-console.log("✅ [CORS] Production CORS configured for admin operations endpoints");
+// Duplicate production CORS removed - global CORS handles all routes including /admin
 
 // Mount Admin Authentication Routes with safe mounting
 console.log('[MOUNT-TRY]', { path: '/admindashboard', name: 'adminAuthRoutes', enabled: true });
@@ -1507,6 +1430,12 @@ app.use('/api/exchangeRates', exchangeRoutes);
 
 // Mount Price Routes (for spot price feed)
 app.use('/api/price', priceRoutes);
+
+// Mount Banner Routes (for admin banner management)
+// Add admin ping endpoint for debugging
+app.get('/admin/ping', (_req, res) => res.json({ ok: true }));
+app.use('/admin', bannerRoutes);
+console.log("✅ [STARTUP] Admin ping endpoint and banner routes mounted successfully at /admin!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
@@ -1965,7 +1894,16 @@ process.on('unhandledRejection', (reason, promise) => {
 
 console.log("✅ [SHUTDOWN] Graceful shutdown handlers configured");
 
-// Global Express error handler (must be last middleware)
+// Handle 404 routes with JSON response
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Global Error Handler
 app.use((err, req, res, next) => {
   const { respondWithError } = require('./lib/debug');
   if (res.headersSent) return next(err);
