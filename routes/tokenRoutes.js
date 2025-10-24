@@ -25,18 +25,32 @@ const upload = multer({
   },
 });
 
-// Admin authentication middleware (checks X-Admin-Key header)
+// Admin authentication middleware (checks both X-Admin-Key and x-admin-key)
 const adminAuth = (req, res, next) => {
   const adminKey = req.headers['x-admin-key'] || req.headers['X-Admin-Key'];
   const expectedKey = process.env.ADMIN_KEY;
 
   if (!expectedKey) {
     console.error('[Token Routes] ADMIN_KEY not configured');
-    return res.status(500).json({ error: 'Server configuration error' });
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server configuration error - ADMIN_KEY not set',
+      code: 'ADMIN_KEY_NOT_CONFIGURED'
+    });
   }
 
-  if (!adminKey || adminKey !== expectedKey) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid or missing X-Admin-Key' });
+  if (!adminKey) {
+    return res.status(401).json({ 
+      success: false,
+      message: 'Unauthorized - X-Admin-Key header is required' 
+    });
+  }
+
+  if (adminKey !== expectedKey) {
+    return res.status(401).json({ 
+      success: false,
+      message: 'Unauthorized - Invalid X-Admin-Key' 
+    });
   }
 
   next();
@@ -45,6 +59,7 @@ const adminAuth = (req, res, next) => {
 // Public endpoints (no authentication required)
 router.get('/tokens', tokenController.getTokens);
 router.get('/pairs', tokenController.getPairs);
+router.get('/health/token', tokenController.healthCheck);
 
 // Admin endpoints (require X-Admin-Key header)
 router.post('/token', adminAuth, tokenController.createToken);
