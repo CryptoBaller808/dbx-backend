@@ -212,6 +212,8 @@ exports.getPairs = async (req, res) => {
  */
 exports.createToken = async (req, res) => {
   try {
+    console.log('[TOKEN_CREATE] Request body:', JSON.stringify(req.body, null, 2));
+    
     const {
       symbol,
       name,
@@ -228,6 +230,7 @@ exports.createToken = async (req, res) => {
     // Validate input
     const validation = validateTokenData(req.body, false);
     if (!validation.valid) {
+      console.warn('[TOKEN_CREATE] Validation errors:', validation.errors);
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
@@ -274,7 +277,7 @@ exports.createToken = async (req, res) => {
       data: newToken
     });
   } catch (error) {
-    console.error('[Token API] Unexpected error creating token:', error);
+    console.error('[TOKEN_CREATE] Unexpected error:', error);
     res.status(500).json({ 
       success: false,
       message: 'An unexpected error occurred while creating the token',

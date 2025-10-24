@@ -429,7 +429,7 @@ const corsOptions = {
     'https://dbx-frontend.onrender.com',
     'https://dbx-frontend-staging.onrender.com',
   ],
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
