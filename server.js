@@ -563,6 +563,9 @@ const serverInstance = server.listen(PORT, HOST, () => {
   console.log(`DBX backend listening on :${PORT}`);
   console.log("✅ [LIGHT START] Server started successfully - /health and /live-check endpoints available");
   
+  // Log ADMIN_KEY status (do not log the actual key)
+  console.log(`🔐 [STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
+  
   // Initialize token seed data (DBX 61)
   const tokenController = require('./controllers/tokenController');
   tokenController.initializeSeedData();
