@@ -490,7 +490,18 @@ exports.uploadLogo = async (req, res) => {
     tokens[tokenIndex].logoUrl = result.secure_url;
     tokens[tokenIndex].updatedAt = Date.now();
     
+    // Log success with URL
+    console.log(`[TOKEN_LOGO] Uploaded url=${result.secure_url}`);
     console.log(`[Token API] Uploaded logo for token: ${token.symbol}`);
+    
+    // Clean up temp file
+    const fs = require('fs');
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.warn('[TOKEN_LOGO] Failed to delete temp file:', err.message);
+      });
+    }
+    
     res.json({
       success: true,
       message: 'Logo uploaded successfully',
