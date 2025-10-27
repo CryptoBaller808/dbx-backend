@@ -437,9 +437,11 @@ exports.deleteToken = async (req, res) => {
 exports.uploadLogo = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`[TOKEN_LOGO] Starting upload for token ID: ${id}`);
     
     // Check if Cloudinary is configured
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY) {
+      console.error('[TOKEN_LOGO] Cloudinary not configured');
       return res.status(503).json({
         success: false,
         message: 'Logo upload is not available - Cloudinary not configured',
@@ -449,6 +451,7 @@ exports.uploadLogo = async (req, res) => {
     
     const tokenIndex = tokens.findIndex(t => t.id === id);
     if (tokenIndex === -1) {
+      console.error(`[TOKEN_LOGO] Token not found: ${id}`);
       return res.status(404).json({ 
         success: false,
         message: 'Token not found' 
@@ -456,6 +459,7 @@ exports.uploadLogo = async (req, res) => {
     }
     
     if (!req.file) {
+      console.error('[TOKEN_LOGO] No file in request');
       return res.status(400).json({ 
         success: false,
         message: 'No file uploaded' 
@@ -463,6 +467,7 @@ exports.uploadLogo = async (req, res) => {
     }
     
     const token = tokens[tokenIndex];
+    console.log(`[TOKEN_LOGO] File accepted path=${req.file.path} size=${req.file.size}`);
     
     // Delete old logo if exists
     if (token.logoUrl) {
@@ -477,6 +482,7 @@ exports.uploadLogo = async (req, res) => {
     }
     
     // Upload new logo
+    console.log(`[TOKEN_LOGO] Uploading token=${id} name=${req.file.originalname}`);
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: 'dbx-token-logos',
       public_id: `${token.symbol.toLowerCase()}_${Date.now()}`,
@@ -485,14 +491,14 @@ exports.uploadLogo = async (req, res) => {
         { quality: 'auto', fetch_format: 'auto' }
       ]
     });
+    console.log(`[TOKEN_LOGO] Uploaded url=${result.secure_url}`);
     
     // Update token with new logo URL
     tokens[tokenIndex].logoUrl = result.secure_url;
     tokens[tokenIndex].updatedAt = Date.now();
     
-    // Log success with URL
-    console.log(`[TOKEN_LOGO] Uploaded url=${result.secure_url}`);
-    console.log(`[Token API] Uploaded logo for token: ${token.symbol}`);
+    // Log success
+    console.log(`[TOKEN_LOGO] Logo updated in database for token: ${token.symbol}`);
     
     // Clean up temp file
     const fs = require('fs');
@@ -511,7 +517,8 @@ exports.uploadLogo = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Token API] Unexpected error uploading logo:', error);
+    console.error('[TOKEN_LOGO] Unexpected error:', error.message);
+    console.error('[Token API] Full error:', error);
     res.status(500).json({ 
       success: false,
       message: 'An unexpected error occurred while uploading the logo',
