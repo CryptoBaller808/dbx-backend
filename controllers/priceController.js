@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Supported base currencies
-const SUPPORTED_BASES = ['ETH', 'BTC', 'XRP', 'XLM', 'MATIC', 'BNB', 'SOL', 'XDC', 'AVAX'];
+const SUPPORTED_BASES = ['ETH', 'BTC', 'XRP', 'XLM', 'MATIC', 'BNB', 'SOL', 'XDC', 'AVAX', 'USDC', 'USDT'];
 
 // CoinGecko ID mapping (only if CoinGecko is available)
 const COINGECKO_IDS = {
@@ -93,7 +93,9 @@ exports.getSpotPrice = async (req, res) => {
       'MATIC': 'MATICUSDT',
       'BNB': 'BNBUSDT',
       'SOL': 'SOLUSDT',
-      'AVAX': 'AVAXUSDT'
+      'AVAX': 'AVAXUSDT',
+      'USDC': 'USDCUSDT',
+      'USDT': 'USDTUSDC'
     };
     
     if (quoteUpper === 'USDT' && binanceMap[baseUpper]) {
@@ -174,7 +176,9 @@ async function fetchBinancePrice(base) {
       'MATIC': 'MATICUSDT',
       'BNB': 'BNBUSDT',
       'SOL': 'SOLUSDT',
-      'AVAX': 'AVAXUSDT'
+      'AVAX': 'AVAXUSDT',
+      'USDC': 'USDCUSDT',
+      'USDT': 'USDTUSDC'
       // XDC not available on Binance - will fallback to other providers
     };
     
