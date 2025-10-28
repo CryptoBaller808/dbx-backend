@@ -194,6 +194,7 @@ const bitcoinRoutes = require('./routes/bitcoinRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
 const priceRoutes = require('./routes/priceRoute');
 const bannerRoutes = require('./routes/bannerRoutes');
+const tokenRoutes = require('./routes/tokenRoutes');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -428,7 +429,7 @@ const corsOptions = {
     'https://dbx-frontend.onrender.com',
     'https://dbx-frontend-staging.onrender.com',
   ],
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
@@ -561,6 +562,13 @@ console.log("🚀 [LIGHT START] Starting HTTP server before database initializat
 const serverInstance = server.listen(PORT, HOST, () => {
   console.log(`DBX backend listening on :${PORT}`);
   console.log("✅ [LIGHT START] Server started successfully - /health and /live-check endpoints available");
+  
+  // Log ADMIN_KEY status (do not log the actual key)
+  console.log(`🔐 [STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
+  
+  // Initialize token seed data (DBX 61)
+  const tokenController = require('./controllers/tokenController');
+  tokenController.initializeSeedData();
   
   // Initialize database readiness after server starts
   initializeDbReadiness();
@@ -1436,6 +1444,10 @@ app.use('/api/price', priceRoutes);
 app.get('/admin/ping', (_req, res) => res.json({ ok: true }));
 app.use('/admin', bannerRoutes);
 console.log("✅ [STARTUP] Admin ping endpoint and banner routes mounted successfully at /admin!");
+
+// Mount Token Routes (for admin token management - DBX 61)
+app.use('/admin', tokenRoutes);
+console.log("✅ [STARTUP] Token routes mounted successfully at /admin!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
