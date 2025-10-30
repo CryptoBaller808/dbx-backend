@@ -1,14 +1,13 @@
 /**
  * Token Controller
  * Handles CRUD operations for admin-managed tokens
- * DBX 61 Implementation - Prompt C: Robust validation with friendly errors
+ * DBX-62a: Postgres persistence with Sequelize
  */
 
 const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
-
-// In-memory token storage (following banner pattern for consistency)
-let tokens = [];
+const db = require('../models');
+const AdminToken = db.AdminToken;
 
 /**
  * Validate token creation/update data
@@ -148,24 +147,25 @@ exports.getTokens = async (req, res) => {
   try {
     const { active } = req.query;
     
-    let filteredTokens = tokens;
+    const where = {};
     
     // Filter by active status if specified
     if (active !== undefined) {
-      const isActive = active === 'true';
-      filteredTokens = tokens.filter(token => token.active === isActive);
+      where.active = active === 'true';
     }
     
-    // Sort by sort field, then by symbol
-    filteredTokens.sort((a, b) => {
-      if (a.sort !== b.sort) return a.sort - b.sort;
-      return a.symbol.localeCompare(b.symbol);
+    const tokens = await AdminToken.findAll({
+      where,
+      order: [
+        ['sort', 'ASC'],
+        ['symbol', 'ASC']
+      ]
     });
     
     // Set cache headers
     res.set('Cache-Control', 'public, max-age=60');
     
-    res.json(filteredTokens);
+    res.json(tokens);
   } catch (error) {
     console.error('[Token API] Error fetching tokens:', error);
     res.status(500).json({ 
@@ -182,7 +182,13 @@ exports.getTokens = async (req, res) => {
  */
 exports.getPairs = async (req, res) => {
   try {
-    const activeTokens = tokens.filter(token => token.active);
+    const activeTokens = await AdminToken.findAll({
+      where: { active: true },
+      order: [
+        ['sort', 'ASC'],
+        ['symbol', 'ASC']
+      ]
+    });
     
     // Generate pairs: each active token paired with its defaultQuote
     const pairs = activeTokens.map(token => ({
@@ -239,7 +245,10 @@ exports.createToken = async (req, res) => {
     }
     
     // Check if symbol already exists
-    const existingToken = tokens.find(t => t.symbol.toUpperCase() === symbol.toUpperCase());
+    const existingToken = await AdminToken.findOne({
+      where: { symbol: symbol.toUpperCase() }
+    });
+    
     if (existingToken) {
       return res.status(400).json({ 
         success: false,
@@ -250,9 +259,7 @@ exports.createToken = async (req, res) => {
       });
     }
     
-    const now = Date.now();
-    const newToken = {
-      id: uuidv4(),
+    const newToken = await AdminToken.create({
       symbol: symbol.toUpperCase(),
       name: name.trim(),
       decimals: parseInt(decimals),
@@ -264,11 +271,7 @@ exports.createToken = async (req, res) => {
       priceProvider: priceProvider.toLowerCase(),
       tvSymbol: tvSymbol ? tvSymbol.trim() : `${symbol.toUpperCase()}/${defaultQuote.toUpperCase()}`,
       logoUrl: null, // Logo is uploaded separately
-      createdAt: now,
-      updatedAt: now,
-    };
-    
-    tokens.push(newToken);
+    });
     
     console.log(`[Token API] Created token: ${newToken.symbol}`);
     res.status(201).json({
@@ -295,15 +298,13 @@ exports.updateToken = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
     
-    const tokenIndex = tokens.findIndex(t => t.id === id);
-    if (tokenIndex === -1) {
+    const token = await AdminToken.findByPk(id);
+    if (!token) {
       return res.status(404).json({ 
         success: false,
         message: 'Token not found' 
       });
     }
-    
-    const token = tokens[tokenIndex];
     
     // Validate updates
     const validation = validateTokenData(updates, true);
@@ -317,7 +318,13 @@ exports.updateToken = async (req, res) => {
     
     // Check symbol uniqueness if changing
     if (updates.symbol && updates.symbol.toUpperCase() !== token.symbol) {
-      const existingToken = tokens.find(t => t.id !== id && t.symbol.toUpperCase() === updates.symbol.toUpperCase());
+      const existingToken = await AdminToken.findOne({
+        where: { 
+          symbol: updates.symbol.toUpperCase(),
+          id: { [db.Sequelize.Op.ne]: id }
+        }
+      });
+      
       if (existingToken) {
         return res.status(400).json({ 
           success: false,
@@ -330,29 +337,25 @@ exports.updateToken = async (req, res) => {
     }
     
     // Update token
-    const updatedToken = {
-      ...token,
-      ...updates,
-      id: token.id, // Preserve ID
-      symbol: updates.symbol ? updates.symbol.toUpperCase() : token.symbol,
-      name: updates.name ? updates.name.trim() : token.name,
-      decimals: updates.decimals !== undefined ? parseInt(updates.decimals) : token.decimals,
-      chain: updates.chain ? updates.chain.trim() : token.chain,
-      contract: updates.contract !== undefined ? (updates.contract ? updates.contract.trim() : null) : token.contract,
-      defaultQuote: updates.defaultQuote ? updates.defaultQuote.toUpperCase() : token.defaultQuote,
-      sort: updates.sort !== undefined ? parseInt(updates.sort) : token.sort,
-      priceProvider: updates.priceProvider ? updates.priceProvider.toLowerCase() : token.priceProvider,
-      tvSymbol: updates.tvSymbol !== undefined ? (updates.tvSymbol ? updates.tvSymbol.trim() : token.tvSymbol) : token.tvSymbol,
-      updatedAt: Date.now(),
-    };
+    const updateData = {};
+    if (updates.symbol !== undefined) updateData.symbol = updates.symbol.toUpperCase();
+    if (updates.name !== undefined) updateData.name = updates.name.trim();
+    if (updates.decimals !== undefined) updateData.decimals = parseInt(updates.decimals);
+    if (updates.chain !== undefined) updateData.chain = updates.chain.trim();
+    if (updates.contract !== undefined) updateData.contract = updates.contract ? updates.contract.trim() : null;
+    if (updates.defaultQuote !== undefined) updateData.defaultQuote = updates.defaultQuote.toUpperCase();
+    if (updates.active !== undefined) updateData.active = updates.active;
+    if (updates.sort !== undefined) updateData.sort = parseInt(updates.sort);
+    if (updates.priceProvider !== undefined) updateData.priceProvider = updates.priceProvider.toLowerCase();
+    if (updates.tvSymbol !== undefined) updateData.tvSymbol = updates.tvSymbol ? updates.tvSymbol.trim() : null;
     
-    tokens[tokenIndex] = updatedToken;
+    await token.update(updateData);
     
-    console.log(`[Token API] Updated token: ${updatedToken.symbol}`);
+    console.log(`[Token API] Updated token: ${token.symbol}`);
     res.json({
       success: true,
       message: 'Token updated successfully',
-      data: updatedToken
+      data: token
     });
   } catch (error) {
     console.error('[Token API] Unexpected error updating token:', error);
@@ -373,25 +376,25 @@ exports.deleteToken = async (req, res) => {
     const { id } = req.params;
     const { hard } = req.query; // ?hard=true for hard delete
     
-    const tokenIndex = tokens.findIndex(t => t.id === id);
-    if (tokenIndex === -1) {
+    const token = await AdminToken.findByPk(id);
+    if (!token) {
       return res.status(404).json({ 
         success: false,
         message: 'Token not found' 
       });
     }
     
-    const token = tokens[tokenIndex];
-    
     if (hard === 'true') {
-      // Hard delete: remove from array and delete logo from Cloudinary
-      tokens.splice(tokenIndex, 1);
+      // Hard delete: remove from database and delete logo from Cloudinary
+      const logoUrl = token.logoUrl;
+      
+      await token.destroy();
       
       // Delete logo from Cloudinary if exists
-      if (token.logoUrl) {
+      if (logoUrl) {
         try {
           // Extract public_id from Cloudinary URL
-          const urlParts = token.logoUrl.split('/');
+          const urlParts = logoUrl.split('/');
           const filename = urlParts[urlParts.length - 1];
           const publicId = `dbx-token-logos/${filename.split('.')[0]}`;
           
@@ -410,14 +413,13 @@ exports.deleteToken = async (req, res) => {
       });
     } else {
       // Soft delete: set active to false
-      tokens[tokenIndex].active = false;
-      tokens[tokenIndex].updatedAt = Date.now();
+      await token.update({ active: false });
       
       console.log(`[Token API] Soft deleted token: ${token.symbol}`);
       res.json({ 
         success: true,
         message: 'Token deactivated',
-        data: tokens[tokenIndex]
+        data: token
       });
     }
   } catch (error) {
@@ -441,7 +443,7 @@ exports.uploadLogo = async (req, res) => {
     
     // Check if Cloudinary is configured
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY) {
-      console.error('[TOKEN_LOGO] Cloudinary not configured');
+      console.error('[TOKEN_LOGO] ERROR Cloudinary not configured');
       return res.status(503).json({
         success: false,
         message: 'Logo upload is not available - Cloudinary not configured',
@@ -449,9 +451,9 @@ exports.uploadLogo = async (req, res) => {
       });
     }
     
-    const tokenIndex = tokens.findIndex(t => t.id === id);
-    if (tokenIndex === -1) {
-      console.error(`[TOKEN_LOGO] Token not found: ${id}`);
+    const token = await AdminToken.findByPk(id);
+    if (!token) {
+      console.error(`[TOKEN_LOGO] ERROR Token not found: ${id}`);
       return res.status(404).json({ 
         success: false,
         message: 'Token not found' 
@@ -459,14 +461,14 @@ exports.uploadLogo = async (req, res) => {
     }
     
     if (!req.file) {
-      console.error('[TOKEN_LOGO] No file in request');
+      console.error('[TOKEN_LOGO] ERROR No file in request');
       return res.status(400).json({ 
         success: false,
         message: 'No file uploaded' 
       });
     }
     
-    const token = tokens[tokenIndex];
+    console.log(`[TOKEN_LOGO] Preflight OK`);
     console.log(`[TOKEN_LOGO] File accepted path=${req.file.path} size=${req.file.size}`);
     
     // Delete old logo if exists
@@ -477,12 +479,12 @@ exports.uploadLogo = async (req, res) => {
         const publicId = `dbx-token-logos/${filename.split('.')[0]}`;
         await cloudinary.uploader.destroy(publicId);
       } catch (err) {
-        console.warn('[Token API] Failed to delete old logo:', err.message);
+        console.warn('[TOKEN_LOGO] Failed to delete old logo:', err.message);
       }
     }
     
     // Upload new logo
-    console.log(`[TOKEN_LOGO] Uploading token=${id} name=${req.file.originalname}`);
+    console.log(`[TOKEN_LOGO] Uploading token=${id} name=${req.file.originalname} size=${req.file.size}`);
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: 'dbx-token-logos',
       public_id: `${token.symbol.toLowerCase()}_${Date.now()}`,
@@ -494,10 +496,8 @@ exports.uploadLogo = async (req, res) => {
     console.log(`[TOKEN_LOGO] Uploaded url=${result.secure_url}`);
     
     // Update token with new logo URL
-    tokens[tokenIndex].logoUrl = result.secure_url;
-    tokens[tokenIndex].updatedAt = Date.now();
+    await token.update({ logoUrl: result.secure_url });
     
-    // Log success
     console.log(`[TOKEN_LOGO] Logo updated in database for token: ${token.symbol}`);
     
     // Clean up temp file
@@ -513,11 +513,11 @@ exports.uploadLogo = async (req, res) => {
       message: 'Logo uploaded successfully',
       data: {
         logoUrl: result.secure_url,
-        token: tokens[tokenIndex]
+        token: token
       }
     });
   } catch (error) {
-    console.error('[TOKEN_LOGO] Unexpected error:', error.message);
+    console.error('[TOKEN_LOGO] ERROR Unexpected error:', error.message);
     console.error('[Token API] Full error:', error);
     res.status(500).json({ 
       success: false,
@@ -533,18 +533,22 @@ exports.uploadLogo = async (req, res) => {
  */
 exports.healthCheck = async (req, res) => {
   try {
+    const totalTokens = await AdminToken.count();
+    const activeTokens = await AdminToken.count({ where: { active: true } });
+    
     res.json({
       env: {
         hasAdminKey: !!process.env.ADMIN_KEY,
-        hasCloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY)
+        hasCloudinary: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY),
+        hasDatabase: !!process.env.DATABASE_URL
       },
       routes: {
         create: true,
         uploadLogo: true
       },
       stats: {
-        totalTokens: tokens.length,
-        activeTokens: tokens.filter(t => t.active).length
+        totalTokens,
+        activeTokens
       }
     });
   } catch (error) {
@@ -555,47 +559,5 @@ exports.healthCheck = async (req, res) => {
       code: 'TOKEN_HEALTH_UNEXPECTED'
     });
   }
-};
-
-/**
- * Initialize seed data
- */
-exports.initializeSeedData = () => {
-  if (tokens.length > 0) {
-    console.log('[Token API] Tokens already initialized');
-    return;
-  }
-  
-  const now = Date.now();
-  const seedTokens = [
-    { symbol: 'BTC', name: 'Bitcoin', chain: 'BTC', decimals: 8, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'BTCUSDT', sort: 1 },
-    { symbol: 'ETH', name: 'Ethereum', chain: 'ETH', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'ETHUSDT', sort: 2 },
-    { symbol: 'XRP', name: 'Ripple', chain: 'XRP', decimals: 6, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'XRPUSDT', sort: 3 },
-    { symbol: 'XLM', name: 'Stellar', chain: 'XLM', decimals: 7, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'XLMUSDT', sort: 4 },
-    { symbol: 'MATIC', name: 'Polygon', chain: 'MATIC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'MATICUSDT', sort: 5 },
-    { symbol: 'BNB', name: 'Binance Coin', chain: 'BSC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'BNBUSDT', sort: 6 },
-    { symbol: 'SOL', name: 'Solana', chain: 'SOL', decimals: 9, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'SOLUSDT', sort: 7 },
-    { symbol: 'AVAX', name: 'Avalanche', chain: 'AVAX', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'AVAXUSDT', sort: 8 },
-    { symbol: 'XDC', name: 'XDC Network', chain: 'XDC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'kucoin', tvSymbol: 'XDCUSDT', sort: 9 },
-  ];
-  
-  tokens = seedTokens.map(seed => ({
-    id: uuidv4(),
-    symbol: seed.symbol,
-    name: seed.name,
-    decimals: seed.decimals,
-    chain: seed.chain,
-    contract: null,
-    defaultQuote: seed.defaultQuote,
-    active: true,
-    sort: seed.sort,
-    priceProvider: seed.priceProvider,
-    tvSymbol: seed.tvSymbol,
-    logoUrl: null,
-    createdAt: now,
-    updatedAt: now,
-  }));
-  
-  console.log(`[Token API] Initialized ${tokens.length} seed tokens`);
 };
 

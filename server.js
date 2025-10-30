@@ -566,9 +566,9 @@ const serverInstance = server.listen(PORT, HOST, () => {
   // Log ADMIN_KEY status (do not log the actual key)
   console.log(`🔐 [STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
   
-  // Initialize token seed data (DBX 61)
-  const tokenController = require('./controllers/tokenController');
-  tokenController.initializeSeedData();
+  // Initialize token seed data from database (DBX-62a)
+  const { runSeeds } = require('./util/seedRunner');
+  runSeeds().catch(err => console.error('[SEED] Failed to run seeds:', err));
   
   // Initialize database readiness after server starts
   initializeDbReadiness();
