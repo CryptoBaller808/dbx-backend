@@ -195,6 +195,7 @@ const exchangeRoutes = require('./routes/exchangeRoutes');
 const priceRoutes = require('./routes/priceRoute');
 const bannerRoutes = require('./routes/bannerRoutes');
 const tokenRoutes = require('./routes/tokenRoutes');
+const tradeRoutes = require('./routes/tradeRoutes');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -1448,6 +1449,10 @@ console.log("✅ [STARTUP] Admin ping endpoint and banner routes mounted success
 // Mount Token Routes (for admin token management - DBX 61)
 app.use('/admin', tokenRoutes);
 console.log("✅ [STARTUP] Token routes mounted successfully at /admin!");
+
+// Mount Trade Routes (for paper trading - DBX 63)
+app.use('/trade', tradeRoutes);
+console.log("✅ [STARTUP] Trade routes mounted successfully at /trade!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
