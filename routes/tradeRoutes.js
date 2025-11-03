@@ -34,5 +34,12 @@ router.get('/recent', tradeController.getRecentFills);
  */
 router.get('/config', tradeController.getConfig);
 
+/**
+ * GET /trade/diag
+ * Diagnostic endpoint for QA testing
+ * Query params: base, quote, side, amount
+ */
+router.get('/diag', tradeController.getDiagnostic);
+
 module.exports = router;
 

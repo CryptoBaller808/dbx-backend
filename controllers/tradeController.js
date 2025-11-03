@@ -17,11 +17,24 @@ const RISK_BLOCKLIST_BASE = (process.env.RISK_BLOCKLIST_BASE || '').split(',').f
 const recentFills = [];
 const MAX_RECENT_FILLS = 50;
 
+// In-memory price cache for fallback
+const priceCache = new Map();
+const CACHE_TTL = 60000; // 1 minute
+
 /**
- * Helper: Get current price from existing price API
+ * Helper: Get current price with fallback chain
+ * 1. Try primary provider (via /api/price)
+ * 2. Try CoinCap fallback
+ * 3. Try CoinGecko fallback  
+ * 4. Try cached price (stale)
  */
 async function getCurrentPrice(base, quote) {
+  const cacheKey = `${base}-${quote}`;
+  const providers = [];
+  
+  // Try primary provider (Binance via /api/price)
   try {
+    console.log(`[TRADE] quote try=binance base=${base} quote=${quote}`);
     const baseUrl = process.env.API_BASE_URL || 'http://localhost:5000';
     const response = await axios.get(`${baseUrl}/api/price`, {
       params: { base, quote },
@@ -29,17 +42,101 @@ async function getCurrentPrice(base, quote) {
     });
     
     if (response.data && response.data.price) {
-      return {
-        price: parseFloat(response.data.price),
-        provider: response.data.source || 'unknown'
-      };
+      const price = parseFloat(response.data.price);
+      const provider = response.data.source || 'binance';
+      
+      // Cache the price
+      priceCache.set(cacheKey, { price, provider, ts: Date.now() });
+      
+      console.log(`[TRADE] quote hit provider=${provider} price=${price}`);
+      return { price, provider, stale: false };
     }
     
-    return null;
+    providers.push('binance');
   } catch (error) {
-    console.error('[TRADE] Error fetching price:', error.message);
-    return null;
+    console.log(`[TRADE] quote binance failed: ${error.message}`);
+    providers.push('binance');
   }
+  
+  // Try CoinCap fallback
+  try {
+    console.log(`[TRADE] quote fallback=coincap base=${base} quote=${quote}`);
+    const response = await axios.get('https://api.coincap.io/v2/assets', {
+      timeout: 3000
+    });
+    
+    if (response.data && response.data.data) {
+      const baseAsset = response.data.data.find(a => a.symbol.toUpperCase() === base.toUpperCase());
+      const quoteAsset = response.data.data.find(a => a.symbol.toUpperCase() === quote.toUpperCase());
+      
+      if (baseAsset && quoteAsset && baseAsset.priceUsd && quoteAsset.priceUsd) {
+        const price = parseFloat(baseAsset.priceUsd) / parseFloat(quoteAsset.priceUsd);
+        
+        // Cache the price
+        priceCache.set(cacheKey, { price, provider: 'coincap', ts: Date.now() });
+        
+        console.log(`[TRADE] quote fallback=coincap price=${price}`);
+        return { price, provider: 'coincap', stale: false };
+      }
+    }
+    
+    providers.push('coincap');
+  } catch (error) {
+    console.log(`[TRADE] quote coincap failed: ${error.message}`);
+    providers.push('coincap');
+  }
+  
+  // Try CoinGecko fallback
+  try {
+    console.log(`[TRADE] quote fallback=coingecko base=${base} quote=${quote}`);
+    const coinIds = {
+      'BTC': 'bitcoin',
+      'ETH': 'ethereum',
+      'XRP': 'ripple',
+      'XLM': 'stellar',
+      'USDT': 'tether',
+      'USDC': 'usd-coin'
+    };
+    
+    const baseCoinId = coinIds[base.toUpperCase()];
+    const quoteCoinId = coinIds[quote.toUpperCase()];
+    
+    if (baseCoinId && quoteCoinId) {
+      const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price`, {
+        params: {
+          ids: `${baseCoinId},${quoteCoinId}`,
+          vs_currencies: 'usd'
+        },
+        timeout: 3000
+      });
+      
+      if (response.data && response.data[baseCoinId] && response.data[quoteCoinId]) {
+        const price = response.data[baseCoinId].usd / response.data[quoteCoinId].usd;
+        
+        // Cache the price
+        priceCache.set(cacheKey, { price, provider: 'coingecko', ts: Date.now() });
+        
+        console.log(`[TRADE] quote fallback=coingecko price=${price}`);
+        return { price, provider: 'coingecko', stale: false };
+      }
+    }
+    
+    providers.push('coingecko');
+  } catch (error) {
+    console.log(`[TRADE] quote coingecko failed: ${error.message}`);
+    providers.push('coingecko');
+  }
+  
+  // Try cached price (stale)
+  const cached = priceCache.get(cacheKey);
+  if (cached) {
+    const age = Date.now() - cached.ts;
+    console.log(`[TRADE] quote cache price=${cached.price} stale=true age=${age}ms`);
+    return { price: cached.price, provider: cached.provider, stale: true };
+  }
+  
+  console.error(`[TRADE] quote PRICE_UNAVAILABLE tried=[${providers.join(',')}]`);
+  return null;
 }
 
 /**
@@ -129,11 +226,13 @@ exports.getQuote = async (req, res) => {
     
     const price = priceData.price;
     const provider = priceData.provider;
+    const stale = priceData.stale || false;
     
     // Calculate amounts
     const amountBase = amountNum;
     const amountQuote = amountBase * price;
     const feeQuote = (amountQuote * TRADING_FEE_BPS) / 10000;
+    const totalQuote = amountQuote + feeQuote;
     
     // Check max order size
     if (amountQuote > MAX_ORDER_USD) {
@@ -146,7 +245,7 @@ exports.getQuote = async (req, res) => {
       });
     }
     
-    console.log(`[TRADE] quote base=${base} quote=${quote} side=${side} amount=${amountBase} price=${price} provider=${provider}`);
+    console.log(`[TRADE] quote base=${base} quote=${quote} side=${side} amount=${amountBase} price=${price} provider=${provider} stale=${stale}`);
     
     res.json({
       ok: true,
@@ -155,8 +254,11 @@ exports.getQuote = async (req, res) => {
       price,
       amountBase,
       amountQuote,
+      feeBps: TRADING_FEE_BPS,
       feeQuote,
+      totalQuote,
       provider,
+      stale,
       ts: Date.now()
     });
   } catch (error) {
@@ -345,6 +447,75 @@ exports.getConfig = async (req, res) => {
     });
   } catch (error) {
     console.error('[TRADE] Unexpected error in getConfig:', error);
+    res.status(500).json({
+      ok: false,
+      code: 'TRADE_UNEXPECTED',
+      message: 'An unexpected error occurred',
+      traceId: uuidv4()
+    });
+  }
+};
+
+
+/**
+ * GET /trade/diag or /api/trade/diag
+ * Diagnostic endpoint for QA testing
+ */
+exports.getDiagnostic = async (req, res) => {
+  const requestPath = req.originalUrl.split('?')[0];
+  console.log(`[TRADE] path=${requestPath} method=GET action=diag`);
+  
+  try {
+    const { base, quote, side, amount } = req.query;
+    
+    // Validate inputs
+    const validation = validateTradeInputs(base, quote, side, amount);
+    if (!validation.valid) {
+      return res.status(400).json({
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        errors: validation.errors
+      });
+    }
+    
+    const amountNum = parseFloat(amount);
+    const providersTried = [];
+    let hit = null;
+    
+    // Try to get price with fallback chain
+    const priceData = await getCurrentPrice(base, quote);
+    
+    if (priceData && priceData.price) {
+      hit = {
+        provider: priceData.provider,
+        price: priceData.price,
+        stale: priceData.stale || false
+      };
+    }
+    
+    // Calculate quote if we have a price
+    let feeBps = TRADING_FEE_BPS;
+    let feeQuote = null;
+    let totalQuote = null;
+    
+    if (hit) {
+      const amountQuote = amountNum * hit.price;
+      feeQuote = (amountQuote * feeBps) / 10000;
+      totalQuote = amountQuote + feeQuote;
+    }
+    
+    res.json({
+      ok: true,
+      pathTried: [requestPath],
+      providersTried: hit ? [hit.provider] : ['binance', 'coincap', 'coingecko', 'cache'],
+      hit,
+      feeBps,
+      feeQuote,
+      totalQuote,
+      ts: Date.now()
+    });
+  } catch (error) {
+    console.error('[TRADE] Unexpected error in getDiagnostic:', error);
     res.status(500).json({
       ok: false,
       code: 'TRADE_UNEXPECTED',
