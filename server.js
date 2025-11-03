@@ -1451,8 +1451,10 @@ app.use('/admin', tokenRoutes);
 console.log("✅ [STARTUP] Token routes mounted successfully at /admin!");
 
 // Mount Trade Routes (for paper trading - DBX 63)
+// Dual-mount at /trade and /api/trade for proxy compatibility
 app.use('/trade', tradeRoutes);
-console.log("✅ [STARTUP] Trade routes mounted successfully at /trade!");
+app.use('/api/trade', tradeRoutes);
+console.log("✅ [STARTUP] Trade routes mounted at /trade and /api/trade!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {

@@ -86,10 +86,12 @@ function addRecentFill(fill) {
 }
 
 /**
- * GET /trade/quote
+ * GET /trade/quote or /api/trade/quote
  * Get a quote for a potential trade
  */
 exports.getQuote = async (req, res) => {
+  const requestPath = req.originalUrl.split('?')[0];
+  console.log(`[TRADE] path=${requestPath} method=GET action=quote`);
   try {
     // Check if trading is enabled
     if (!TRADING_ENABLED) {
@@ -144,7 +146,7 @@ exports.getQuote = async (req, res) => {
       });
     }
     
-    console.log(`[TRADE] quote pair=${pair} side=${side} amountBase=${amountBase} price=${price}`);
+    console.log(`[TRADE] quote base=${base} quote=${quote} side=${side} amount=${amountBase} price=${price} provider=${provider}`);
     
     res.json({
       ok: true,
@@ -169,10 +171,12 @@ exports.getQuote = async (req, res) => {
 };
 
 /**
- * POST /trade/submit
- * Submit a market order (paper trading)
+ * POST /trade/submit or /api/trade/submit
+ * Submit a market order for paper trading
  */
 exports.submitOrder = async (req, res) => {
+  const requestPath = req.originalUrl.split('?')[0];
+  console.log(`[TRADE] path=${requestPath} method=POST action=submit`);
   try {
     // Check if trading is enabled
     if (!TRADING_ENABLED) {
@@ -183,7 +187,10 @@ exports.submitOrder = async (req, res) => {
       });
     }
     
-    const { pair, side, amountBase, clientId } = req.body;
+    const { pair, side, amountBase, clientId, walletAddress } = req.body;
+    
+    // In paper mode, wallet is optional
+    const actor = walletAddress || 'guest';
     
     // Parse pair
     if (!pair || typeof pair !== 'string' || !pair.includes('-')) {
@@ -243,27 +250,36 @@ exports.submitOrder = async (req, res) => {
     const orderId = uuidv4();
     const ts = Date.now();
     
-    // Create receipt
+    // Parse pair for receipt
+    const [baseSymbol, quoteSymbol] = pair.split('-');
+    
+    // Create receipt (new shape for hardening)
     const receipt = {
-      ok: true,
-      orderId,
-      pair,
-      side: side.toLowerCase(),
-      executedBase,
-      executedQuote,
-      feeQuote,
-      avgPrice: price,
-      provider,
+      id: orderId,
       ts,
+      actor,
+      side: side.toLowerCase(),
+      base: baseSymbol,
+      quote: quoteSymbol,
+      amountBase: executedBase,
+      price,
+      feeBps: TRADING_FEE_BPS,
+      feeQuote,
+      totalQuote: executedQuote + feeQuote,
+      source: provider,
+      engine: 'paper',
       clientId: clientId || null
     };
     
     // Add to recent fills
     addRecentFill(receipt);
     
-    console.log(`[TRADE] submit pair=${pair} side=${side} execBase=${executedBase} execQuote=${executedQuote} fee=${feeQuote} provider=${provider}`);
+    console.log(`[TRADE] submit pair=${pair} side=${side} execBase=${executedBase} execQuote=${executedQuote} fee=${feeQuote} provider=${provider} actor=${actor}`);
     
-    res.json(receipt);
+    res.json({
+      ok: true,
+      receipt
+    });
   } catch (error) {
     console.error('[TRADE] Unexpected error in submitOrder:', error);
     res.status(500).json({
