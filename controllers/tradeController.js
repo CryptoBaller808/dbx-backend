@@ -525,3 +525,81 @@ exports.getDiagnostic = async (req, res) => {
   }
 };
 
+
+/**
+ * GET /trade/test/quote
+ * Public read-only quote test endpoint (no auth required)
+ * For DBX-63 Step 4 & 5 verification
+ */
+exports.getTestQuote = async (req, res) => {
+  const requestPath = req.originalUrl.split('?')[0];
+  console.log(`[TRADE] path=${requestPath} method=GET action=test-quote`);
+  
+  try {
+    const { pair, amount } = req.query;
+    
+    // Parse pair
+    if (!pair || typeof pair !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        errors: { pair: 'Pair is required (e.g., ETH-USDT)' }
+      });
+    }
+    
+    const [base, quote] = pair.split('-');
+    if (!base || !quote) {
+      return res.status(400).json({
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        errors: { pair: 'Pair must be in format BASE-QUOTE (e.g., ETH-USDT)' }
+      });
+    }
+    
+    // Validate amount
+    const amountNum = parseFloat(amount);
+    if (!amount || !Number.isFinite(amountNum) || amountNum <= 0) {
+      return res.status(400).json({
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        errors: { amount: 'Amount must be a positive number' }
+      });
+    }
+    
+    // Get current price
+    const priceData = await getCurrentPrice(base, quote);
+    if (!priceData || !priceData.price) {
+      return res.status(502).json({
+        ok: false,
+        code: 'PRICE_UNAVAILABLE',
+        message: 'Unable to fetch current price'
+      });
+    }
+    
+    const price = priceData.price;
+    const provider = priceData.provider;
+    const stale = priceData.stale || false;
+    
+    console.log(`[TRADE] test-quote pair=${pair} amount=${amount} price=${price} provider=${provider} stale=${stale}`);
+    
+    res.json({
+      ok: true,
+      pathUsed: requestPath,
+      price,
+      feeBps: TRADING_FEE_BPS,
+      engine: 'paper',
+      source: provider,
+      stale,
+      ts: Date.now()
+    });
+  } catch (error) {
+    console.error('[TRADE] Unexpected error in getTestQuote:', error);
+    res.status(500).json({
+      ok: false,
+      code: 'TRADE_UNEXPECTED',
+      message: 'An unexpected error occurred',
+      traceId: uuidv4()
+    });
+  }
+};
+

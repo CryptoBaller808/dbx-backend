@@ -41,5 +41,12 @@ router.get('/config', tradeController.getConfig);
  */
 router.get('/diag', tradeController.getDiagnostic);
 
+/**
+ * GET /trade/test/quote
+ * Public read-only quote test endpoint (no auth required)
+ * Query params: pair, amount
+ */
+router.get('/test/quote', tradeController.getTestQuote);
+
 module.exports = router;
 
