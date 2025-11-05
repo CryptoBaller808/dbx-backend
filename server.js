@@ -1456,6 +1456,12 @@ app.use('/trade', tradeRoutes);
 app.use('/api/trade', tradeRoutes);
 console.log("✅ [STARTUP] Trade routes mounted at /trade and /api/trade!");
 
+// Mount Portfolio Routes (for balance management - Milestone 4)
+const portfolioRoutes = require('./routes/portfolioRoutes');
+app.use('/portfolio', portfolioRoutes);
+app.use('/api/portfolio', portfolioRoutes);
+console.log("✅ [STARTUP] Portfolio routes mounted at /portfolio and /api/portfolio!");
+
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
   console.log(`[Socket.io] Client connected: ${socket.id}`);
