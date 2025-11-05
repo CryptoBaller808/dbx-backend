@@ -97,7 +97,8 @@ const models = [
   'itemSaleInfoModel.js',
   'settingsModel.js',
   'transactionsModel.js',
-  'wishlistModel.js'
+  'wishlistModel.js',
+  'UserBalance.js'  // Milestone 4: Balance Engine
 ];
 
 models.forEach(file => {
