@@ -258,15 +258,20 @@ app.get('/live-check', (_req, res) => {
 });
 console.log("✅ [HEALTH] Live-check endpoint added for Railway health probes");
 
-// Version endpoint for quick deployment verification
+// Version endpoint for quick deployment verification (Railway requirement)
 app.get('/version', (_req, res) => {
   res.json({
-    branch: process.env.GIT_BRANCH || 'unknown',
-    commit: process.env.GIT_COMMIT || 'unknown',
-    ts: Date.now()
+    branch: process.env.GIT_BRANCH || process.env.RAILWAY_GIT_BRANCH || 'unknown',
+    commit: process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    ts: Date.now(),
+    status: 'ok'
   });
 });
 console.log("✅ [VERSION] Version endpoint added for deployment verification");
+
+// Admin ping endpoint (Railway requirement)
+app.get('/admin/ping', (_req, res) => res.json({ ok: true }));
+console.log("✅ [HEALTH] Admin ping endpoint added");
 
 // ================================
 // LIGHT START BYPASS - EARLY HEALTH ROUTE
@@ -561,17 +566,20 @@ const PORT = Number(process.env.PORT) || 8080;
 
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log(`DBX backend listening on :${PORT}`);
-  console.log("✅ [LIGHT START] Server started successfully - /health and /live-check endpoints available");
-  
-  // Log ADMIN_KEY status (do not log the actual key)
-  console.log(`🔐 [STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
+  console.log(`[STARTUP] Listening on ${PORT} (host=${HOST})`);
+  console.log(`[STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
+  console.log(`[STARTUP] DATABASE_URL: ${process.env.DATABASE_URL ? 'present' : 'missing'}`);
   
   // Initialize token seed data (DBX 61)
   const tokenController = require('./controllers/tokenController');
   tokenController.initializeSeedData();
   
-  // Initialize database readiness after server starts
+  // Kick off DB warmup async so healthcheck can pass
+  require('./util/dbWarmup').init().catch(err => {
+    console.error('[DB] Warmup error:', err?.message || err);
+  });
+  
+  // Also initialize database readiness for existing logic
   initializeDbReadiness();
 });
 
