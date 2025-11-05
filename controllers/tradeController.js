@@ -5,7 +5,6 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
-const balanceService = require('../services/balanceService');
 const axios = require('axios');
 
 // Feature flags from environment
@@ -347,81 +346,6 @@ exports.submitOrder = async (req, res) => {
           amountBase: `Order size exceeds maximum of $${MAX_ORDER_USD.toLocaleString()}`
         }
       });
-    }
-    
-    // MILESTONE 4: Balance validation and updates
-    // Only validate/update balances if actor is not 'guest'
-    if (actor !== 'guest') {
-      try {
-        const sideNorm = side.toLowerCase();
-        
-        if (sideNorm === 'buy') {
-          // BUY: Need enough quote currency (e.g., USDT to buy ETH)
-          const requiredQuote = executedQuote + feeQuote;
-          const quoteBalance = await balanceService.getBalance(actor, quote);
-          
-          if (quoteBalance < requiredQuote) {
-            return res.status(400).json({
-              ok: false,
-              code: 'INSUFFICIENT_BALANCE',
-              message: `Insufficient ${quote} balance`,
-              errors: {
-                balance: `Need ${requiredQuote.toFixed(6)} ${quote}, have ${quoteBalance.toFixed(6)} ${quote}`
-              }
-            });
-          }
-          
-          // Debit quote currency
-          await balanceService.debit(actor, quote, requiredQuote, `buy ${executedBase} ${base}`);
-          
-          // Credit base currency
-          await balanceService.credit(actor, base, executedBase, `buy ${executedBase} ${base}`);
-          
-          console.log(`[TRADE] balance_update buy debit=${requiredQuote} ${quote} credit=${executedBase} ${base}`);
-        } else if (sideNorm === 'sell') {
-          // SELL: Need enough base currency (e.g., ETH to sell for USDT)
-          const baseBalance = await balanceService.getBalance(actor, base);
-          
-          if (baseBalance < executedBase) {
-            return res.status(400).json({
-              ok: false,
-              code: 'INSUFFICIENT_BALANCE',
-              message: `Insufficient ${base} balance`,
-              errors: {
-                balance: `Need ${executedBase.toFixed(6)} ${base}, have ${baseBalance.toFixed(6)} ${base}`
-              }
-            });
-          }
-          
-          // Debit base currency
-          await balanceService.debit(actor, base, executedBase, `sell ${executedBase} ${base}`);
-          
-          // Credit quote currency (minus fee)
-          const netQuote = executedQuote - feeQuote;
-          await balanceService.credit(actor, quote, netQuote, `sell ${executedBase} ${base}`);
-          
-          console.log(`[TRADE] balance_update sell debit=${executedBase} ${base} credit=${netQuote} ${quote}`);
-        }
-      } catch (error) {
-        console.error(`[TRADE] balance_update error:`, error);
-        
-        // If it's an insufficient balance error, return 400
-        if (error.message && error.message.includes('INSUFFICIENT_BALANCE')) {
-          return res.status(400).json({
-            ok: false,
-            code: 'INSUFFICIENT_BALANCE',
-            message: error.message
-          });
-        }
-        
-        // Otherwise, return 500
-        return res.status(500).json({
-          ok: false,
-          code: 'BALANCE_ERROR',
-          message: 'Failed to update balances',
-          traceId: uuidv4()
-        });
-      }
     }
     
     // Generate order ID
