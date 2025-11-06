@@ -82,6 +82,7 @@ const models = [
   'SystemAlert.js',
   'SystemHealthLog.js',
   'UserMFA.js',
+  'UserBalance.js',
   'accountOffers.js',
   'bannerModel.js',
   'blockchainModel.js',
