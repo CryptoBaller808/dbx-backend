@@ -15,8 +15,15 @@ const tradeController = require('../controllers/tradeController');
 router.get('/quote', tradeController.getQuote);
 
 /**
+ * POST /trade/market
+ * Submit a market order (paper trading) - V2 primary endpoint
+ * Body: { pair, side, amountBase, clientId? }
+ */
+router.post('/market', tradeController.submitOrder);
+
+/**
  * POST /trade/submit
- * Submit a market order (paper trading)
+ * Legacy alias for /market (backward compatibility)
  * Body: { pair, side, amountBase, clientId? }
  */
 router.post('/submit', tradeController.submitOrder);
