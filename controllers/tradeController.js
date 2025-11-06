@@ -6,6 +6,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const balanceService = require('../services/balanceService');
 
 // Feature flags from environment
 const TRADING_ENABLED = process.env.TRADING_ENABLED !== 'false'; // Default true
@@ -345,6 +346,58 @@ exports.submitOrder = async (req, res) => {
         errors: {
           amountBase: `Order size exceeds maximum of $${MAX_ORDER_USD.toLocaleString()}`
         }
+      });
+    }
+    
+    // Balance validation and updates (Milestone 4)
+    console.log(`[TRADE] submit balance check userId=${actor} side=${side} base=${base} quote=${quote}`);
+    
+    try {
+      if (side.toLowerCase() === 'buy') {
+        // BUY: Need quote currency (e.g., USDT to buy ETH)
+        const requiredQuote = executedQuote + feeQuote;
+        const availableQuote = await balanceService.getBalance(actor, quote);
+        
+        if (availableQuote < requiredQuote) {
+          console.log(`[TRADE] submit insufficient balance token=${quote} required=${requiredQuote} available=${availableQuote}`);
+          return res.status(400).json({
+            ok: false,
+            code: 'INSUFFICIENT_BALANCE',
+            message: `Insufficient ${quote} balance. Required: ${requiredQuote.toFixed(6)}, Available: ${availableQuote.toFixed(6)}`
+          });
+        }
+        
+        // Debit quote currency, credit base currency
+        await balanceService.debit(actor, quote, requiredQuote);
+        await balanceService.credit(actor, base, executedBase);
+        console.log(`[TRADE] submit balance updated debit=${quote}:${requiredQuote} credit=${base}:${executedBase}`);
+        
+      } else {
+        // SELL: Need base currency (e.g., ETH to sell)
+        const requiredBase = executedBase;
+        const availableBase = await balanceService.getBalance(actor, base);
+        
+        if (availableBase < requiredBase) {
+          console.log(`[TRADE] submit insufficient balance token=${base} required=${requiredBase} available=${availableBase}`);
+          return res.status(400).json({
+            ok: false,
+            code: 'INSUFFICIENT_BALANCE',
+            message: `Insufficient ${base} balance. Required: ${requiredBase.toFixed(6)}, Available: ${availableBase.toFixed(6)}`
+          });
+        }
+        
+        // Debit base currency, credit quote currency (minus fee)
+        await balanceService.debit(actor, base, requiredBase);
+        const receivedQuote = executedQuote - feeQuote;
+        await balanceService.credit(actor, quote, receivedQuote);
+        console.log(`[TRADE] submit balance updated debit=${base}:${requiredBase} credit=${quote}:${receivedQuote}`);
+      }
+    } catch (balanceError) {
+      console.error('[TRADE] Balance operation failed:', balanceError.message);
+      return res.status(500).json({
+        ok: false,
+        code: 'BALANCE_ERROR',
+        message: 'Failed to update balances'
       });
     }
     

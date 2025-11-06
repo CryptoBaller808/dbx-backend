@@ -196,6 +196,7 @@ const priceRoutes = require('./routes/priceRoute');
 const bannerRoutes = require('./routes/bannerRoutes');
 const tokenRoutes = require('./routes/tokenRoutes');
 const tradeRoutes = require('./routes/tradeRoutes');
+const portfolioRoutes = require('./routes/portfolioRoutes');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -1463,6 +1464,12 @@ console.log("✅ [STARTUP] Token routes mounted successfully at /admin!");
 app.use('/trade', tradeRoutes);
 app.use('/api/trade', tradeRoutes);
 console.log("✅ [STARTUP] Trade routes mounted at /trade and /api/trade!");
+
+// Mount Portfolio Routes (for balance management - Milestone 4)
+// Dual-mount at /portfolio and /api/portfolio for compatibility
+app.use('/portfolio', portfolioRoutes);
+app.use('/api/portfolio', portfolioRoutes);
+console.log("✅ [STARTUP] Portfolio routes mounted at /portfolio and /api/portfolio!");
 
 // Socket.io Configuration for Real-Time Transaction Tracking, Risk Monitoring, and Auction Updates
 io.on('connection', (socket) => {
