@@ -147,6 +147,15 @@ try {
   console.error("❌ [PROBE] Stack trace:", error.stack);
 }
 
+console.log("📦 [PROBE] Loading adminRoutingRoutes.js...");
+let adminRoutingRoutes = null;
+try {
+  adminRoutingRoutes = require('./routes/adminRoutingRoutes');
+  console.log("✅ [PROBE] adminRoutingRoutes.js loaded successfully");
+} catch (error) {
+  console.error("❌ [PROBE] ERROR loading adminRoutingRoutes.js:", error.message);
+}
+
 console.log("📦 [PROBE] Loading adminDashboardV2Routes.js...");
 let adminRoutes = null; // Declare adminRoutes in proper scope
 try {
@@ -1225,6 +1234,14 @@ try {
   console.log("✅ [STARTUP] Mounted PUT    /api/admin/banner/update/:id");
   console.log("✅ [STARTUP] Mounted DELETE /api/admin/banner/delete/:id");
   console.log("✅ [STARTUP] Mounted GET    /api/admin/health");
+  
+  // Mount routing admin routes
+  if (adminRoutingRoutes) {
+    safeUse('/api/admin/routing', maybeFactory(adminRoutingRoutes), 'adminRoutingRoutes');
+    console.log("✅ [STARTUP] adminRoutingRoutes mounted at /api/admin/routing!");
+    console.log("✅ [STARTUP] Mounted GET    /api/admin/routing/last");
+    console.log("✅ [STARTUP] Mounted GET    /api/admin/routing/config");
+  }
 } catch (error) {
   console.error("❌ [STARTUP] ERROR mounting apiAdminRoutes:", error);
   console.error("❌ [STARTUP] Error details:", error.message);
