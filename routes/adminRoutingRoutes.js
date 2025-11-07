@@ -7,6 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const { getRecentDecisions } = require('../services/routing/decisionsBuffer');
+const { routeQuote } = require('../services/routing/router');
 
 /**
  * @route GET /api/admin/routing/last
@@ -42,6 +43,49 @@ router.get('/config', (req, res) => {
       }
     }
   });
+});
+
+/**
+ * @route GET /api/admin/routing/diag
+ * @desc Run routing diagnostics without executing trade
+ * @query {string} base - Base currency
+ * @query {string} quote - Quote currency
+ * @query {number} amountUsd - Trade amount in USD
+ * @query {string} side - Trade side (buy/sell)
+ * @returns {Object} Diagnostic results with raw provider responses
+ */
+router.get('/diag', async (req, res) => {
+  const { base, quote, amountUsd, side } = req.query;
+  
+  if (!base || !quote || !amountUsd || !side) {
+    return res.status(400).json({
+      ok: false,
+      code: 'MISSING_PARAMS',
+      message: 'Required params: base, quote, amountUsd, side'
+    });
+  }
+  
+  try {
+    const result = await routeQuote({
+      base: String(base).toUpperCase(),
+      quote: String(quote).toUpperCase(),
+      amountUsd: parseFloat(amountUsd),
+      side: String(side).toLowerCase()
+    });
+    
+    return res.json({
+      ok: true,
+      diagnostic: true,
+      params: { base, quote, amountUsd: parseFloat(amountUsd), side },
+      result
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      code: 'DIAG_ERROR',
+      message: error.message
+    });
+  }
 });
 
 module.exports = router;

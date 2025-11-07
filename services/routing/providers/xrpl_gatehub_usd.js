@@ -22,6 +22,7 @@ async function getQuote({ base, quote, amountUsd }) {
     if (!supportedBases.includes(base) || !supportedQuotes.includes(quote)) {
       return {
         ok: false,
+        source: 'xrpl-gatehub',
         reason: `GateHub does not support ${base}/${quote} pair`
       };
     }
@@ -33,6 +34,7 @@ async function getQuote({ base, quote, amountUsd }) {
     if (!basePrice) {
       return {
         ok: false,
+        source: 'xrpl-gatehub',
         reason: 'Unable to fetch market price'
       };
     }
@@ -64,6 +66,7 @@ async function getQuote({ base, quote, amountUsd }) {
     console.error('[GateHub Provider] Error:', error.message);
     return {
       ok: false,
+      source: 'xrpl-gatehub',
       reason: error.message
     };
   }

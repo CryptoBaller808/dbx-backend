@@ -22,6 +22,7 @@ async function getQuote({ base, quote, amountUsd }) {
     if (!supportedBases.includes(base) || !supportedQuotes.includes(quote)) {
       return {
         ok: false,
+        source: 'xdc-usdt',
         reason: `XDC USDT does not support ${base}/${quote} pair`
       };
     }
@@ -31,6 +32,7 @@ async function getQuote({ base, quote, amountUsd }) {
     if (!basePrice) {
       return {
         ok: false,
+        source: 'xdc-usdt',
         reason: 'Unable to fetch market price'
       };
     }
@@ -61,6 +63,7 @@ async function getQuote({ base, quote, amountUsd }) {
     console.error('[XDC USDT Provider] Error:', error.message);
     return {
       ok: false,
+        source: 'xdc-usdt',
       reason: error.message
     };
   }

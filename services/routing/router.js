@@ -61,35 +61,72 @@ async function routeQuote({ base, quote, side, amountUsd }) {
       })
     );
 
-    // Extract successful quotes
-    const candidates = results
-      .filter(r => r.status === 'fulfilled' && r.value.ok)
-      .map(r => r.value)
-      .map(candidate => {
-        // Calculate derived metrics
-        const slippageBps = Math.round((1 - candidate.liquidityScore) * 100);
-        const totalCostBps = candidate.feeBps + slippageBps;
-        
-        // Normalize price based on side
-        const effectivePrice = side === 'buy' 
-          ? candidate.price * (1 + totalCostBps / 10000)
-          : candidate.price * (1 - totalCostBps / 10000);
+    // Extract fulfilled results
+    const fulfilledResults = results
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value);
 
-        return {
-          ...candidate,
-          slippageBps,
-          totalCostBps,
-          effectivePrice
-        };
-      });
+    // Filter for valid candidates
+    const okCands = fulfilledResults.filter(r => 
+      r && 
+      r.ok && 
+      Number.isFinite(r.price) && 
+      r.source
+    );
 
-    if (candidates.length === 0) {
+    // Guard: No viable candidates
+    if (okCands.length === 0) {
+      const providersStatus = fulfilledResults.map(r => ({
+        source: r?.source || r?.name || 'unknown',
+        ok: !!r?.ok,
+        reason: r?.reason || r?.error || 'no-quote'
+      }));
+
+      // Record failed attempt
+      const failedDecision = {
+        timestamp: new Date().toISOString(),
+        base,
+        quote,
+        amountUsd,
+        side,
+        chosenSource: null,
+        price: null,
+        feeBps: null,
+        liquidityScore: null,
+        estConfirmMs: null,
+        split: false,
+        elapsedMs: Date.now() - startTime,
+        success: false,
+        providers: providersStatus
+      };
+      
+      addDecision(failedDecision);
+
       return {
         ok: false,
-        code: 'NO_LIQUIDITY',
-        message: 'No providers available for this pair'
+        code: 'NO_CANDIDATES',
+        message: 'No viable routing providers returned a quote',
+        providers: providersStatus
       };
     }
+
+    // Calculate derived metrics for valid candidates
+    const candidates = okCands.map(candidate => {
+      const slippageBps = Math.round((1 - candidate.liquidityScore) * 100);
+      const totalCostBps = candidate.feeBps + slippageBps;
+      
+      // Normalize price based on side
+      const effectivePrice = side === 'buy' 
+        ? candidate.price * (1 + totalCostBps / 10000)
+        : candidate.price * (1 - totalCostBps / 10000);
+
+      return {
+        ...candidate,
+        slippageBps,
+        totalCostBps,
+        effectivePrice
+      };
+    });
 
     // Apply routing strategy based on trade size
     const routing = applyRoutingStrategy(candidates, amountUsd, side);
@@ -98,6 +135,7 @@ async function routeQuote({ base, quote, side, amountUsd }) {
 
     // Log routing decision
     const decisionRecord = {
+      timestamp: new Date().toISOString(),
       base,
       quote,
       amountUsd,
@@ -108,7 +146,13 @@ async function routeQuote({ base, quote, side, amountUsd }) {
       liquidityScore: routing.chosen.liquidityScore,
       estConfirmMs: routing.chosen.estConfirmMs,
       split: routing.route.splits ? true : false,
-      elapsedMs
+      elapsedMs,
+      success: true,
+      providers: fulfilledResults.map(r => ({
+        source: r?.source || r?.name || 'unknown',
+        ok: !!r?.ok,
+        reason: r?.ok ? 'success' : (r?.reason || 'no-quote')
+      }))
     };
     
     logRoutingDecision(decisionRecord);
@@ -133,6 +177,27 @@ async function routeQuote({ base, quote, side, amountUsd }) {
     };
   } catch (error) {
     console.error('[Router] Error:', error);
+    
+    // Record exception
+    const errorDecision = {
+      timestamp: new Date().toISOString(),
+      base,
+      quote,
+      amountUsd,
+      side,
+      chosenSource: null,
+      price: null,
+      feeBps: null,
+      liquidityScore: null,
+      estConfirmMs: null,
+      split: false,
+      elapsedMs: Date.now() - startTime,
+      success: false,
+      error: error.message
+    };
+    
+    addDecision(errorDecision);
+
     return {
       ok: false,
       code: 'ROUTING_ERROR',
@@ -236,17 +301,24 @@ function applyRoutingStrategy(candidates, amountUsd, side) {
 
 /**
  * Log routing decision
- * @param {Object} params - Log parameters
+ * @param {Object} record - Decision record
  */
-function logRoutingDecision({ base, quote, amountUsd, side, chosen, elapsedMs }) {
+function logRoutingDecision(record) {
   if (ROUTING_ENGINE_LOG === 'debug' || ROUTING_ENGINE_LOG === 'info') {
-    const split = chosen.source.includes('split:');
-    console.log(
-      `[routing] ${base}/${quote} ${side} amountUsd=${amountUsd}, ` +
-      `picked=${chosen.source}, price=${chosen.price.toFixed(6)}, ` +
-      `feeBps=${chosen.feeBps}, liq=${chosen.liquidityScore.toFixed(2)}, ` +
-      `ms=${elapsedMs}, split=${split}`
-    );
+    if (record.success && record.chosenSource) {
+      const split = record.chosenSource.includes('split:');
+      console.log(
+        `[routing] ${record.base}/${record.quote} ${record.side} amountUsd=${record.amountUsd}, ` +
+        `picked=${record.chosenSource}, price=${record.price.toFixed(6)}, ` +
+        `feeBps=${record.feeBps}, liq=${record.liquidityScore.toFixed(2)}, ` +
+        `ms=${record.elapsedMs}, split=${split}`
+      );
+    } else {
+      console.log(
+        `[routing] ${record.base}/${record.quote} ${record.side} amountUsd=${record.amountUsd}, ` +
+        `FAILED, ms=${record.elapsedMs}, error=${record.error || 'no-candidates'}`
+      );
+    }
   }
 }
 

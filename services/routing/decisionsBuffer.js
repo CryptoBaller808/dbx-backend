@@ -3,7 +3,7 @@
  * Used by admin monitoring endpoint
  */
 
-const MAX_DECISIONS = 50;
+const MAX_DECISIONS = 100;
 const decisions = [];
 
 /**

@@ -67,17 +67,30 @@ router.get('/quote', async (req, res, next) => {
   
   // Add routing block if amountUsd and side are provided
   if (req.query.amountUsd && req.query.side && process.env.ROUTING_ENGINE_V1 === 'true') {
-    const routing = await routeQuote({
-      base: parsed.base,
-      quote: parsed.quote,
-      side: req.query.side,
-      amountUsd: parseFloat(req.query.amountUsd)
-    });
-    
-    return res.json({
-      ...priceData,
-      routing
-    });
+    try {
+      const routing = await routeQuote({
+        base: parsed.base,
+        quote: parsed.quote,
+        side: req.query.side,
+        amountUsd: parseFloat(req.query.amountUsd)
+      });
+      
+      return res.json({
+        ...priceData,
+        routing
+      });
+    } catch (error) {
+      // Never throw; include routing failure in response
+      console.error('[Price/Quote] Routing error:', error.message);
+      return res.json({
+        ...priceData,
+        routing: {
+          ok: false,
+          code: 'ROUTING_ERROR',
+          message: error.message
+        }
+      });
+    }
   }
   
   return res.json(priceData);
