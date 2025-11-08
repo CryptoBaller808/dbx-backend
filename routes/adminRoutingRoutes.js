@@ -32,10 +32,12 @@ router.get('/last', (req, res) => {
  * @returns {Object} Routing engine configuration
  */
 router.get('/config', (req, res) => {
+  const enabled = process.env.ROUTING_ENGINE_V1 === 'true';
   return res.json({
     ok: true,
+    enabled,
     config: {
-      enabled: process.env.ROUTING_ENGINE_V1 === 'true',
+      enabled,
       logLevel: process.env.ROUTING_ENGINE_LOG || 'info',
       thresholds: {
         large: parseInt(process.env.ROUTING_THRESHOLD_LARGE_USD) || 1000,
