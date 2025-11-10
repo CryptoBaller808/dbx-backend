@@ -108,6 +108,7 @@ router.get('/quote', async (req, res, next) => {
  */
 router.get('/routing-quote', async (req, res) => {
   const { base, quote, amountUsd, side } = req.query;
+  const startTime = Date.now();
   
   if (!base || !quote || !amountUsd || !side) {
     return res.status(400).json({
@@ -130,6 +131,29 @@ router.get('/routing-quote', async (req, res) => {
     side: side.toLowerCase(),
     amountUsd: parseFloat(amountUsd)
   });
+  
+  const latency_ms = Date.now() - startTime;
+  
+  // Log liquidity metrics if dashboard is enabled
+  if (process.env.LIQUIDITY_DASHBOARD_V1 === 'true' && result.ok) {
+    try {
+      const LiquidityMetrics = require('../models/LiquidityMetrics');
+      const provider = result.chosen?.source || result.routing?.primary || 'unknown';
+      const strategy = result.policy?.strategy || 'auto';
+      const fee_bps = result.chosen?.fee_bps || 25;
+      
+      await LiquidityMetrics.create({
+        provider,
+        pair: `${base}-${quote}`,
+        strategy,
+        volume: parseFloat(amountUsd),
+        fee_bps,
+        latency_ms
+      });
+    } catch (error) {
+      console.error('[RoutingQuote] Failed to log liquidity metrics:', error.message);
+    }
+  }
   
   return res.json(result);
 });

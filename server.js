@@ -156,6 +156,15 @@ try {
   console.error("❌ [PROBE] ERROR loading adminRoutingRoutes.js:", error.message);
 }
 
+console.log("📦 [PROBE] Loading adminLiquidityRoutes.js...");
+let adminLiquidityRoutes = null;
+try {
+  adminLiquidityRoutes = require('./routes/adminLiquidityRoutes');
+  console.log("✅ [PROBE] adminLiquidityRoutes.js loaded successfully");
+} catch (error) {
+  console.error("❌ [PROBE] ERROR loading adminLiquidityRoutes.js:", error.message);
+}
+
 console.log("📦 [PROBE] Loading adminDashboardV2Routes.js...");
 let adminRoutes = null; // Declare adminRoutes in proper scope
 try {
@@ -1241,6 +1250,15 @@ try {
     console.log("✅ [STARTUP] adminRoutingRoutes mounted at /api/admin/routing!");
     console.log("✅ [STARTUP] Mounted GET    /api/admin/routing/last");
     console.log("✅ [STARTUP] Mounted GET    /api/admin/routing/config");
+  }
+  
+  // Mount liquidity dashboard admin routes
+  if (adminLiquidityRoutes) {
+    safeUse('/api/admin/liquidity', maybeFactory(adminLiquidityRoutes), 'adminLiquidityRoutes');
+    console.log("✅ [STARTUP] adminLiquidityRoutes mounted at /api/admin/liquidity!");
+    console.log("✅ [STARTUP] Mounted GET    /api/admin/liquidity/metrics");
+    console.log("✅ [STARTUP] Mounted GET    /api/admin/settlement/simulated");
+    console.log("✅ [STARTUP] Mounted POST   /api/internal/settlement/simulate");
   }
 } catch (error) {
   console.error("❌ [STARTUP] ERROR mounting apiAdminRoutes:", error);

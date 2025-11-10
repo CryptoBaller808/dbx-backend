@@ -279,7 +279,7 @@ function applyRoutingStrategy(candidates, amountUsd, side) {
   const avgLiqScore = (top1.liquidityScore * pct1 + top2.liquidityScore * pct2) / 100;
   const avgConfirmMs = Math.round((top1.estConfirmMs * pct1 + top2.estConfirmMs * pct2) / 100);
 
-  return {
+  const routeResult = {
     route: {
       primary: top1.source,
       splits: [
@@ -297,6 +297,36 @@ function applyRoutingStrategy(candidates, amountUsd, side) {
       reason: 'smart-split'
     }
   };
+  
+  // Simulate settlement for smart-split routes
+  if (process.env.SETTLEMENT_SIM_MODE === 'true') {
+    try {
+      const SettlementSim = require('../models/SettlementSim');
+      const route_id = `route_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      await SettlementSim.create({
+        route_id,
+        base,
+        quote,
+        notional_usd: amountUsd,
+        state: 'simulated_settled',
+        path: {
+          strategy: 'smart-split',
+          legs: [
+            { source: top1.source, allocation_pct: pct1, price: top1.price },
+            { source: top2.source, allocation_pct: pct2, price: top2.price }
+          ],
+          avg_price: avgPrice,
+          avg_fee_bps: avgFeeBps,
+          est_confirm_ms: avgConfirmMs
+        }
+      });
+    } catch (error) {
+      console.error('[Router] Failed to create settlement simulation:', error.message);
+    }
+  }
+  
+  return routeResult;
 }
 
 /**
