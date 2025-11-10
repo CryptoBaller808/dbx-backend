@@ -59,6 +59,13 @@ The DigitalBlock Exchange (DBX) Backend API is a production-ready, enterprise-gr
 
 ### Required Variables
 
+#### Phase 2: Liquidity Dashboard
+
+- `LIQUIDITY_DASHBOARD_V1` (boolean): `true` to enable the liquidity dashboard and associated endpoints.
+- `SETTLEMENT_SIM_MODE` (boolean): `true` to enable cross-chain settlement simulation for smart-split routes.
+
+
+
 ```bash
 # Application
 NODE_ENV=production
@@ -172,14 +179,31 @@ ENABLE_NFT_MARKETPLACE=true
 
 5. **Verify the setup**:
    ```bash
-   curl http://localhost:3000/health
+   node scripts/smoke.mjs
    ```
+
+### Disabled Feature Response
+
+When a Phase-2 feature is disabled, endpoints will return a `503 Service Unavailable` with the following JSON payload:
+
+```json
+{
+  "ok": false,
+  "code": "LIQUIDITY_DISABLED",
+  "message": "Liquidity dashboard is disabled",
+  "enabled": false
+}
+```
 
 ---
 
 ## 📚 API Documentation
 
 ### Health Endpoints
+
+- `GET /version` - Fast, non-blocking version and health check.
+- `GET /api/admin/liquidity/config` - Returns the current configuration of the liquidity dashboard feature flags and thresholds.
+
 
 - `GET /health` - Basic health check
 - `GET /health/db` - Database connectivity check

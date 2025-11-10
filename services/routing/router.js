@@ -322,7 +322,7 @@ function applyRoutingStrategy(candidates, amountUsd, side) {
         }
       });
     } catch (error) {
-      console.error('[Router] Failed to create settlement simulation:', error.message);
+      console.error('[Phase2] init warn: Failed to create settlement simulation:', error.message);
     }
   }
   

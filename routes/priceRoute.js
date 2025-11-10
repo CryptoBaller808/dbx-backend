@@ -151,7 +151,7 @@ router.get('/routing-quote', async (req, res) => {
         latency_ms
       });
     } catch (error) {
-      console.error('[RoutingQuote] Failed to log liquidity metrics:', error.message);
+      console.error('[Phase2] init warn: Failed to log liquidity metrics:', error.message);
     }
   }
   

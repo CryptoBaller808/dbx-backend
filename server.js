@@ -21,6 +21,7 @@ try {
 }
 
 console.log("🚀 [STARTUP] server.js started...");
+console.log(`[Startup] liquidityDashboard=${process.env.LIQUIDITY_DASHBOARD_V1} settlementSim=${process.env.SETTLEMENT_SIM_MODE} NODE_ENV=${process.env.NODE_ENV} PORT=${process.env.PORT}`);
 // ================================
 // DEEP PROBE MISSION - PROOF OF LIFE
 // ================================
@@ -585,6 +586,7 @@ const PORT = Number(process.env.PORT) || 8080;
 
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
+  console.log(`[Startup] Server listening on :${PORT}`);
   console.log(`[STARTUP] Listening on ${PORT} (host=${HOST})`);
   console.log(`[STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
   console.log(`[STARTUP] DATABASE_URL: ${process.env.DATABASE_URL ? 'present' : 'missing'}`);

@@ -8,8 +8,9 @@ const checkLiquidityDashboard = (req, res, next) => {
   if (process.env.LIQUIDITY_DASHBOARD_V1 !== 'true') {
     return res.status(503).json({
       ok: false,
-      code: 'FEATURE_DISABLED',
-      message: 'Liquidity dashboard feature is not enabled'
+      code: 'LIQUIDITY_DISABLED',
+      message: 'Liquidity dashboard is disabled',
+      enabled: false
     });
   }
   next();
@@ -174,6 +175,66 @@ router.post('/settlement/simulate', async (req, res) => {
       message: error.message
     });
   }
+});
+
+// GET /api/admin/liquidity/diag
+router.get("/diag", async (req, res) => {
+  if (process.env.LIQUIDITY_DASHBOARD_V1 !== "true") {
+    return res.status(503).json({
+      ok: false,
+      code: "LIQUIDITY_DISABLED",
+      message: "Liquidity dashboard is disabled",
+      enabled: false,
+    });
+  }
+
+  try {
+    const now = new Date();
+    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+    // Get providers seen in last 24h
+    const providersSeen = await LiquidityMetrics.distinct("provider", {
+      timestamp: { $gte: oneDayAgo },
+    });
+
+    // Get last refresh timestamp
+    const lastMetric = await LiquidityMetrics.findOne()
+      .sort({ timestamp: -1 })
+      .lean();
+
+    res.json({
+      ok: true,
+      enabled: true,
+      providersSeen,
+      lastRefreshTs: lastMetric?.timestamp || null,
+      timestamp: now.toISOString(),
+    });
+  } catch (error) {
+    console.error("[LiquidityDiag] Error:", error.message);
+    res.status(500).json({
+      ok: false,
+      code: "INTERNAL_ERROR",
+      message: error.message,
+    });
+  }
+});
+
+// GET /api/admin/liquidity/config
+router.get("/config", (req, res) => {
+  const enabled = process.env.LIQUIDITY_DASHBOARD_V1 === "true";
+  const simMode = process.env.SETTLEMENT_SIM_MODE === "true";
+  const largeUsd = parseInt(process.env.ROUTING_THRESHOLD_LARGE_USD) || 1000;
+  const splitUsd = parseInt(process.env.ROUTING_THRESHOLD_SPLIT_USD) || 25000;
+
+  res.json({
+    ok: true,
+    enabled,
+    simMode,
+    thresholds: {
+      largeUsd,
+      splitUsd,
+    },
+  });
 });
 
 module.exports = router;
