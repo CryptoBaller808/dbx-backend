@@ -14,6 +14,10 @@ const TRADING_FEE_BPS = parseInt(process.env.TRADING_FEE_BPS || '25'); // 0.25%
 const MAX_ORDER_USD = parseInt(process.env.MAX_ORDER_USD || '50000');
 const RISK_BLOCKLIST_BASE = (process.env.RISK_BLOCKLIST_BASE || '').split(',').filter(Boolean);
 
+// Preview mode feature flags (DBX-65)
+const TRADE_QUOTE_PREVIEW_ENABLED = process.env.TRADE_QUOTE_PREVIEW_ENABLED === 'true';
+const TRADE_QUOTE_PREVIEW_MAX_NOTIONAL_USD = parseInt(process.env.TRADE_QUOTE_PREVIEW_MAX_NOTIONAL_USD || '500000');
+
 // In-memory ring buffer for recent fills (last 50 per process)
 const recentFills = [];
 const MAX_RECENT_FILLS = 50;
@@ -186,10 +190,14 @@ function addRecentFill(fill) {
 /**
  * GET /trade/quote or /api/trade/quote
  * Get a quote for a potential trade
+ * Supports preview mode with ?preview=true to skip balance validation
  */
 exports.getQuote = async (req, res) => {
   const requestPath = req.originalUrl.split('?')[0];
-  console.log(`[TRADE] path=${requestPath} method=GET action=quote`);
+  const previewMode = req.query.preview === 'true';
+  console.log(`[TRADE_DEBUG] previewMode=${previewMode}, TRADE_QUOTE_PREVIEW_ENABLED=${TRADE_QUOTE_PREVIEW_ENABLED}`);
+  console.log(`[TRADE] path=${requestPath} method=GET action=quote preview=${previewMode}`);
+  
   try {
     // Check if trading is enabled
     if (!TRADING_ENABLED) {
@@ -234,12 +242,78 @@ exports.getQuote = async (req, res) => {
     const amountQuote = amountBase * price;
     const feeQuote = (amountQuote * TRADING_FEE_BPS) / 10000;
     const totalQuote = amountQuote + feeQuote;
+    const notionalUsd = amountQuote; // Approximate USD value
     
-    // Check max order size
+    // Preview mode: check if enabled and requested
+    if (previewMode && TRADE_QUOTE_PREVIEW_ENABLED) {
+      // Enforce preview cap
+      if (notionalUsd > TRADE_QUOTE_PREVIEW_MAX_NOTIONAL_USD) {
+        return res.status(400).json({
+          ok: false,
+          code: 'PREVIEW_LIMIT',
+          message: 'Preview notional exceeds cap.',
+          details: {
+            capUsd: TRADE_QUOTE_PREVIEW_MAX_NOTIONAL_USD,
+            notionalUsd
+          }
+        });
+      }
+      
+      // Try to get routing data if available
+      let routing = null;
+      let chosen = null;
+      let policy = null;
+      
+      if (process.env.ROUTING_ENGINE_V1 === 'true') {
+        try {
+          const smartRouter = require('../services/routing/router');
+          const routingResult = await smartRouter.routeQuote({
+            base: base.toUpperCase(),
+            quote: quote.toUpperCase(),
+            side: side.toLowerCase(),
+            amountUsd: notionalUsd
+          });
+          
+          if (routingResult && routingResult.ok) {
+            routing = routingResult;
+            chosen = routingResult.chosen;
+            policy = routingResult.policy;
+          }
+        } catch (routingError) {
+          console.log(`[TRADE] preview routing failed: ${routingError.message}`);
+        }
+      }
+      
+      console.log(`[TRADE] preview quote base=${base} quote=${quote} side=${side} amount=${amountBase} price=${price} notional=${notionalUsd} routing=${!!routing}`);
+      
+      // Return preview response
+      return res.json({
+        ok: true,
+        mode: 'preview',
+        price,
+        base: base.toUpperCase(),
+        quote: quote.toUpperCase(),
+        side: side.toLowerCase(),
+        amountBase,
+        notionalUsd,
+        routing,
+        chosen,
+        policy,
+        validation: {
+          preview: true,
+          skippedChecks: ['balance', 'positionLimits', 'kyc'],
+          capUsd: TRADE_QUOTE_PREVIEW_MAX_NOTIONAL_USD
+        },
+        ts: Date.now()
+      });
+    }
+    
+    // Normal mode: check max order size
     if (amountQuote > MAX_ORDER_USD) {
       return res.status(400).json({
         ok: false,
         code: 'VALIDATION_ERROR',
+        message: `Order exceeds maximum of $${MAX_ORDER_USD.toLocaleString()}`,
         errors: {
           amount: `Order size exceeds maximum of $${MAX_ORDER_USD.toLocaleString()}`
         }
@@ -248,6 +322,7 @@ exports.getQuote = async (req, res) => {
     
     console.log(`[TRADE] quote base=${base} quote=${quote} side=${side} amount=${amountBase} price=${price} provider=${provider} stale=${stale}`);
     
+    // Return normal response
     res.json({
       ok: true,
       pair,

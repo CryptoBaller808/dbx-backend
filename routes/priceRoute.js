@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const priceController = require('../controllers/priceController');
+const { routeQuote } = require('../services/routing/router');
 
 /**
  * Parse pair parameter into base and quote components
@@ -37,12 +38,13 @@ router.get('/', priceController.getSpotPrice);
  * @route GET /api/price/quote
  * @desc Alias for /api/price with single pair parameter
  * @query {string} pair - Trading pair (ETHUSDT, ETH-USDT, or ETH/USDT)
+ * @query {number} [amountUsd] - Optional trade amount in USD for routing
+ * @query {string} [side] - Optional trade side (buy/sell) for routing
  * @example /api/price/quote?pair=ETHUSDT
- * @example /api/price/quote?pair=ETH-USDT
- * @example /api/price/quote?pair=ETH/USDT
- * @returns {Object} { pair, lastPrice, ts, source }
+ * @example /api/price/quote?pair=ETH-USDT&amountUsd=1500&side=buy
+ * @returns {Object} { pair, lastPrice, ts, source, routing? }
  */
-router.get('/quote', (req, res, next) => {
+router.get('/quote', async (req, res, next) => {
   const parsed = parsePairParam(req.query.pair);
   if (!parsed) {
     return res.status(400).json({
@@ -53,7 +55,83 @@ router.get('/quote', (req, res, next) => {
   }
   req.query.base = parsed.base;
   req.query.quote = parsed.quote;
-  return priceController.getSpotPrice(req, res, next);
+  
+  // Get base price
+  const priceData = await new Promise((resolve) => {
+    const mockRes = {
+      status: () => mockRes,
+      json: (data) => resolve(data)
+    };
+    priceController.getSpotPrice(req, mockRes, next);
+  });
+  
+  // Add routing block if amountUsd and side are provided
+  if (req.query.amountUsd && req.query.side && process.env.ROUTING_ENGINE_V1 === 'true') {
+    try {
+      const routing = await routeQuote({
+        base: parsed.base,
+        quote: parsed.quote,
+        side: req.query.side,
+        amountUsd: parseFloat(req.query.amountUsd)
+      });
+      
+      return res.json({
+        ...priceData,
+        routing
+      });
+    } catch (error) {
+      // Never throw; include routing failure in response
+      console.error('[Price/Quote] Routing error:', error.message);
+      return res.json({
+        ...priceData,
+        routing: {
+          ok: false,
+          code: 'ROUTING_ERROR',
+          message: error.message
+        }
+      });
+    }
+  }
+  
+  return res.json(priceData);
+});
+
+/**
+ * @route GET /api/price/routing-quote
+ * @desc Get routing recommendation for a trade
+ * @query {string} base - Base currency
+ * @query {string} quote - Quote currency
+ * @query {number} amountUsd - Trade amount in USD
+ * @query {string} side - Trade side (buy or sell)
+ * @example /api/price/routing-quote?base=XRP&quote=USDT&amountUsd=500&side=buy
+ * @returns {Object} Routing decision with candidates and policy
+ */
+router.get('/routing-quote', async (req, res) => {
+  const { base, quote, amountUsd, side } = req.query;
+  
+  if (!base || !quote || !amountUsd || !side) {
+    return res.status(400).json({
+      ok: false,
+      code: 'MISSING_PARAMS',
+      message: 'Required: base, quote, amountUsd, side'
+    });
+  }
+  
+  if (process.env.ROUTING_ENGINE_V1 !== 'true') {
+    return res.json({
+      ok: false,
+      code: 'ROUTING_DISABLED'
+    });
+  }
+  
+  const result = await routeQuote({
+    base: base.toUpperCase(),
+    quote: quote.toUpperCase(),
+    side: side.toLowerCase(),
+    amountUsd: parseFloat(amountUsd)
+  });
+  
+  return res.json(result);
 });
 
 /**
