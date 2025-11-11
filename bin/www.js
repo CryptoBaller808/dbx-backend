@@ -95,9 +95,19 @@ function onListening() {
   const branch = process.env.GIT_BRANCH || process.env.RAILWAY_GIT_BRANCH || 'unknown';
   console.log(`[BOOT] listening on 0.0.0.0:${port}`);
   console.log(`[BOOT] commit=${commit.substring(0, 7)} branch=${branch}`);
+  console.log(`[BOOT] node=${process.version} env=${process.env.NODE_ENV || 'development'} port=${port}`);
   
   // Initialize Socket.IO
   socketInit(socket);
   
   console.log("✅ [STARTUP] Server listening and Socket.IO initialized");
+  
+  // Non-blocking background initialization
+  Promise.resolve()
+    .then(() => console.log('✅ Background init started'))
+    .catch(e => console.error('❌ Background init failed:', e));
 }
+
+// Uncaught exception handlers
+process.on('uncaughtException', err => console.error('[UNCAUGHT]', err));
+process.on('unhandledRejection', err => console.error('[UNHANDLED]', err));
