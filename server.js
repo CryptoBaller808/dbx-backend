@@ -21,7 +21,12 @@ try {
 }
 
 console.log("🚀 [STARTUP] server.js started...");
-console.log(`[BOOT] flags: LIQUIDITY_DASHBOARD_V1=${process.env.LIQUIDITY_DASHBOARD_V1} SETTLEMENT_SIM_MODE=${process.env.SETTLEMENT_SIM_MODE} NODE_ENV=${process.env.NODE_ENV} PORT=${process.env.PORT}`);
+console.log('[BOOT] flags', {
+  LIQUIDITY_DASHBOARD_V1: process.env.LIQUIDITY_DASHBOARD_V1,
+  SETTLEMENT_SIM_MODE: process.env.SETTLEMENT_SIM_MODE,
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT
+});
 console.log(`[Startup] liquidityDashboard=${process.env.LIQUIDITY_DASHBOARD_V1} settlementSim=${process.env.SETTLEMENT_SIM_MODE} NODE_ENV=${process.env.NODE_ENV} PORT=${process.env.PORT}`);
 // ================================
 // DEEP PROBE MISSION - PROOF OF LIFE
@@ -38,7 +43,32 @@ console.log("🔥 [PROBE] Entry point confirmed: server.js is running!");
 console.log("🚀 [STARTUP] Process ID:", process.pid);
 console.log("🚀 [STARTUP] Node version:", process.version);
 console.log("🚀 [STARTUP] Environment:", process.env.NODE_ENV || 'development');
+
+// ================================
+// ULTRA-EARLY HEALTH HANDLER
+// ================================
 const express = require('express');
+const START = Date.now();
+const app = express();
+
+// Mount /health FIRST - zero dependencies, always returns 200
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    t: Date.now() - START,
+    pid: process.pid,
+    port: process.env.PORT || 'unset',
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      LIQUIDITY_DASHBOARD_V1: String(process.env.LIQUIDITY_DASHBOARD_V1),
+      SETTLEMENT_SIM_MODE: String(process.env.SETTLEMENT_SIM_MODE),
+    },
+  });
+});
+
+console.log('[BOOT] entering light-start; /health mounted (no deps).');
+
+const express_unused = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const bodyParser = require('body-parser');
@@ -222,8 +252,7 @@ console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
 console.log("⚡ Dual application conflict resolved - app.js deactivated");
 
-console.log("🏗️ [STARTUP] About to create Express app...");
-const app = express();
+console.log("🌎 [STARTUP] Express app already created (ultra-early for /health)");;
 
 // ================================
 // SAFE ROUTER MOUNTING HELPER
@@ -252,26 +281,9 @@ const maybeFactory = (mod) => (typeof mod === 'function' && !mod.handle && !mod.
 console.log("✅ [MOUNT] Safe mounting helper configured");
 
 // ================================
-// RAILWAY HEALTH ENDPOINT - MUST BE FIRST
+// RAILWAY HEALTH ENDPOINT - ALREADY MOUNTED ULTRA-EARLY
 // ================================
-// Simple health endpoint that bypasses all middleware, CORS, auth, etc.
-// Supports both GET and HEAD methods for Railway health checks
-const startTime = Date.now();
-const healthHandler = (_req, res) => {
-  const uptime = Math.floor((Date.now() - startTime) / 1000);
-  res.status(200).json({
-    ok: true,
-    uptime,
-    env: {
-      NODE_ENV: process.env.NODE_ENV || 'development',
-      LIQUIDITY_DASHBOARD_V1: process.env.LIQUIDITY_DASHBOARD_V1 || 'false',
-      SETTLEMENT_SIM_MODE: process.env.SETTLEMENT_SIM_MODE || 'false'
-    }
-  });
-};
-app.get('/health', healthHandler);
-app.head('/health', healthHandler);
-console.log("✅ [STARTUP] health endpoints ready");
+console.log("✅ [STARTUP] /health already mounted at top of file (ultra-early)");
 
 // Version endpoint for deployment verification (also bypasses middleware)
 app.get('/diag/version', (_req, res) => {
@@ -600,7 +612,7 @@ const PORT = Number(process.env.PORT) || 8080;
 
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log(`[STARTUP] listening on ${PORT}`);
+  console.log(`[STARTUP] listening on ${HOST}:${PORT}`);
   console.log(`[STARTUP] Listening on ${PORT} (host=${HOST})`);
   console.log(`[STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
   console.log(`[STARTUP] DATABASE_URL: ${process.env.DATABASE_URL ? 'present' : 'missing'}`);
@@ -620,6 +632,9 @@ const serverInstance = server.listen(PORT, HOST, () => {
   // Initialize Phase 2 services with graceful degradation
   console.log("[STARTUP] initializing services...");
   initializePhase2Services();
+}).on('error', (e) => {
+  console.error('[STARTUP] listen error:', e);
+  process.exit(1);
 });
 
 // ================================
@@ -1308,7 +1323,7 @@ if (adminRoutes && adminRoutes.stack) {
 }
 
 // Mount API Admin Routes (Ghost Bypass System) - PRIORITY MOUNTING
-console.log("[BOOT] routes mounted");
+console.log("[BOOT] mounting phase-2 routes…");
 console.log("[STARTUP] mounting routes");
 console.log("🚀 [STARTUP] ========================================");
 console.log("🚀 [STARTUP] MOUNTING API ADMIN ROUTES (GHOST BYPASS)");
@@ -1346,6 +1361,7 @@ try {
     console.log("✅ [STARTUP] Mounted GET    /api/admin/settlement/simulated");
     console.log("✅ [STARTUP] Mounted POST   /api/internal/settlement/simulate");
   }
+  console.log("[BOOT] routes mounted");
 } catch (error) {
   console.error("❌ [STARTUP] ERROR mounting apiAdminRoutes:", error);
   console.error("❌ [STARTUP] Error details:", error.message);
