@@ -1,7 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const LiquidityMetrics = require('../models/LiquidityMetrics');
-const SettlementSim = require('../models/SettlementSim');
+
+// Lazy-load models to avoid boot-time DB dependency
+let LiquidityMetrics, SettlementSim;
+function ensureModels() {
+  if (!LiquidityMetrics) {
+    try {
+      LiquidityMetrics = require('../models/LiquidityMetrics');
+      SettlementSim = require('../models/SettlementSim');
+    } catch (error) {
+      console.warn('[Phase2] Failed to load liquidity models:', error.message);
+      throw error;
+    }
+  }
+}
 
 // Feature flag check middleware
 const checkLiquidityDashboard = (req, res, next) => {
@@ -31,6 +43,7 @@ const checkLiquidityDashboard = (req, res, next) => {
 // GET /api/admin/liquidity/metrics?period=24h
 router.get('/metrics', checkLiquidityDashboard, async (req, res) => {
   try {
+    ensureModels();
     const period = req.query.period || '24h';
     
     // Calculate time threshold
@@ -118,6 +131,7 @@ router.get('/metrics', checkLiquidityDashboard, async (req, res) => {
 // GET /api/admin/settlement/simulated
 router.get('/settlement/simulated', checkLiquidityDashboard, async (req, res) => {
   try {
+    ensureModels();
     const limit = parseInt(req.query.limit) || 50;
     
     const settlements = await SettlementSim.find()
@@ -144,6 +158,7 @@ router.get('/settlement/simulated', checkLiquidityDashboard, async (req, res) =>
 // POST /api/internal/settlement/simulate
 router.post('/settlement/simulate', async (req, res) => {
   try {
+    ensureModels();
     if (process.env.SETTLEMENT_SIM_MODE !== 'true') {
       return res.status(503).json({
         ok: false,
@@ -191,6 +206,18 @@ router.post('/settlement/simulate', async (req, res) => {
 
 // GET /api/admin/liquidity/diag
 router.get("/diag", async (req, res) => {
+  try {
+    ensureModels();
+  } catch (error) {
+    // Models not available, return degraded status
+    return res.status(503).json({
+      ok: false,
+      code: "SERVICE_DEGRADED",
+      message: "Liquidity dashboard models not available",
+      enabled: false,
+    });
+  }
+  
   if (process.env.LIQUIDITY_DASHBOARD_V1 !== "true") {
     return res.status(503).json({
       ok: false,

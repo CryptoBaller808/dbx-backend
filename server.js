@@ -21,6 +21,7 @@ try {
 }
 
 console.log("🚀 [STARTUP] server.js started...");
+console.log(`[BOOT] flags: LIQUIDITY_DASHBOARD_V1=${process.env.LIQUIDITY_DASHBOARD_V1} SETTLEMENT_SIM_MODE=${process.env.SETTLEMENT_SIM_MODE} NODE_ENV=${process.env.NODE_ENV} PORT=${process.env.PORT}`);
 console.log(`[Startup] liquidityDashboard=${process.env.LIQUIDITY_DASHBOARD_V1} settlementSim=${process.env.SETTLEMENT_SIM_MODE} NODE_ENV=${process.env.NODE_ENV} PORT=${process.env.PORT}`);
 // ================================
 // DEEP PROBE MISSION - PROOF OF LIFE
@@ -675,6 +676,7 @@ async function initializeDbReadiness() {
     // 1. Database authentication
     console.log("🔄 [DB-READY] Testing database authentication...");
     await sequelize.authenticate();
+    console.log("[BOOT] db connect status: connected");
     console.log("✅ [DB-READY] Database authentication successful");
     
     // 2. Basic query test
@@ -704,6 +706,7 @@ async function initializeDbReadiness() {
     console.log("🎉 [DB-READY] Database readiness initialization complete!");
     
   } catch (error) {
+    console.log("[BOOT] db connect status: failed -", error.message);
     console.error("❌ [DB-READY] Database readiness initialization failed:", error.message);
     console.error("❌ [DB-READY] Stack:", error.stack);
     
@@ -718,6 +721,24 @@ async function initializeDbReadiness() {
 // ================================
 // READINESS ENDPOINT
 // ================================
+// /ready returns 503 while warming up, 200 when ready
+app.get('/ready', (req, res) => {
+  if (!dbReady) {
+    return res.status(503).json({
+      ready: false,
+      message: 'Database not ready',
+      uptime: Math.floor(process.uptime())
+    });
+  }
+  
+  res.json({
+    ready: true,
+    dbAuthenticated: true,
+    bcryptWarmed,
+    uptime: Math.floor(process.uptime())
+  });
+});
+
 app.get('/diag/ready', (req, res) => {
   const poolStats = sequelize.connectionManager?.pool ? {
     max: sequelize.options.pool?.max || 'unknown',
@@ -1287,6 +1308,7 @@ if (adminRoutes && adminRoutes.stack) {
 }
 
 // Mount API Admin Routes (Ghost Bypass System) - PRIORITY MOUNTING
+console.log("[BOOT] routes mounted");
 console.log("[STARTUP] mounting routes");
 console.log("🚀 [STARTUP] ========================================");
 console.log("🚀 [STARTUP] MOUNTING API ADMIN ROUTES (GHOST BYPASS)");
