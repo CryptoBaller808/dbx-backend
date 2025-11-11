@@ -4,7 +4,7 @@
   "description": "DBX Backend API - Multi-chain cryptocurrency trading platform optimized for Render deployment",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node ./bin/www.js",
     "dev": "nodemon server.js",
     "build": "echo 'No build step required for Node.js backend'",
     "test": "mocha tests/**/*.test.js --timeout 10000",
