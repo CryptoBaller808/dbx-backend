@@ -255,10 +255,22 @@ console.log("✅ [MOUNT] Safe mounting helper configured");
 // ================================
 // Simple health endpoint that bypasses all middleware, CORS, auth, etc.
 // Supports both GET and HEAD methods for Railway health checks
-const healthHandler = (_req, res) => res.status(200).json({ ok: true, ts: new Date().toISOString() });
+const startTime = Date.now();
+const healthHandler = (_req, res) => {
+  const uptime = Math.floor((Date.now() - startTime) / 1000);
+  res.status(200).json({
+    ok: true,
+    uptime,
+    env: {
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      LIQUIDITY_DASHBOARD_V1: process.env.LIQUIDITY_DASHBOARD_V1 || 'false',
+      SETTLEMENT_SIM_MODE: process.env.SETTLEMENT_SIM_MODE || 'false'
+    }
+  });
+};
 app.get('/health', healthHandler);
 app.head('/health', healthHandler);
-console.log("✅ [HEALTH] Railway health endpoint added (GET/HEAD, bypasses all middleware)");
+console.log("✅ [STARTUP] health endpoints ready");
 
 // Version endpoint for deployment verification (also bypasses middleware)
 app.get('/diag/version', (_req, res) => {
@@ -465,6 +477,7 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 };
 
+console.log("[STARTUP] binding middleware");
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Preflight handling
 console.log("✅ [STARTUP] CORS configured with x-admin-key support");
@@ -586,7 +599,7 @@ const PORT = Number(process.env.PORT) || 8080;
 
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
-  console.log(`[Startup] Server listening on :${PORT}`);
+  console.log(`[STARTUP] listening on ${PORT}`);
   console.log(`[STARTUP] Listening on ${PORT} (host=${HOST})`);
   console.log(`[STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
   console.log(`[STARTUP] DATABASE_URL: ${process.env.DATABASE_URL ? 'present' : 'missing'}`);
@@ -602,7 +615,55 @@ const serverInstance = server.listen(PORT, HOST, () => {
   
   // Also initialize database readiness for existing logic
   initializeDbReadiness();
+  
+  // Initialize Phase 2 services with graceful degradation
+  console.log("[STARTUP] initializing services...");
+  initializePhase2Services();
 });
+
+// ================================
+// PHASE 2 SERVICES INITIALIZATION
+// ================================
+let phase2Status = { liquidity: 'pending', settlement: 'pending' };
+
+async function initializePhase2Services() {
+  if (process.env.LIQUIDITY_DASHBOARD_V1 !== 'true') {
+    console.log('[Phase2] Liquidity dashboard disabled, skipping init');
+    phase2Status.liquidity = 'disabled';
+    phase2Status.settlement = 'disabled';
+    return;
+  }
+  
+  console.log('[Phase2] Starting liquidity dashboard initialization...');
+  
+  // Initialize with timeout and graceful degradation
+  const initTimeout = setTimeout(() => {
+    console.warn('[Phase2] init warn: Initialization timeout after 5s, continuing with degraded mode');
+    if (phase2Status.liquidity === 'pending') phase2Status.liquidity = 'degraded';
+    if (phase2Status.settlement === 'pending') phase2Status.settlement = 'degraded';
+  }, 5000);
+  
+  try {
+    // Test database connection for Phase 2
+    const { sequelize } = require('./models');
+    await sequelize.authenticate();
+    
+    // Mark as ready
+    phase2Status.liquidity = 'ready';
+    phase2Status.settlement = process.env.SETTLEMENT_SIM_MODE === 'true' ? 'ready' : 'disabled';
+    
+    clearTimeout(initTimeout);
+    console.log('[Phase2] Initialization complete:', phase2Status);
+  } catch (error) {
+    clearTimeout(initTimeout);
+    console.error('[Phase2] init warn: Initialization failed:', error.message);
+    phase2Status.liquidity = 'degraded';
+    phase2Status.settlement = 'degraded';
+  }
+}
+
+// Export phase2Status for use in endpoints
+global.phase2Status = phase2Status;
 
 // ================================
 // DB READINESS INITIALIZATION
@@ -1226,6 +1287,7 @@ if (adminRoutes && adminRoutes.stack) {
 }
 
 // Mount API Admin Routes (Ghost Bypass System) - PRIORITY MOUNTING
+console.log("[STARTUP] mounting routes");
 console.log("🚀 [STARTUP] ========================================");
 console.log("🚀 [STARTUP] MOUNTING API ADMIN ROUTES (GHOST BYPASS)");
 console.log("🚀 [STARTUP] ========================================");

@@ -13,6 +13,18 @@ const checkLiquidityDashboard = (req, res, next) => {
       enabled: false
     });
   }
+  
+  // Check if Phase 2 is degraded
+  const status = global.phase2Status || { liquidity: 'degraded' };
+  if (status.liquidity === 'degraded') {
+    return res.status(503).json({
+      ok: false,
+      code: 'SERVICE_DEGRADED',
+      message: 'Liquidity dashboard service is degraded',
+      status: status.liquidity
+    });
+  }
+  
   next();
 };
 
