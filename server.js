@@ -8,7 +8,12 @@ console.log('[BOOT] pre-import marker PID=%s PORT=%s', process.pid, process.env.
 // ================================
 const express = require('express');
 const app = express();
-app.get('/health', (req,res)=>res.status(200).json({ ok:true, t:Date.now(), pid:process.pid, port:process.env.PORT || null }));
+app.set('trust proxy', true);
+app.get('/health', (req, res) => {
+  res.set('X-Boot-Commit', process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown');
+  res.set('X-Boot-Branch', process.env.GIT_BRANCH || process.env.RAILWAY_GIT_BRANCH || 'unknown');
+  res.status(200).json({ ok:true, t:Date.now(), pid:process.pid, port:process.env.PORT || null, commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown' });
+});
 console.log('[BOOT] /health mounted (ultra-early, zero deps)');
 
 // ================================
@@ -276,8 +281,7 @@ console.log("✅ [VERSION] Version endpoint added for deployment verification");
 // ================================
 console.log("[STARTUP] binding middleware");
 
-// Trust proxy for Railway/Render
-app.set('trust proxy', 1);
+// Trust proxy already set at top of file
 
 // ================================
 // CORS CONFIGURATION WITH ADMIN KEY SUPPORT
@@ -592,7 +596,8 @@ const PORT = process.env.PORT || 3000;
 console.log("🚀 [LIGHT START] Starting HTTP server before database initialization...");
 const serverInstance = server.listen(PORT, HOST, () => {
   console.log(`[BOOT] listening on ${HOST}:${PORT}`);
-  console.log(`[STARTUP] Listening on ${PORT} (host=${HOST})`);
+  console.log(`[BOOT] commit=${process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown'} branch=${process.env.GIT_BRANCH || process.env.RAILWAY_GIT_BRANCH || 'unknown'}`);
+  console.log(`[STARTUP] Listening on ${PORT} (host=${HOST}`);
   console.log(`[STARTUP] ADMIN_KEY: ${process.env.ADMIN_KEY ? 'present' : 'missing'}`);
   console.log(`[STARTUP] DATABASE_URL: ${process.env.DATABASE_URL ? 'present' : 'missing'}`);
   
@@ -798,3 +803,6 @@ process.on('SIGINT', () => {
 
 console.log("✅ [STARTUP] Graceful shutdown handlers configured");
 console.log("🎉 [STARTUP] DBX Backend initialization complete!");
+
+// Export app for bin/www.js
+module.exports = app;

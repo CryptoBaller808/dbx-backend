@@ -10,7 +10,7 @@
 // import { Server, Socket } from "socket.io";
 // import socketInit from "../services/socket";
 
-app = require("../app");
+app = require("../server");
 const debugLib =require("debug");
 const debug = debugLib("xrp-ledger:server");
 const http = require("http");
@@ -36,7 +36,8 @@ var server = http.createServer(app);
  * Listen on provided port, on all network interfaces.
  */
 
-server.listen(port);
+// Bind to 0.0.0.0 explicitly for Railway
+server.listen(port, "0.0.0.0");
 server.on("error", onError);
 server.on("listening", onListening);
 //socket io
@@ -106,5 +107,7 @@ function onListening() {
   var addr = server.address();
   var bind = typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
   debug("Listening on " + bind);
+  console.log(`[BOOT] listening on 0.0.0.0:${port}`);
+  console.log(`[BOOT] commit=${process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown'} branch=${process.env.GIT_BRANCH || process.env.RAILWAY_GIT_BRANCH || 'unknown'}`);
   socketInit(socket);
 }
