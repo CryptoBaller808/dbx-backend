@@ -75,25 +75,14 @@ app.use('/api/', limiter);
 
 // Request logging
 try {
-  // Always create a real Pino instance here
-  const baseLogger = pino({
-    level: process.env.LOG_LEVEL || 'info',
-  });
-
-  // Optional: pretty transport for non-prod
-  const transport = process.env.NODE_ENV === 'production' ? undefined : {
-    target: 'pino-pretty',
-    options: { singleLine: true }
-  };
+  const baseLogger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
   app.use(pinoHttp({
     logger: baseLogger,
-    // Optional: skip health to cut noise
     autoLogging: { ignorePaths: ['/health'] },
-    transport
   }));
 
-  console.log('✅ pino-http enabled with real Pino logger');
+  console.log('✅ pino-http enabled with real Pino logger (no transport)');
 } catch (e) {
   console.warn('⚠️ pino-http disabled due to init error:', e?.message || e);
 }
