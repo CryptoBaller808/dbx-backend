@@ -12,18 +12,9 @@ const app = express();
 // Trust proxy and mount /health FIRST - zero dependencies
 app.set('trust proxy', true);
 app.get('/health', (req, res) => {
-  const commit = process.env.GIT_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown';
-  const branch = process.env.GIT_BRANCH || process.env.RAILWAY_GIT_BRANCH || 'unknown';
-  res.set('X-Boot-Commit', commit);
-  res.set('X-Boot-Branch', branch);
-  res.status(200).json({ 
-    ok: true, 
-    t: Date.now(), 
-    pid: process.pid, 
-    port: process.env.PORT || null,
-    commit: commit.substring(0, 7),
-    branch: branch
-  });
+  res.set('X-Boot-Commit', process.env.GIT_COMMIT || 'unknown');
+  res.set('X-Boot-Branch', process.env.GIT_BRANCH || 'unknown');
+  res.sendStatus(200);
 });
 console.log('[BOOT] /health mounted (ultra-early, zero deps)');
 
