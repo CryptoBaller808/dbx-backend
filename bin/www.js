@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 
+// Early boot logs and exception handlers
+console.log(`[BOOT] node=${process.version} cwd=${process.cwd()} port=${process.env.PORT || '4000'}`);
+
+process.on('uncaughtException', err => {
+  console.error('[UNCAUGHT EXCEPTION]', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', err => {
+  console.error('[UNHANDLED REJECTION]', err);
+  process.exit(1);
+});
+
 /**
  * Module dependencies.
  */
@@ -107,7 +120,3 @@ function onListening() {
     .then(() => console.log('✅ Background init started'))
     .catch(e => console.error('❌ Background init failed:', e));
 }
-
-// Uncaught exception handlers
-process.on('uncaughtException', err => console.error('[UNCAUGHT]', err));
-process.on('unhandledRejection', err => console.error('[UNHANDLED]', err));
