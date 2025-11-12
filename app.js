@@ -21,6 +21,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const pino = require('pino');
 const pinoHttp = require('pino-http');
 const path = require('path');
 const bcrypt = require('bcrypt');
@@ -73,19 +74,29 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Request logging
-app.use(pinoHttp({
-  logger: {
+try {
+  // Always create a real Pino instance here
+  const baseLogger = pino({
     level: process.env.LOG_LEVEL || 'info',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname'
-      }
-    }
-  }
-}));
+  });
+
+  // Optional: pretty transport for non-prod
+  const transport = process.env.NODE_ENV === 'production' ? undefined : {
+    target: 'pino-pretty',
+    options: { singleLine: true }
+  };
+
+  app.use(pinoHttp({
+    logger: baseLogger,
+    // Optional: skip health to cut noise
+    autoLogging: { ignorePaths: ['/health'] },
+    transport
+  }));
+
+  console.log('✅ pino-http enabled with real Pino logger');
+} catch (e) {
+  console.warn('⚠️ pino-http disabled due to init error:', e?.message || e);
+}
 
 console.log("✅ [STARTUP] Middleware configured");
 
