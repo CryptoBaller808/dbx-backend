@@ -1,5 +1,5 @@
 console.log('============================================================');
-console.log('📱 app.js: Module execution started', new Date().toISOString());
+console.log('📱 DIAGNOSTIC: app.js module execution START', new Date().toISOString());
 console.log('============================================================');
 
 const express = require('express');
