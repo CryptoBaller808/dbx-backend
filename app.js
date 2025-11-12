@@ -1,26 +1,21 @@
-// ================================
-// PRE-IMPORT MARKER
-// ================================
-console.log('[BOOT] pre-import marker PID=%s PORT=%s', process.pid, process.env.PORT);
+console.log('============================================================');
+console.log('📱 app.js: Module execution started', new Date().toISOString());
+console.log('============================================================');
 
-// ================================
-// ULTRA-EARLY HEALTH HANDLER
-// ================================
 const express = require('express');
 const app = express();
 
-// Trust proxy and mount /health FIRST - zero dependencies
+// Ultra-early health
 app.set('trust proxy', true);
 app.get('/health', (req, res) => {
   res.set('X-Boot-Commit', process.env.GIT_COMMIT || 'unknown');
   res.set('X-Boot-Branch', process.env.GIT_BRANCH || 'unknown');
-  res.sendStatus(200);
+  res.status(200).send('OK');
 });
-console.log('[BOOT] /health mounted (ultra-early, zero deps)');
 
-// ================================
-// IMPORTS
-// ================================
+console.log('✅ /health route mounted');
+
+console.log('📦 Loading imports...');
 const http = require('http');
 const bodyParser = require('body-parser');
 const cors = require('cors');
