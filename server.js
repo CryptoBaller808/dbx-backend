@@ -367,22 +367,13 @@ const io = socketIo(server, {
 console.log("✅ [STARTUP] HTTP server and Socket.IO created");
 
 // ================================
-// SOCKET.IO CONFIGURATION
+// SOCKET.IO CONFIGURATION - XUMM INTEGRATION
 // ================================
-io.on('connection', (socket) => {
-  console.log('New WebSocket connection:', socket.id);
-  
-  socket.on('subscribe', (data) => {
-    console.log('Client subscribed to:', data);
-    socket.join(data.channel);
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('WebSocket disconnected:', socket.id);
-  });
-});
-
-console.log("✅ [STARTUP] Socket.IO event handlers configured");
+console.log('[DBX BACKEND] Initializing XUMM Socket.IO handlers...');
+const socketInit = require('./services/socket');
+socketInit(io);
+console.log('[DBX BACKEND] ✓ XUMM Socket.IO handlers initialized');
+console.log("✅ [STARTUP] Socket.IO event handlers configured (including XUMM)");
 
 // ================================
 // DATABASE SECURITY MIDDLEWARE

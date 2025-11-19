@@ -17,7 +17,10 @@ const { TxData } = require("xrpl-txdata");
 const Verify = new TxData();
 
 const socketInit = async (io) => {
+  console.log('[DBX BACKEND] socketInit called - registering XUMM event handlers');
+  
   io.on("connection", (socket) => {
+    console.log('[DBX BACKEND] ✓ Socket connected:', socket.id);
     console.log("connected to socket with id==", socket.id);
 
     const userSocket = io.to(socket.id);
@@ -29,11 +32,14 @@ const socketInit = async (io) => {
     });
 
     socket.on("xumm-qr-code", async () => {
+      console.log('[DBX BACKEND] ✓ Received xumm-qr-code event from socket', socket.id);
+      
       const rejectResponse = {
         success: false,
         message: "Rejected",
       };
       try {
+        console.log('[DBX BACKEND] Creating XUMM SignIn payload...');
         const request = {
           txjson: {
             TransactionType: "SignIn",
@@ -50,26 +56,42 @@ const socketInit = async (io) => {
         );
 
         const QR_Code = subscription.created.refs.qr_png;
+        console.log('[DBX BACKEND] QR code generated successfully');
+        console.log('[DBX BACKEND] Emitting qr-response to socket', socket.id);
 
         userSocket.emit("qr-response", QR_Code);
+        console.log('[DBX BACKEND] ✓ qr-response emitted');
 
         const noPushMsgReceivedUrl = `https://xumm.app/sign/${subscription.created.uuid}/qr`;
+        console.log('[DBX BACKEND] Emitting qr-app-response (deep link) to socket', socket.id);
 
         userSocket.emit("qr-app-response", noPushMsgReceivedUrl);
+        console.log('[DBX BACKEND] ✓ qr-app-response emitted');
+        console.log('[DBX BACKEND] Waiting for user to sign in XUMM app...');
         const resolveData = await subscription.resolved;
 
         if (resolveData.signed == false) {
+          console.log('[DBX BACKEND] User rejected sign-in request');
           userSocket.emit("account-response", rejectResponse);
+          console.log('[DBX BACKEND] ✓ account-response (rejected) emitted');
         } else {
+          console.log('[DBX BACKEND] User signed in successfully');
           const response = await xumm.payload.get(resolveData.payload_uuidv4);
           const accountNo = response.response.account;
+          console.log('[DBX BACKEND] Account:', accountNo);
+          console.log('[DBX BACKEND] Fetching account balance...');
           const accountData = await xrplHelper.getBalance(accountNo);
           accountData.success = true;
           accountData.userToken = response.application.issued_user_token;
+          console.log('[DBX BACKEND] Emitting account-response with balance data to socket', socket.id);
           userSocket.emit("account-response", accountData);
+          console.log('[DBX BACKEND] ✓ account-response (success) emitted');
         }
       } catch (error) {
+        console.error('[DBX BACKEND] ✗ XUMM QR code handler error:', error.message);
+        console.error('[DBX BACKEND] Error stack:', error.stack);
         userSocket.emit("account-response", rejectResponse);
+        console.log('[DBX BACKEND] ✓ account-response (error) emitted');
       }
     });
 
