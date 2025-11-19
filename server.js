@@ -1,4 +1,18 @@
 console.log("🚀 SERVER.JS IS RUNNING ON RENDER - THIS IS THE TRUE ENGINE");
+
+// ================================
+// ULTRA-EARLY CRASH DETECTORS
+// ================================
+process.on('uncaughtException', (err) => {
+  console.error('[DBX BACKEND] UNCAUGHT EXCEPTION:', err.stack || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[DBX BACKEND] UNHANDLED REJECTION:', reason);
+});
+
+console.log('[DBX BACKEND] Crash detectors installed');
+
 console.log("🔥 OPERATION: SERVER RESURRECTION - PHANTOM APP BANISHED!");
 console.log("⚡ DBX BACKEND TRUE HEART IS BEATING - GHOST SAGA ENDS HERE!");
 console.log("🌺 RENDER DEPLOYMENT TIMESTAMP:", new Date().toISOString());

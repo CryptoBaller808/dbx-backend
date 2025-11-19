@@ -3,6 +3,18 @@
 // const xrpl = require("xrpl");
 // import AccountOffers from "../model/AccountOffers";
 
+// ================================
+// XUMM DISABLE FLAG CHECK
+// ================================
+if (process.env.ENABLE_XUMM !== 'true') {
+  console.log('[DBX BACKEND] XUMM disabled (ENABLE_XUMM != true), exporting no-op socketInit');
+  module.exports = (io) => {
+    console.log('[DBX BACKEND] socketInit called but XUMM is disabled, skipping');
+  };
+  return;
+}
+
+console.log('[DBX BACKEND] XUMM enabled, loading XUMM dependencies...');
 xumm = require("../services/xumm.js");
 xrplHelper = require("../services/xrpl.js");
 const xrpl = require("xrpl");
