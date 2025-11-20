@@ -79,134 +79,118 @@ const getDefaultConfigurations = () => {
   };
 };
 
+// Map environment variable names to chain identifiers
+const ENV_VAR_MAP = {
+  'xrpl': 'UBAL_XRP_RPC_URL',
+  'stellar': 'UBAL_XLM_RPC_URL',
+  'xdc': 'UBAL_XDC_RPC_URL',
+  'bitcoin': 'UBAL_BTC_RPC_URL',
+};
+
+// Get RPC URL from environment variable for a given chain
+const getRpcUrlFromEnv = (chainId) => {
+  const envVarName = ENV_VAR_MAP[chainId.toLowerCase()];
+  if (!envVarName) {
+    return null;
+  }
+  return process.env[envVarName] || null;
+};
+
 // Create and configure adapter registry
 const createAdapterRegistry = async (configManager) => {
   const registry = new AdapterRegistry();
   
   try {
+    console.log('[Blockchain Registry] Loading blockchain configurations from database...');
+    
     // Load configurations from database
     const configs = await configManager.loadConfigurations();
     
-    // Get default configurations as fallback
-    const defaultConfigs = getDefaultConfigurations();
+    console.log(`[Blockchain Registry] Loaded ${configs.size} configurations from database`);
     
-    // Register adapters for each supported blockchain
-    
-    // XRP Ledger
-    try {
-      const xrpConfig = configs.get('xrp') || defaultConfigs.xrp;
-      if (xrpConfig && xrpConfig.isActive) {
-        const xrpAdapter = new XRPAdapter(xrpConfig);
-        registry.registerAdapter('XRP', xrpAdapter);
-        registry.registerAdapter('xrp', xrpAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ XRP adapter registered successfully');
+    // Process each configuration from database
+    for (const [chainKey, dbConfig] of configs.entries()) {
+      try {
+        // Skip if not active
+        if (!dbConfig.isActive) {
+          console.log(`[Blockchain Registry] ⏭️ Skipping ${chainKey}: not active`);
+          continue;
+        }
+
+        const chainId = dbConfig.chainId || chainKey;
+        
+        // Get RPC URL from environment variable
+        const rpcUrlFromEnv = getRpcUrlFromEnv(chainId);
+        
+        if (!rpcUrlFromEnv) {
+          console.warn(`[Blockchain Registry] ⚠️ WARNING: No RPC URL configured for ${dbConfig.name} (${chainId})`);
+          console.warn(`[Blockchain Registry] ⚠️ Please set ${ENV_VAR_MAP[chainId.toLowerCase()]} environment variable`);
+          console.warn(`[Blockchain Registry] ⚠️ Skipping ${chainId} - chain will not be available`);
+          continue;
+        }
+
+        // Build adapter configuration
+        const adapterConfig = {
+          chainId: chainId.toUpperCase(),
+          network: 'mainnet',
+          rpcUrl: rpcUrlFromEnv,
+          isActive: dbConfig.isActive,
+          ...dbConfig.config, // Merge any additional config from database
+        };
+
+        console.log(`[Blockchain Registry] 🔧 Configuring ${dbConfig.name} with RPC from env: ${ENV_VAR_MAP[chainId.toLowerCase()]}`);
+
+        // Register adapter based on adapter type
+        const adapterType = dbConfig.adapterType.toLowerCase();
+        
+        if (chainId.toLowerCase() === 'xrpl') {
+          const xrpAdapter = new XRPAdapter(adapterConfig);
+          registry.registerAdapter('XRP', xrpAdapter);
+          registry.registerAdapter('xrpl', xrpAdapter);
+          console.log('[Blockchain Registry] ✅ XRP adapter registered successfully');
+        } else if (chainId.toLowerCase() === 'stellar') {
+          const xlmAdapter = new XLMAdapter(adapterConfig);
+          registry.registerAdapter('STELLAR', xlmAdapter);
+          registry.registerAdapter('xlm', xlmAdapter);
+          console.log('[Blockchain Registry] ✅ Stellar adapter registered successfully');
+        } else if (chainId.toLowerCase() === 'xdc') {
+          const xdcAdapter = new XDCAdapter(adapterConfig);
+          registry.registerAdapter('XDC', xdcAdapter);
+          registry.registerAdapter('xdc', xdcAdapter);
+          console.log('[Blockchain Registry] ✅ XDC adapter registered successfully');
+        } else if (chainId.toLowerCase() === 'bitcoin') {
+          console.log('[Blockchain Registry] ⚠️ Bitcoin adapter not yet implemented, skipping');
+          // TODO: Implement Bitcoin adapter when ready
+          // const btcAdapter = new BTCAdapter(adapterConfig);
+          // registry.registerAdapter('BTC', btcAdapter);
+          // registry.registerAdapter('bitcoin', btcAdapter);
+        } else {
+          console.warn(`[Blockchain Registry] ⚠️ Unknown chain type: ${chainId}, skipping`);
+        }
+        
+      } catch (error) {
+        // Graceful per-chain failure - log and continue
+        console.error(`[Blockchain Registry] ❌ Failed to register ${chainKey}:`, error.message);
+        console.error(`[Blockchain Registry] ❌ Error stack:`, error.stack);
+        console.warn(`[Blockchain Registry] ⚠️ Continuing with other chains...`);
       }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register XRP adapter:', error.message);
     }
     
-    // Stellar
-    try {
-      const xlmConfig = configs.get('xlm') || defaultConfigs.xlm;
-      if (xlmConfig && xlmConfig.isActive) {
-        const xlmAdapter = new XLMAdapter(xlmConfig);
-        registry.registerAdapter('STELLAR', xlmAdapter);
-        registry.registerAdapter('xlm', xlmAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ Stellar adapter registered successfully');
-      }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register Stellar adapter:', error.message);
-    }
+    const registeredCount = registry.getSupportedChains().length;
+    console.log(`[Blockchain Registry] ✅ Successfully registered ${registeredCount} blockchain adapters`);
     
-    // XDC Network
-    try {
-      const xdcConfig = configs.get('xdc') || defaultConfigs.xdc;
-      if (xdcConfig && xdcConfig.isActive) {
-        const xdcAdapter = new XDCAdapter(xdcConfig);
-        registry.registerAdapter('XDC', xdcAdapter);
-        registry.registerAdapter('xdc', xdcAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ XDC adapter registered successfully');
-      }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register XDC adapter:', error.message);
+    if (registeredCount === 0) {
+      console.warn('[Blockchain Registry] ⚠️ WARNING: No blockchain adapters registered!');
+      console.warn('[Blockchain Registry] ⚠️ Please check:');
+      console.warn('[Blockchain Registry] ⚠️   1. Database contains blockchain records (run seeders)');
+      console.warn('[Blockchain Registry] ⚠️   2. Environment variables are set (UBAL_*_RPC_URL)');
+      console.warn('[Blockchain Registry] ⚠️   3. Blockchains are marked as active in database');
     }
-    
-    // Solana
-    try {
-      const solanaConfig = configs.get('solana') || defaultConfigs.solana;
-      if (solanaConfig && solanaConfig.isActive) {
-        const solanaAdapter = new SolanaAdapter(solanaConfig);
-        registry.registerAdapter('SOLANA', solanaAdapter);
-        registry.registerAdapter('solana', solanaAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ Solana adapter registered successfully');
-      }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register Solana adapter:', error.message);
-    }
-    
-    // Avalanche
-    try {
-      const avaxConfig = configs.get('avalanche') || defaultConfigs.avalanche;
-      if (avaxConfig && avaxConfig.isActive) {
-        // Disabled due to stability issues
-        // const avaxAdapter = new AVAXAdapter(avaxConfig);
-        // registry.registerAdapter('AVALANCHE', avaxAdapter);
-        // registry.registerAdapter('avax', avaxAdapter); // Alias
-        console.log('[Blockchain Registry] ⚠️ Avalanche adapter disabled for stability');
-      }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register Avalanche adapter:', error.message);
-    }
-    
-    // Polygon
-    try {
-      const maticConfig = configs.get('polygon') || defaultConfigs.polygon;
-      if (maticConfig && maticConfig.isActive) {
-        const maticAdapter = new MATICAdapter(maticConfig);
-        registry.registerAdapter('POLYGON', maticAdapter);
-        registry.registerAdapter('matic', maticAdapter); // Alias
-        console.log('[Blockchain Registry] ✅ Polygon adapter registered successfully');
-      }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register Polygon adapter:', error.message);
-    }
-    
-    // Binance Smart Chain
-    try {
-      const bscConfig = configs.get('bsc') || defaultConfigs.bsc;
-      if (bscConfig && bscConfig.isActive) {
-        // Disabled due to stability issues
-        // const bnbAdapter = new BNBAdapter(bscConfig);
-        // registry.registerAdapter('BSC', bnbAdapter);
-        // registry.registerAdapter('bnb', bnbAdapter); // Alias
-        console.log('[Blockchain Registry] ⚠️ BSC adapter disabled for stability');
-      }
-    } catch (error) {
-      console.error('[Blockchain Registry] ❌ Failed to register BSC adapter:', error.message);
-    }
-    
-    console.log(`[Blockchain Registry] Registered ${registry.getSupportedChains().length} blockchain adapters`);
     
   } catch (error) {
-    console.error('[Blockchain Registry] Failed to load configurations:', error);
-    
-    // Fallback: Register adapters with default configurations
-    const defaultConfigs = getDefaultConfigurations();
-    
-    // Define enabled adapters list (excluding problematic ones)
-    const enabledAdapters = ['XRP', 'STELLAR', 'XDC', 'SOLANA', 'POLYGON'];
-    
-    if (enabledAdapters.includes('XRP')) registry.registerAdapter('XRP', new XRPAdapter(defaultConfigs.xrp));
-    if (enabledAdapters.includes('STELLAR')) registry.registerAdapter('STELLAR', new XLMAdapter(defaultConfigs.xlm));
-    if (enabledAdapters.includes('XDC')) registry.registerAdapter('XDC', new XDCAdapter(defaultConfigs.xdc));
-    if (enabledAdapters.includes('SOLANA')) registry.registerAdapter('SOLANA', new SolanaAdapter(defaultConfigs.solana));
-    // AVAX adapter disabled for stability
-    // if (enabledAdapters.includes('AVALANCHE')) registry.registerAdapter('AVALANCHE', new AVAXAdapter(defaultConfigs.avalanche));
-    if (enabledAdapters.includes('POLYGON')) registry.registerAdapter('POLYGON', new MATICAdapter(defaultConfigs.polygon));
-    // BNB adapter disabled for stability
-    // if (enabledAdapters.includes('BSC')) registry.registerAdapter('BSC', new BNBAdapter(defaultConfigs.bsc));
-    
-    console.log('[Blockchain Registry] Registered adapters with default configurations');
+    console.error('[Blockchain Registry] ❌ Failed to load configurations from database:', error.message);
+    console.error('[Blockchain Registry] ❌ Error stack:', error.stack);
+    console.warn('[Blockchain Registry] ⚠️ No adapters registered - blockchain functionality will be limited');
   }
   
   return registry;
@@ -215,44 +199,59 @@ const createAdapterRegistry = async (configManager) => {
 // Initialize blockchain services
 const initializeBlockchainServices = async (db) => {
   try {
-    // Guard: Skip blockchain initialization if required tables don't exist or if disabled
+    console.log('[Blockchain Services] 🚀 Initializing blockchain services with UBAL...');
+    
+    // Guard: Skip blockchain initialization if explicitly disabled
     if (process.env.DBX_SKIP_CHAIN_INIT === 'true') {
-      console.log('[Blockchain Services] Skipping blockchain initialization (DBX_SKIP_CHAIN_INIT=true)');
+      console.log('[Blockchain Services] ⏭️ Skipping blockchain initialization (DBX_SKIP_CHAIN_INIT=true)');
       return null;
     }
     
-    // Check if required tables exist
+    // Validate database connection
     if (!db || !db.models) {
-      console.log('[Blockchain Services] Database models not available, skipping blockchain initialization');
-      return null;
+      console.error('[Blockchain Services] ❌ Database models not available');
+      throw new Error('Database models not available - cannot initialize blockchain services');
     }
     
-    // Check for blockchains table existence with proper guard
+    // Validate Blockchain model exists
+    if (!db.models.Blockchain) {
+      console.error('[Blockchain Services] ❌ Blockchain model not found');
+      throw new Error('Blockchain model not found - please run migrations');
+    }
+    
+    // Check if blockchains table exists
+    console.log('[Blockchain Services] 🔍 Checking blockchains table...');
+    const [results] = await db.sequelize.query(
+      "SELECT to_regclass('public.blockchains') as table_exists"
+    );
+    
+    if (!results || !results[0] || !results[0].table_exists) {
+      console.error('[Blockchain Services] ❌ Blockchains table does not exist');
+      console.error('[Blockchain Services] ❌ Please run migrations: npx sequelize-cli db:migrate');
+      throw new Error('Blockchains table does not exist');
+    }
+    
+    // Test table accessibility
     try {
-      if (db.models.Blockchain) {
-        // Use SELECT to_regclass to check table existence without causing errors
-        const [results] = await db.sequelize.query(
-          "SELECT to_regclass('public.blockchains') as table_exists"
-        );
-        
-        if (results && results[0] && results[0].table_exists) {
-          // Test if we can query the table
-          await db.models.Blockchain.findOne({ limit: 1 });
-          console.log('[Blockchain Services] Blockchain table exists and is accessible');
-        } else {
-          console.log('[Blockchain Services] Blockchain table does not exist, using default configurations');
-        }
-      } else {
-        console.log('[Blockchain Services] Blockchain model not found, using default configurations');
+      const blockchainCount = await db.models.Blockchain.count();
+      console.log(`[Blockchain Services] ✅ Blockchains table accessible (${blockchainCount} records)`);
+      
+      if (blockchainCount === 0) {
+        console.warn('[Blockchain Services] ⚠️ WARNING: No blockchain records found in database');
+        console.warn('[Blockchain Services] ⚠️ Please run seeders: npx sequelize-cli db:seed:all');
+        console.warn('[Blockchain Services] ⚠️ Continuing with empty configuration...');
       }
     } catch (tableError) {
-      console.warn('[Blockchain Services] Blockchain table not accessible, using default configurations:', tableError.message);
+      console.error('[Blockchain Services] ❌ Cannot access blockchains table:', tableError.message);
+      throw new Error(`Cannot access blockchains table: ${tableError.message}`);
     }
     
-    // Create configuration manager
-    const configManager = new ConfigurationManager(db?.models?.Blockchain);
+    // Create configuration manager with Blockchain model
+    console.log('[Blockchain Services] 🔧 Creating configuration manager...');
+    const configManager = new ConfigurationManager(db.models.Blockchain);
     
-    // Create adapter registry
+    // Create adapter registry (loads from database and env vars)
+    console.log('[Blockchain Services] 🔧 Creating adapter registry...');
     const registry = await createAdapterRegistry(configManager);
     
     // Create blockchain service

@@ -82,6 +82,31 @@ ALLOWED_ORIGINS=https://your-frontend.onrender.com,https://your-admin.onrender.c
 
 ### Blockchain Configuration
 
+#### UBAL (Unified Blockchain Abstraction Layer)
+
+**⚠️ REQUIRED:** The following RPC URLs are required for blockchain functionality:
+
+```bash
+# XRP Ledger (REQUIRED)
+UBAL_XRP_RPC_URL=wss://xrplcluster.com
+
+# Stellar Network (REQUIRED)
+UBAL_XLM_RPC_URL=https://horizon.stellar.org
+
+# XDC Network (REQUIRED)
+UBAL_XDC_RPC_URL=https://rpc.xinfin.network
+
+# Bitcoin Network (Optional - not fully implemented)
+UBAL_BTC_RPC_URL=https://blockstream.info/api
+
+# Optional: Skip blockchain initialization (default: false)
+# DBX_SKIP_CHAIN_INIT=false
+```
+
+**📚 For detailed UBAL configuration, see [UBAL Configuration Guide](./docs/UBAL_CONFIGURATION.md)**
+
+#### Legacy Blockchain Configuration (Deprecated)
+
 ```bash
 # Ethereum
 ETH_RPC_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID
@@ -99,18 +124,6 @@ MATIC_RPC_URL=https://polygon-rpc.com
 
 # Solana
 SOL_RPC_URL=https://api.mainnet-beta.solana.com
-
-# XRP Ledger
-XRP_RPC_URL=wss://xrplcluster.com
-
-# Stellar
-XLM_RPC_URL=https://horizon.stellar.org
-
-# Bitcoin
-BTC_RPC_URL=https://blockstream.info/api
-
-# XDC Network
-XDC_RPC_URL=https://rpc.xinfin.network
 ```
 
 ### Optional Configuration
@@ -165,10 +178,39 @@ ENABLE_NFT_MARKETPLACE=true
    # Edit .env with your configuration
    ```
 
-4. **Start the development server**:
+4. **Run database migrations**:
+   ```bash
+   npx sequelize-cli db:migrate --url "$DATABASE_URL"
+   ```
+
+5. **Seed blockchain configurations**:
+   ```bash
+   npx sequelize-cli db:seed:all --url "$DATABASE_URL"
+   ```
+   
+   This will seed the blockchains table with XRP, XLM, XDC, and BTC configurations.
+
+6. **Start the development server**:
    ```bash
    npm run dev
    ```
+
+### Railway Deployment
+
+When deploying to Railway, run these commands after deployment:
+
+```bash
+# 1. Run migrations
+npx sequelize-cli db:migrate --url "$DATABASE_URL"
+
+# 2. Run seeders
+npx sequelize-cli db:seed:all --url "$DATABASE_URL"
+
+# 3. Verify UBAL environment variables are set in Railway dashboard
+# 4. Restart the service
+```
+
+**Note:** The seeder is idempotent - safe to run multiple times without creating duplicates.
 
 5. **Verify the setup**:
    ```bash
