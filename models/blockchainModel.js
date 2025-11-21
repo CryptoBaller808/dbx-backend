@@ -60,6 +60,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       tableName: "blockchains",
       timestamps: true,
+      underscored: true,  // Maps createdAt -> created_at, updatedAt -> updated_at
     }
   );
 
