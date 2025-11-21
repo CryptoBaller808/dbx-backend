@@ -235,20 +235,24 @@ const initializeBlockchainServices = async (db) => {
     }
     
     // Validate database connection
-    if (!db || !db.models) {
-      console.error('[Blockchain Services] ❌ Database models not available');
-      throw new Error('Database models not available - cannot initialize blockchain services');
+    // db parameter is the sequelize instance from initializeDatabase()
+    const sequelize = db;
+    const models = require(path.join(process.cwd(), 'models'));
+    
+    if (!sequelize) {
+      console.error('[Blockchain Services] ❌ Sequelize instance not available');
+      throw new Error('Sequelize instance not available - cannot initialize blockchain services');
     }
     
     // Validate Blockchain model exists
-    if (!db.models.Blockchain) {
+    if (!models.Blockchain) {
       console.error('[Blockchain Services] ❌ Blockchain model not found');
       throw new Error('Blockchain model not found - please run migrations');
     }
     
     // Check if blockchains table exists
     console.log('[Blockchain Services] 🔍 Checking blockchains table...');
-    const [results] = await db.sequelize.query(
+    const [results] = await sequelize.query(
       "SELECT to_regclass('public.blockchains') as table_exists"
     );
     
@@ -260,7 +264,7 @@ const initializeBlockchainServices = async (db) => {
     
     // Test table accessibility
     try {
-      const blockchainCount = await db.models.Blockchain.count();
+      const blockchainCount = await models.Blockchain.count();
       console.log(`[Blockchain Services] ✅ Blockchains table accessible (${blockchainCount} records)`);
       
       if (blockchainCount === 0) {
@@ -275,7 +279,7 @@ const initializeBlockchainServices = async (db) => {
     
     // Create configuration manager with Blockchain model
     console.log('[Blockchain Services] 🔧 Creating configuration manager...');
-    const configManager = new ConfigurationManager(db.models.Blockchain);
+    const configManager = new ConfigurationManager(models.Blockchain);
     
     // Create adapter registry (loads from database and env vars)
     console.log('[Blockchain Services] 🔧 Creating adapter registry...');
