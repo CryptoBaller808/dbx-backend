@@ -49,6 +49,11 @@ async function runCommand(command, args, description) {
 
 async function startup() {
   try {
+    // Step 0: Reset blockchains table (one-time fix for snake_case migration)
+    if (process.env.RESET_BLOCKCHAINS_TABLE === 'true') {
+      await runCommand('node', ['scripts/reset-blockchains-table.js'], 'Resetting blockchains table');
+    }
+    
     // Step 1: Run migrations
     await runCommand('node', ['scripts/run-migrations.js'], 'Running database migrations');
 
