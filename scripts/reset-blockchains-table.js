@@ -5,6 +5,8 @@
  * This script drops and recreates the blockchains table to apply
  * the snake_case column naming changes.
  * 
+ * Also clears the migration tracking so the migration runs again.
+ * 
  * Usage: node scripts/reset-blockchains-table.js
  */
 
@@ -38,9 +40,16 @@ async function resetBlockchainsTable() {
     await sequelize.query('DROP TABLE IF EXISTS blockchains CASCADE');
     console.log('✅ [Reset Blockchains] Table dropped successfully');
     
+    // Remove migration tracking entry so migration runs again
+    console.log('🗑️ [Reset Blockchains] Clearing migration tracking...');
+    await sequelize.query(
+      `DELETE FROM "SequelizeMeta" WHERE name = '20251120000000-create-blockchains-table.js'`
+    );
+    console.log('✅ [Reset Blockchains] Migration tracking cleared');
+    
     // Close connection
     await sequelize.close();
-    console.log('✅ [Reset Blockchains] Reset complete');
+    console.log('✅ [Reset Blockchains] Reset complete - migration will run on next startup');
     
   } catch (error) {
     console.error('❌ [Reset Blockchains] Error:', error.message);
