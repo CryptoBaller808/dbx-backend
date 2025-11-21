@@ -6,7 +6,8 @@
  */
 
 // Import database models
-const db = require('../models');
+const path = require('path');
+const db = require(path.join(__dirname, '..', 'models'));
 
 const {
   BlockchainError,
