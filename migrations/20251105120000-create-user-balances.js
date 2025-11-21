@@ -3,6 +3,13 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // Check if table already exists
+    const tables = await queryInterface.showAllTables();
+    if (tables.includes('user_balances')) {
+      console.log('⚠️ [Migration] user_balances table already exists, skipping creation');
+      return;
+    }
+
     await queryInterface.createTable('user_balances', {
       id: {
         allowNull: false,
@@ -55,4 +62,3 @@ module.exports = {
     await queryInterface.dropTable('user_balances');
   }
 };
-
