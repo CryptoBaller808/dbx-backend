@@ -15,7 +15,7 @@ console.log('[UBAL DEBUG] __dirname:', __dirname);
 console.log('[UBAL DEBUG] __filename:', __filename);
 console.log('[UBAL DEBUG] process.cwd():', process.cwd());
 
-const modelsPath = path.join(__dirname, '..', 'models');
+const modelsPath = path.join(process.cwd(), 'models');
 console.log('[UBAL DEBUG] Computed models path:', modelsPath);
 console.log('[UBAL DEBUG] Models path exists?:', fs.existsSync(modelsPath));
 
@@ -28,7 +28,7 @@ if (fs.existsSync(modelsPath)) {
 }
 
 console.log('[UBAL DEBUG] Attempting to require models...');
-const db = require(path.join(__dirname, '..', 'models'));
+const db = require(path.join(process.cwd(), 'models'));
 console.log('[UBAL DEBUG] ✅ Models loaded successfully!');
 console.log('[UBAL DEBUG] ==========================================');
 
