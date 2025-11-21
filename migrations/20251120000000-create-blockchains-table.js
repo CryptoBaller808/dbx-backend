@@ -5,6 +5,8 @@
  * 
  * This migration creates the blockchains table required for UBAL
  * (Unified Blockchain Abstraction Layer) configuration.
+ * 
+ * Uses snake_case column names following PostgreSQL best practices.
  */
 
 module.exports = {
@@ -36,23 +38,23 @@ module.exports = {
           allowNull: false,
           comment: 'Blockchain native currency symbol (e.g., "XRP")',
         },
-        chainId: {
+        chain_id: {
           type: Sequelize.STRING,
           allowNull: false,
           unique: true,
           comment: 'Unique chain identifier for UBAL (e.g., "xrpl", "stellar")',
         },
-        nodeUrl: {
+        node_url: {
           type: Sequelize.STRING,
           allowNull: true,
           comment: 'RPC node URL - loaded from env vars at runtime',
         },
-        explorerUrl: {
+        explorer_url: {
           type: Sequelize.STRING,
           allowNull: false,
           comment: 'Block explorer URL',
         },
-        nativeCurrency: {
+        native_currency: {
           type: Sequelize.STRING,
           allowNull: false,
           comment: 'Native currency name',
@@ -63,12 +65,12 @@ module.exports = {
           defaultValue: 18,
           comment: 'Native currency decimal places',
         },
-        adapterType: {
+        adapter_type: {
           type: Sequelize.STRING,
           allowNull: false,
           comment: 'Adapter type: "account", "evm", "utxo"',
         },
-        isActive: {
+        is_active: {
           type: Sequelize.BOOLEAN,
           allowNull: false,
           defaultValue: true,
@@ -84,28 +86,26 @@ module.exports = {
           allowNull: true,
           comment: 'Logo URL or path',
         },
-        createdAt: {
+        created_at: {
           type: Sequelize.DATE,
           allowNull: false,
           defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
-          field: 'created_at',
         },
-        updatedAt: {
+        updated_at: {
           type: Sequelize.DATE,
           allowNull: false,
           defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
-          field: 'updated_at',
         },
       });
 
-      // Create index on chainId for faster lookups
-      await queryInterface.addIndex('blockchains', ['chainId'], {
+      // Create index on chain_id for faster lookups
+      await queryInterface.addIndex('blockchains', ['chain_id'], {
         unique: true,
         name: 'blockchains_chain_id_unique',
       });
 
-      // Create index on isActive for filtering
-      await queryInterface.addIndex('blockchains', ['isActive'], {
+      // Create index on is_active for filtering
+      await queryInterface.addIndex('blockchains', ['is_active'], {
         name: 'blockchains_is_active_idx',
       });
 
