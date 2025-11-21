@@ -61,7 +61,7 @@ console.log('[ENV] SEED_DEBUG raw="%s" coerced=%s SEED_ADMIN_NAME="%s" SEED_ADMI
 
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const { initializeBlockchainServices } = require('./services/blockchain');
+// Blockchain services loaded conditionally based on ENABLE_UBAL flag
 const { initializeDatabase, sequelize } = require('./models');
 const { 
   secureConnection, 
@@ -1667,6 +1667,9 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       // Check if UBAL is enabled
       if (process.env.ENABLE_UBAL === 'true') {
         console.log('[Server] Initializing blockchain services (UBAL)...');
+        
+        // Load blockchain services only when enabled
+        const { initializeBlockchainServices } = require('./services/blockchain');
         
         // Initialize blockchain services
         await initializeBlockchainServices(db);
