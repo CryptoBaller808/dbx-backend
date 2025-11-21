@@ -1664,10 +1664,17 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
     
     // Skip DB-dependent services in light mode
     if (!skipDBDependent && process.env.DBX_STARTUP_MODE !== 'light') {
-      console.log('[Server] Initializing blockchain services...');
-      
-      // Initialize blockchain services
-      await initializeBlockchainServices(db);
+      // Check if UBAL is enabled
+      if (process.env.ENABLE_UBAL === 'true') {
+        console.log('[Server] Initializing blockchain services (UBAL)...');
+        
+        // Initialize blockchain services
+        await initializeBlockchainServices(db);
+        
+        console.log('[Server] ✅ UBAL blockchain services initialized');
+      } else {
+        console.log('[Server] ⏭️  Skipping UBAL initialization (ENABLE_UBAL != true)');
+      }
       
       // console.log('[Server] Initializing wallet services...');
       
