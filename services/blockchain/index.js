@@ -6,7 +6,7 @@
  */
 
 // Import database models
-const db = require('../util/database');
+const db = require('../models');
 
 const {
   BlockchainError,
