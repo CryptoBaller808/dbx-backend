@@ -7,7 +7,30 @@
 
 // Import database models
 const path = require('path');
+const fs = require('fs');
+
+// DEBUG: Log module resolution details
+console.log('[UBAL DEBUG] ========== MODULE RESOLUTION DEBUG ==========');
+console.log('[UBAL DEBUG] __dirname:', __dirname);
+console.log('[UBAL DEBUG] __filename:', __filename);
+console.log('[UBAL DEBUG] process.cwd():', process.cwd());
+
+const modelsPath = path.join(__dirname, '..', 'models');
+console.log('[UBAL DEBUG] Computed models path:', modelsPath);
+console.log('[UBAL DEBUG] Models path exists?:', fs.existsSync(modelsPath));
+
+if (fs.existsSync(modelsPath)) {
+  console.log('[UBAL DEBUG] Models directory contents:', fs.readdirSync(modelsPath).slice(0, 10));
+  console.log('[UBAL DEBUG] index.js exists?:', fs.existsSync(path.join(modelsPath, 'index.js')));
+} else {
+  console.log('[UBAL DEBUG] Models directory does NOT exist!');
+  console.log('[UBAL DEBUG] Parent directory contents:', fs.readdirSync(path.join(__dirname, '..')).slice(0, 20));
+}
+
+console.log('[UBAL DEBUG] Attempting to require models...');
 const db = require(path.join(__dirname, '..', 'models'));
+console.log('[UBAL DEBUG] ✅ Models loaded successfully!');
+console.log('[UBAL DEBUG] ==========================================');
 
 const {
   BlockchainError,
