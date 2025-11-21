@@ -5,6 +5,9 @@
  * for use throughout the application.
  */
 
+// Import database models
+const db = require('../util/database');
+
 const {
   BlockchainError,
   ErrorCodes,
