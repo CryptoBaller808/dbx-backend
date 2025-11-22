@@ -426,6 +426,33 @@ const io = socketIo(server, {
 });
 console.log("✅ [STARTUP] Socket.IO initialized successfully");
 
+// Initialize XUMM Socket.IO handlers
+if (process.env.ENABLE_XUMM === 'true') {
+  console.log("[DBX BACKEND] XUMM enabled, loading XUMM dependencies...");
+  try {
+    // Verify XUMM environment variables
+    if (!process.env.XUMM_API_KEY || !process.env.XUMM_API_SECRET) {
+      console.error("❌ [DBX BACKEND] XUMM environment variables not set!");
+      console.error("❌ [DBX BACKEND] Required: XUMM_API_KEY, XUMM_API_SECRET");
+    } else {
+      console.log("[DBX BACKEND] ✓ XUMM environment variables verified");
+      console.log("[DBX BACKEND] ✓ XRPL_NETWORK:", process.env.XRPL_NETWORK || 'mainnet');
+      
+      // Initialize XUMM SDK (imported in services/socket.js)
+      console.log("[DBX BACKEND] ✓ XUMM SDK initialized");
+      
+      // Initialize XUMM Socket.IO handlers
+      const socketInit = require('./services/socket');
+      socketInit(io);
+      console.log("[DBX BACKEND] ✓ XUMM Socket.IO handlers initialized");
+    }
+  } catch (error) {
+    console.error("❌ [DBX BACKEND] Failed to initialize XUMM:", error.message);
+  }
+} else {
+  console.log("⏭️ [DBX BACKEND] XUMM disabled (ENABLE_XUMM not set to 'true')");
+}
+
 // Add basic health test route at the very top
 console.log("🧪 [STARTUP] Adding basic health test route...");
 app.get('/basic-health', (req, res) => {
