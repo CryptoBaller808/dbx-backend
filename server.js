@@ -448,6 +448,8 @@ if (process.env.ENABLE_XUMM === 'true') {
     }
   } catch (error) {
     console.error("❌ [DBX BACKEND] Failed to initialize XUMM:", error.message);
+    console.error("❌ [DBX BACKEND] Error stack:", error.stack);
+    console.error("❌ [DBX BACKEND] Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
   }
 } else {
   console.log("⏭️ [DBX BACKEND] XUMM disabled (ENABLE_XUMM not set to 'true')");
