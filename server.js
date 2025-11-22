@@ -1761,7 +1761,17 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       console.log('[Server] Initializing system health monitoring service...');
       
       // Initialize system health monitoring service with Socket.io
-      const healthMonitoring = initializeHealthMonitoringService(io);
+      let healthMonitoring = null;
+      if (process.env.DISABLE_HEALTH_MONITORING === 'true') {
+        console.log('⏭️ [Server] Health monitoring disabled via DISABLE_HEALTH_MONITORING flag');
+      } else {
+        try {
+          healthMonitoring = initializeHealthMonitoringService(io);
+        } catch (error) {
+          console.error('❌ [Server] Health monitoring initialization failed:', error.message);
+          console.log('⏭️ [Server] Continuing without health monitoring');
+        }
+      }
       
       console.log('[Server] All services initialized successfully!');
       

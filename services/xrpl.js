@@ -905,7 +905,15 @@ async function updateOfferPriceInDatabase(id, newPrice) {
   }
 }
 
-subscribeToOrderBook().catch(console.error);
+// Initialize XRPL WebSocket subscription
+if (process.env.DISABLE_XRPL_WS_TEST === 'true') {
+  console.log('⏭️ [XRPL] WebSocket test subscription disabled via DISABLE_XRPL_WS_TEST flag');
+} else {
+  subscribeToOrderBook().catch((error) => {
+    console.error('❌ [XRPL] WebSocket subscription failed:', error.message);
+    console.log('⏭️ [XRPL] Continuing without WebSocket subscription');
+  });
+}
 
 // GET ALL USER CURRENCIES
 
