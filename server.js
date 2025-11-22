@@ -426,6 +426,35 @@ const io = socketIo(server, {
 });
 console.log("✅ [STARTUP] Socket.IO initialized successfully");
 
+// Initialize XUMM Socket.IO handlers
+if (process.env.ENABLE_XUMM === 'true') {
+  console.log("[DBX BACKEND] XUMM enabled, loading XUMM dependencies...");
+  try {
+    // Verify XUMM environment variables
+    if (!process.env.XUMM_API_KEY || !process.env.XUMM_API_SECRET) {
+      console.error("❌ [DBX BACKEND] XUMM environment variables not set!");
+      console.error("❌ [DBX BACKEND] Required: XUMM_API_KEY, XUMM_API_SECRET");
+    } else {
+      console.log("[DBX BACKEND] ✓ XUMM environment variables verified");
+      console.log("[DBX BACKEND] ✓ XRPL_NETWORK:", process.env.XRPL_NETWORK || 'mainnet');
+      
+      // Initialize XUMM SDK (imported in services/socket.js)
+      console.log("[DBX BACKEND] ✓ XUMM SDK initialized");
+      
+      // Initialize XUMM Socket.IO handlers
+      const socketInit = require('./services/socket');
+      socketInit(io);
+      console.log("[DBX BACKEND] ✓ XUMM Socket.IO handlers initialized");
+    }
+  } catch (error) {
+    console.error("❌ [DBX BACKEND] Failed to initialize XUMM:", error.message);
+    console.error("❌ [DBX BACKEND] Error stack:", error.stack);
+    console.error("❌ [DBX BACKEND] Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+  }
+} else {
+  console.log("⏭️ [DBX BACKEND] XUMM disabled (ENABLE_XUMM not set to 'true')");
+}
+
 // Add basic health test route at the very top
 console.log("🧪 [STARTUP] Adding basic health test route...");
 app.get('/basic-health', (req, res) => {
@@ -1732,7 +1761,17 @@ const initializeServices = async ({ skipDBDependent = false } = {}) => {
       console.log('[Server] Initializing system health monitoring service...');
       
       // Initialize system health monitoring service with Socket.io
-      const healthMonitoring = initializeHealthMonitoringService(io);
+      let healthMonitoring = null;
+      if (process.env.DISABLE_HEALTH_MONITORING === 'true') {
+        console.log('⏭️ [Server] Health monitoring disabled via DISABLE_HEALTH_MONITORING flag');
+      } else {
+        try {
+          healthMonitoring = initializeHealthMonitoringService(io);
+        } catch (error) {
+          console.error('❌ [Server] Health monitoring initialization failed:', error.message);
+          console.log('⏭️ [Server] Continuing without health monitoring');
+        }
+      }
       
       console.log('[Server] All services initialized successfully!');
       

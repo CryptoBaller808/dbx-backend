@@ -769,6 +769,10 @@ class CrossChainNFTBridge {
    * Load active bridge transactions
    */
   async loadActiveBridgeTransactions() {
+    if (process.env.DISABLE_NFT_BRIDGE === 'true') {
+      console.log('⏭️ [CrossChainNFTBridge] NFT bridge disabled via DISABLE_NFT_BRIDGE flag');
+      return;
+    }
     try {
       const activeTransactions = await db.NFTBridgeTransaction.findAll({
         where: {
