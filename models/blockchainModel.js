@@ -1,6 +1,9 @@
 /**
  * Blockchain Model
- * Standardized Sequelize implementation
+ * Standardized Sequelize implementation with explicit field mappings
+ * 
+ * This model uses underscored: true and explicit field mappings to ensure
+ * proper conversion between camelCase (JavaScript) and snake_case (PostgreSQL).
  */
 module.exports = (sequelize, DataTypes) => {
   const Blockchain = sequelize.define(
@@ -23,18 +26,22 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
+        field: 'chain_id',  // Maps to snake_case column
       },
       nodeUrl: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
+        field: 'node_url',  // Maps to snake_case column
       },
       explorerUrl: {
         type: DataTypes.STRING,
         allowNull: false,
+        field: 'explorer_url',  // Maps to snake_case column
       },
       nativeCurrency: {
         type: DataTypes.STRING,
         allowNull: false,
+        field: 'native_currency',  // Maps to snake_case column
       },
       decimals: {
         type: DataTypes.INTEGER,
@@ -43,10 +50,12 @@ module.exports = (sequelize, DataTypes) => {
       adapterType: {
         type: DataTypes.STRING,
         allowNull: false,
+        field: 'adapter_type',  // Maps to snake_case column
       },
       isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+        field: 'is_active',  // Maps to snake_case column
       },
       config: {
         type: DataTypes.JSON,

@@ -108,15 +108,15 @@ module.exports = {
       // This will insert new records or update existing ones based on chainId
       for (const blockchain of blockchains) {
         const [results] = await queryInterface.sequelize.query(
-          `INSERT INTO blockchains (name, symbol, "chainId", "nodeUrl", "explorerUrl", "nativeCurrency", decimals, "adapterType", "isActive", config, logo, created_at, updated_at)
+          `INSERT INTO blockchains (name, symbol, chain_id, node_url, explorer_url, native_currency, decimals, adapter_type, is_active, config, logo, created_at, updated_at)
            VALUES (:name, :symbol, :chainId, :nodeUrl, :explorerUrl, :nativeCurrency, :decimals, :adapterType, :isActive, :config::jsonb, :logo, :created_at, :updated_at)
-           ON CONFLICT ("chainId") DO UPDATE SET
+           ON CONFLICT (chain_id) DO UPDATE SET
              name = EXCLUDED.name,
              symbol = EXCLUDED.symbol,
-             "explorerUrl" = EXCLUDED."explorerUrl",
-             "nativeCurrency" = EXCLUDED."nativeCurrency",
+             explorer_url = EXCLUDED.explorer_url,
+             native_currency = EXCLUDED.native_currency,
              decimals = EXCLUDED.decimals,
-             "adapterType" = EXCLUDED."adapterType",
+             adapter_type = EXCLUDED.adapter_type,
              config = EXCLUDED.config,
              updated_at = EXCLUDED.updated_at
            RETURNING *`,
@@ -142,11 +142,9 @@ module.exports = {
     
     try {
       // Delete only the 4 blockchains we seeded
-      await queryInterface.bulkDelete('blockchains', {
-        chainId: {
-          [Sequelize.Op.in]: ['xrpl', 'stellar', 'xdc', 'bitcoin']
-        }
-      }, {});
+      await queryInterface.sequelize.query(
+        `DELETE FROM blockchains WHERE chain_id IN ('xrpl', 'stellar', 'xdc', 'bitcoin')`
+      );
       
       console.log('✅ [Blockchains Seeder] Rollback completed');
       
