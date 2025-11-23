@@ -60,33 +60,40 @@ const socketInit = async (io) => {
 
         const QR_Code = subscription.created.refs.qr_png;
         console.log('[DBX BACKEND] ✅ QR code generated, emitting to client:', socket.id);
+        console.log('[DBX BACKEND] 📦 QR Code data length:', QR_Code?.length);
 
-        userSocket.emit("qr-response", QR_Code);
-        console.log('[DBX BACKEND] ✅ Emitted qr-response event');
+        // ✅ FIX: Emit directly to socket, not via io.to()
+        socket.emit("qr-response", QR_Code);
+        console.log('[DBX BACKEND] ✅ Emitted qr-response event directly to socket');
 
         const noPushMsgReceivedUrl = `https://xumm.app/sign/${subscription.created.uuid}/qr`;
 
-        userSocket.emit("qr-app-response", noPushMsgReceivedUrl);
+        socket.emit("qr-app-response", noPushMsgReceivedUrl);
+        console.log('[DBX BACKEND] ✅ Emitted qr-app-response event');
         const resolveData = await subscription.resolved;
 
         if (resolveData.signed == false) {
-          userSocket.emit("account-response", rejectResponse);
+          socket.emit("account-response", rejectResponse);
+          console.log('[DBX BACKEND] ✅ Emitted account-response (rejected)');
         } else {
           const response = await xumm.payload.get(resolveData.payload_uuidv4);
           const accountNo = response.response.account;
           const accountData = await xrplHelper.getBalance(accountNo);
           accountData.success = true;
           accountData.userToken = response.application.issued_user_token;
-          userSocket.emit("account-response", accountData);
+          socket.emit("account-response", accountData);
+          console.log('[DBX BACKEND] ✅ Emitted account-response (success)');
         }
       } catch (error) {
         console.error('[DBX BACKEND] ❌ XUMM handler error:', error.message);
         console.error('[DBX BACKEND] ❌ Full error:', error);
-        userSocket.emit("account-response", rejectResponse);
+        socket.emit("account-response", rejectResponse);
+        console.log('[DBX BACKEND] ✅ Emitted account-response (error)');
       }
     });
 
     socket.on("get-account-balance", async (args) => {
+      console.log('[DBX BACKEND] 🐛 get-account-balance triggered:', socket.id);
       const accountNo = args.accountNo;
 
       const accountData = await xrplHelper.getBalance(accountNo);
@@ -94,7 +101,8 @@ const socketInit = async (io) => {
       accountData.success = true;
       accountData.userToken = args.userToken;
 
-      userSocket.emit("account-response", accountData);
+      socket.emit("account-response", accountData);
+      console.log('[DBX BACKEND] ✅ Emitted account-response for balance check');
     });
 
     // GET All user currencies
