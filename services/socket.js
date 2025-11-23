@@ -18,7 +18,8 @@ const Verify = new TxData();
 
 const socketInit = async (io) => {
   io.on("connection", (socket) => {
-    console.log("connected to socket with id==", socket.id);
+    console.log('[Socket.IO] 🔌 Client connected:', socket.id);
+    console.log('[Socket.IO] 🔌 Registering XUMM event handlers...');
 
     const userSocket = io.to(socket.id);
 
@@ -30,10 +31,13 @@ const socketInit = async (io) => {
     }
 
     socket.on("connect_error", (err) => {
-      console.log(`connect_error due to ${err.message}`);
+      console.log(`[Socket.IO] ❌ Connect error: ${err.message}`);
     });
 
+    console.log('[Socket.IO] ✅ Registered handler: xumm-qr-code');
     socket.on("xumm-qr-code", async () => {
+      console.log('[DBX BACKEND] 🎯 XUMM HANDLER TRIGGERED:', socket.id);
+      console.log('[DBX BACKEND] 🎯 Generating XUMM QR code for wallet connection...');
       const rejectResponse = {
         success: false,
         message: "Rejected",
@@ -55,8 +59,10 @@ const socketInit = async (io) => {
         );
 
         const QR_Code = subscription.created.refs.qr_png;
+        console.log('[DBX BACKEND] ✅ QR code generated, emitting to client:', socket.id);
 
         userSocket.emit("qr-response", QR_Code);
+        console.log('[DBX BACKEND] ✅ Emitted qr-response event');
 
         const noPushMsgReceivedUrl = `https://xumm.app/sign/${subscription.created.uuid}/qr`;
 
@@ -74,6 +80,8 @@ const socketInit = async (io) => {
           userSocket.emit("account-response", accountData);
         }
       } catch (error) {
+        console.error('[DBX BACKEND] ❌ XUMM handler error:', error.message);
+        console.error('[DBX BACKEND] ❌ Full error:', error);
         userSocket.emit("account-response", rejectResponse);
       }
     });
