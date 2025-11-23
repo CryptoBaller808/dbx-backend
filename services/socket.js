@@ -22,7 +22,12 @@ const socketInit = async (io) => {
 
     const userSocket = io.to(socket.id);
 
-    xlmEvents(socket, userSocket);
+    // Initialize XLM WalletConnect handlers if enabled
+    if (process.env.ENABLE_XLM_EVENTS === 'true') {
+      xlmEvents(socket, userSocket);
+    } else {
+      console.log('[XLM] Skipping Stellar WalletConnect handlers');
+    }
 
     socket.on("connect_error", (err) => {
       console.log(`connect_error due to ${err.message}`);

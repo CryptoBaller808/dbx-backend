@@ -1,4 +1,11 @@
 const { SignClient } = require("@walletconnect/sign-client");
+// Feature flag to disable XLM WalletConnect handlers
+if (process.env.ENABLE_XLM_EVENTS !== 'true') {
+  console.log('[XLM] XLM events disabled (ENABLE_XLM_EVENTS != true)');
+  module.exports = function() {};
+  return;
+}
+
 const {
   TransactionBuilder,
   Operation,
