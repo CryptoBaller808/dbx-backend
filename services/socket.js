@@ -81,14 +81,23 @@ const socketInit = async (io) => {
           }
         );
 
-        const QR_Code = subscription.created.refs.qr_png;
+        // ✅ CRITICAL FIX: Use deep link for QR code, not PNG image URL!
+        // The QR code must contain the sign-in URL that XUMM app can open
+        // subscription.created.refs.qr_png = Image URL (wrong for scanning)
+        // subscription.created.next.always = Deep link (correct for scanning)
+        const QR_Code = subscription.created.next.always; // Deep link for QR code
+        const QR_Image = subscription.created.refs.qr_png; // PNG image URL for display
+        
         console.log('[DBX BACKEND] ✅ QR code generated, emitting to client:', socket.id);
-        console.log('[DBX BACKEND] 📦 QR Code data length:', QR_Code?.length);
+        console.log('[DBX BACKEND] 📦 QR Deep Link:', QR_Code);
+        console.log('[DBX BACKEND] 🖼️ QR Image URL:', QR_Image);
 
         // ✅ FIX: Emit directly to socket, not via io.to()
+        // Send the deep link so frontend can generate QR code from it
         socket.emit("qr-response", QR_Code);
         console.log('[DBX BACKEND] ✅ Emitted qr-response event directly to socket');
 
+        // Also send the image URL for display purposes
         const noPushMsgReceivedUrl = `https://xumm.app/sign/${subscription.created.uuid}/qr`;
 
         socket.emit("qr-app-response", noPushMsgReceivedUrl);
