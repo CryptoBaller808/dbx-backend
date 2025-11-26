@@ -65,12 +65,10 @@ const socketInit = async (io) => {
         const subscription = await xumm.payload.createAndSubscribe(
           request,
           (e) => {
-            // ✅ PHASE 2A: Log all subscription events
-            console.log('[DBX BACKEND] 🔔 XUMM Subscription Event:', {
-              socketId: socket.id,
-              eventType: e.data.opened ? 'OPENED' : e.data.signed !== undefined ? 'SIGNED' : 'OTHER',
-              data: e.data,
-            });
+            // ✅ PHASE 2A: Log all subscription events with full data
+            console.log('[DBX BACKEND] 🔔 XUMM Subscription Event:', socket.id);
+            console.log('[DBX BACKEND] 📊 Event Type:', e.data.opened ? 'OPENED' : e.data.signed !== undefined ? 'SIGNED' : 'OTHER');
+            console.log('[DBX BACKEND] 📦 Full Event Data:', JSON.stringify(e.data, null, 2));
             
             if (e.data.opened) {
               console.log('[DBX BACKEND] 📱 Payload OPENED in XUMM app!', socket.id);
