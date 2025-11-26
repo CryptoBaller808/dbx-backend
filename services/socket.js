@@ -47,12 +47,37 @@ const socketInit = async (io) => {
           txjson: {
             TransactionType: "SignIn",
           },
+          // ✅ PHASE 2A: Add custom metadata to track socket ID
+          custom_meta: {
+            identifier: socket.id,
+            blob: {
+              socketId: socket.id,
+              timestamp: new Date().toISOString(),
+            },
+          },
         };
+
+        console.log('[DBX BACKEND] 📦 Creating XUMM payload with metadata:', {
+          socketId: socket.id,
+          transactionType: 'SignIn',
+        });
 
         const subscription = await xumm.payload.createAndSubscribe(
           request,
           (e) => {
+            // ✅ PHASE 2A: Log all subscription events
+            console.log('[DBX BACKEND] 🔔 XUMM Subscription Event:', {
+              socketId: socket.id,
+              eventType: e.data.opened ? 'OPENED' : e.data.signed !== undefined ? 'SIGNED' : 'OTHER',
+              data: e.data,
+            });
+            
+            if (e.data.opened) {
+              console.log('[DBX BACKEND] 📱 Payload OPENED in XUMM app!', socket.id);
+            }
+            
             if (Object.keys(e.data).indexOf("signed") > -1) {
+              console.log('[DBX BACKEND] ✍️ Payload SIGNED:', e.data.signed, 'Socket:', socket.id);
               return e.data;
             }
           }
@@ -70,17 +95,36 @@ const socketInit = async (io) => {
 
         socket.emit("qr-app-response", noPushMsgReceivedUrl);
         console.log('[DBX BACKEND] ✅ Emitted qr-app-response event');
+        
+        console.log('[DBX BACKEND] ⏳ Waiting for user to scan and approve in XUMM app...', socket.id);
         const resolveData = await subscription.resolved;
+        console.log('[DBX BACKEND] ✅ Payload RESOLVED!', {
+          socketId: socket.id,
+          signed: resolveData.signed,
+          payloadId: resolveData.payload_uuidv4,
+        });
 
         if (resolveData.signed == false) {
           socket.emit("account-response", rejectResponse);
           console.log('[DBX BACKEND] ✅ Emitted account-response (rejected)');
         } else {
+          console.log('[DBX BACKEND] 🔍 Fetching payload details...', resolveData.payload_uuidv4);
           const response = await xumm.payload.get(resolveData.payload_uuidv4);
           const accountNo = response.response.account;
+          
+          console.log('[DBX BACKEND] 💰 Fetching balance for account:', accountNo);
           const accountData = await xrplHelper.getBalance(accountNo);
           accountData.success = true;
           accountData.userToken = response.application.issued_user_token;
+          accountData.account = accountNo;
+          
+          console.log('[DBX BACKEND] 📤 Emitting account-response to socket:', socket.id);
+          console.log('[DBX BACKEND] 📊 Account data:', {
+            account: accountNo,
+            balance: accountData.balance,
+            hasUserToken: !!accountData.userToken,
+          });
+          
           socket.emit("account-response", accountData);
           console.log('[DBX BACKEND] ✅ Emitted account-response (success)');
         }
