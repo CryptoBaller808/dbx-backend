@@ -207,7 +207,7 @@ const tokenRoutes = require('./routes/tokenRoutes');
 const tradeRoutes = require('./routes/tradeRoutes');
 const portfolioRoutes = require('./routes/portfolioRoutes');
 const usersRoute = require('./routes/usersRoute');
-const profileRoute = require('./routes/profileRoute');
+// const profileRoute = require('./routes/profileRoute'); // COMMENTED OUT - saleController missing methods
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -1343,7 +1343,7 @@ app.use('/api/mfa', mfaRoutes);
 app.use('/users', usersRoute);
 
 // Mount Profile Routes (user profile data)
-app.use('/profiles', profileRoute);
+// app.use('/profiles', profileRoute); // COMMENTED OUT - saleController missing methods
 
 // Mount Transaction Routes
 app.use('/api/transactions', transactionRoutes);
