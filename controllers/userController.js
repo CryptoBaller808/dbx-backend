@@ -652,14 +652,72 @@ const xummWalletConnection = async (req, res) => {
 
 const verifyUser = async (req, res) => {
   try {
-    // Placeholder implementation for user verification
-    res.status(200).json({
-      success: true,
-      message: "User verification endpoint",
-      data: {}
+    const { wallet, usertoken } = req.body;
+    
+    if (!wallet) {
+      return res.status(400).json({
+        success: false,
+        message: "Wallet address is required"
+      });
+    }
+
+    console.log('[XUMM Verify] Verifying wallet:', wallet);
+
+    // Find or create user with this XRP wallet address
+    let user = await User.findOne({
+      where: { xrp_wallet_address: wallet }
     });
+
+    if (!user) {
+      console.log('[XUMM Verify] User not found, creating new user...');
+      // Create new user with wallet address
+      user = await User.create({
+        username: `xrp_${wallet.substring(0, 8)}`,
+        email: `${wallet.substring(0, 8)}@xumm.wallet`,
+        password: crypto.randomBytes(32).toString('hex'), // Random password for wallet users
+        xrp_wallet_address: wallet,
+        first_name: 'XUMM',
+        last_name: 'User',
+        role_id: 2, // Regular user role
+        status: 'active',
+        email_verified: true // Auto-verify wallet users
+      });
+      console.log('[XUMM Verify] New user created:', user.id);
+    } else {
+      console.log('[XUMM Verify] Existing user found:', user.id);
+    }
+
+    // Generate JWT token
+    const access_token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email,
+        wallet: wallet 
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    // Return user data in expected format
+    const userData = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      profile_image: user.profile_image,
+      cover_image: user.cover_image,
+      bio: user.bio,
+      xrp_wallet_address: user.xrp_wallet_address,
+      access_token: access_token,
+      userToken: usertoken
+    };
+
+    console.log('[XUMM Verify] Verification successful for user:', user.id);
+    
+    res.status(200).json(userData);
   } catch (error) {
-    console.error("User verification error:", error);
+    console.error("[XUMM Verify] User verification error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
