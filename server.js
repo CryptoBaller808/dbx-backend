@@ -206,6 +206,7 @@ const bannerRoutes = require('./routes/bannerRoutes');
 const tokenRoutes = require('./routes/tokenRoutes');
 const tradeRoutes = require('./routes/tradeRoutes');
 const portfolioRoutes = require('./routes/portfolioRoutes');
+const usersRoute = require('./routes/usersRoute');
 
 console.log("🚀 DBX Backend running from server.js - UNIFIED ENTRY POINT");
 console.log("🌺 Route consolidation complete - Single source of truth architecture");
@@ -1336,6 +1337,9 @@ app._router.stack.forEach((layer, index) => {
 console.log("🔗 [STARTUP] About to mount other routes...");
 // Mount MFA Routes
 app.use('/api/mfa', mfaRoutes);
+
+// Mount Users Routes (XUMM wallet verification, etc.)
+app.use('/users', usersRoute);
 
 // Mount Transaction Routes
 app.use('/api/transactions', transactionRoutes);
