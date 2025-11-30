@@ -18,17 +18,26 @@ const Verify = new TxData();
 
 const socketInit = async (io) => {
   io.on("connection", (socket) => {
-    console.log("connected to socket with id==", socket.id);
+    console.log('[Socket.IO] 🔌 Client connected:', socket.id);
+    console.log('[Socket.IO] 🔌 Registering XUMM event handlers...');
 
     const userSocket = io.to(socket.id);
 
-    xlmEvents(socket, userSocket);
+    // Initialize XLM WalletConnect handlers if enabled
+    if (process.env.ENABLE_XLM_EVENTS === 'true') {
+      xlmEvents(socket, userSocket);
+    } else {
+      console.log('[XLM] Skipping Stellar WalletConnect handlers');
+    }
 
     socket.on("connect_error", (err) => {
-      console.log(`connect_error due to ${err.message}`);
+      console.log(`[Socket.IO] ❌ Connect error: ${err.message}`);
     });
 
+    console.log('[Socket.IO] ✅ Registered handler: xumm-qr-code');
     socket.on("xumm-qr-code", async () => {
+      console.log('[DBX BACKEND] 🎯 XUMM HANDLER TRIGGERED:', socket.id);
+      console.log('[DBX BACKEND] 🎯 Generating XUMM QR code for wallet connection...');
       const rejectResponse = {
         success: false,
         message: "Rejected",
@@ -38,42 +47,104 @@ const socketInit = async (io) => {
           txjson: {
             TransactionType: "SignIn",
           },
+          // ✅ PHASE 2A: Add custom metadata to track socket ID
+          custom_meta: {
+            identifier: socket.id,
+            blob: {
+              socketId: socket.id,
+              timestamp: new Date().toISOString(),
+            },
+          },
         };
+
+        console.log('[DBX BACKEND] 📦 Creating XUMM payload with metadata:', {
+          socketId: socket.id,
+          transactionType: 'SignIn',
+        });
 
         const subscription = await xumm.payload.createAndSubscribe(
           request,
           (e) => {
+            // ✅ PHASE 2A: Log all subscription events with full data
+            console.log('[DBX BACKEND] 🔔 XUMM Subscription Event:', socket.id);
+            console.log('[DBX BACKEND] 📊 Event Type:', e.data.opened ? 'OPENED' : e.data.signed !== undefined ? 'SIGNED' : 'OTHER');
+            console.log('[DBX BACKEND] 📦 Full Event Data:', JSON.stringify(e.data, null, 2));
+            
+            if (e.data.opened) {
+              console.log('[DBX BACKEND] 📱 Payload OPENED in XUMM app!', socket.id);
+            }
+            
             if (Object.keys(e.data).indexOf("signed") > -1) {
+              console.log('[DBX BACKEND] ✍️ Payload SIGNED:', e.data.signed, 'Socket:', socket.id);
               return e.data;
             }
           }
         );
 
-        const QR_Code = subscription.created.refs.qr_png;
+        // ✅ CRITICAL FIX: Use deep link for QR code, not PNG image URL!
+        // The QR code must contain the sign-in URL that XUMM app can open
+        // subscription.created.refs.qr_png = Image URL (wrong for scanning)
+        // subscription.created.next.always = Deep link (correct for scanning)
+        const QR_Code = subscription.created.next.always; // Deep link for QR code
+        const QR_Image = subscription.created.refs.qr_png; // PNG image URL for display
+        
+        console.log('[DBX BACKEND] ✅ QR code generated, emitting to client:', socket.id);
+        console.log('[DBX BACKEND] 📦 QR Deep Link:', QR_Code);
+        console.log('[DBX BACKEND] 🖼️ QR Image URL:', QR_Image);
 
-        userSocket.emit("qr-response", QR_Code);
+        // ✅ FIX: Emit directly to socket, not via io.to()
+        // Send the deep link so frontend can generate QR code from it
+        socket.emit("qr-response", QR_Code);
+        console.log('[DBX BACKEND] ✅ Emitted qr-response event directly to socket');
 
+        // Also send the image URL for display purposes
         const noPushMsgReceivedUrl = `https://xumm.app/sign/${subscription.created.uuid}/qr`;
 
-        userSocket.emit("qr-app-response", noPushMsgReceivedUrl);
+        socket.emit("qr-app-response", noPushMsgReceivedUrl);
+        console.log('[DBX BACKEND] ✅ Emitted qr-app-response event');
+        
+        console.log('[DBX BACKEND] ⏳ Waiting for user to scan and approve in XUMM app...', socket.id);
         const resolveData = await subscription.resolved;
+        console.log('[DBX BACKEND] ✅ Payload RESOLVED!', {
+          socketId: socket.id,
+          signed: resolveData.signed,
+          payloadId: resolveData.payload_uuidv4,
+        });
 
         if (resolveData.signed == false) {
-          userSocket.emit("account-response", rejectResponse);
+          socket.emit("account-response", rejectResponse);
+          console.log('[DBX BACKEND] ✅ Emitted account-response (rejected)');
         } else {
+          console.log('[DBX BACKEND] 🔍 Fetching payload details...', resolveData.payload_uuidv4);
           const response = await xumm.payload.get(resolveData.payload_uuidv4);
           const accountNo = response.response.account;
+          
+          console.log('[DBX BACKEND] 💰 Fetching balance for account:', accountNo);
           const accountData = await xrplHelper.getBalance(accountNo);
           accountData.success = true;
           accountData.userToken = response.application.issued_user_token;
-          userSocket.emit("account-response", accountData);
+          accountData.account = accountNo;
+          
+          console.log('[DBX BACKEND] 📤 Emitting account-response to socket:', socket.id);
+          console.log('[DBX BACKEND] 📊 Account data:', {
+            account: accountNo,
+            balance: accountData.balance,
+            hasUserToken: !!accountData.userToken,
+          });
+          
+          socket.emit("account-response", accountData);
+          console.log('[DBX BACKEND] ✅ Emitted account-response (success)');
         }
       } catch (error) {
-        userSocket.emit("account-response", rejectResponse);
+        console.error('[DBX BACKEND] ❌ XUMM handler error:', error.message);
+        console.error('[DBX BACKEND] ❌ Full error:', error);
+        socket.emit("account-response", rejectResponse);
+        console.log('[DBX BACKEND] ✅ Emitted account-response (error)');
       }
     });
 
     socket.on("get-account-balance", async (args) => {
+      console.log('[DBX BACKEND] 🐛 get-account-balance triggered:', socket.id);
       const accountNo = args.accountNo;
 
       const accountData = await xrplHelper.getBalance(accountNo);
@@ -81,7 +152,8 @@ const socketInit = async (io) => {
       accountData.success = true;
       accountData.userToken = args.userToken;
 
-      userSocket.emit("account-response", accountData);
+      socket.emit("account-response", accountData);
+      console.log('[DBX BACKEND] ✅ Emitted account-response for balance check');
     });
 
     // GET All user currencies
