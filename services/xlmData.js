@@ -62,20 +62,33 @@ const getXLMBalances = async (
   event = "account-response"
 ) => {
   if (publicKey) {
+    console.log('[XLM SOCKET] 🔍 Fetching balances for publicKey:', publicKey?.slice(0, 8) + '...');
+    console.log('[XLM SOCKET] 🌐 Horizon server:', server.serverURL);
+    
     try {
       const account = await server.loadAccount(publicKey);
+      
+      console.log('[XLM SOCKET] ✅ Account loaded from Horizon');
+      console.log('[XLM SOCKET] 💰 Native balance:', account.balances[account.balances.length - 1].balance, 'XLM');
+      console.log('[XLM SOCKET] 📄 Total balances:', account.balances.length);
+      
       accountData = {
         account: account.balances[account.balances.length - 1].balance,
         userToken: publicKey,
         success: true,
         currencies: account.balances,
       };
+      
+      console.log('[XLM SOCKET] 📦 Emitting', event, 'to client');
       userSocket.emit(event, accountData);
-      // userSocket.emit("account-response", accountData);
+      console.log('[XLM SOCKET] ✅ Balance data sent successfully');
     } catch (error) {
-      console.log("getXLMBalances:error", error);
+      console.error('[XLM SOCKET] ❌ getXLMBalances error:', error.message);
+      console.log('[XLM SOCKET] 📦 Emitting connect-error to client');
       userSocket.emit("connect-error", error);
     }
+  } else {
+    console.log('[XLM SOCKET] ⚠️ getXLMBalances called with no publicKey');
   }
 };
 
