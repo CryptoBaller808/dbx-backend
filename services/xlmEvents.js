@@ -1,10 +1,17 @@
+// Stage E: Import crypto polyfill BEFORE WalletConnect to fix crypto.getRandomValues crash
+require('../util/cryptoPolyfill');
+
 const { SignClient } = require("@walletconnect/sign-client");
+
 // Feature flag to disable XLM WalletConnect handlers
 if (process.env.ENABLE_XLM_EVENTS !== 'true') {
   console.log('[XLM] XLM events disabled (ENABLE_XLM_EVENTS != true)');
   module.exports = function() {};
   return;
 }
+
+console.log('[XLM SOCKET] ✅ XLM events enabled (ENABLE_XLM_EVENTS = true)');
+console.log('[XLM SOCKET] 🔗 WalletConnect v2 SignClient ready to initialize');
 
 const {
   TransactionBuilder,
@@ -38,7 +45,14 @@ const LimitOrders = db.xlm_limit_orders;
 let sessions = {}; //we need session topic to saved in the db
 
 module.exports = async (socket, userSocket) => {
+  console.log('[XLM SOCKET] 🔌 Client connected for XLM:', socket.id);
+  console.log('[XLM SOCKET] 🔗 Initializing WalletConnect SignClient...');
+  
   const walletConnectSignClient = await SignClient.init(SIGN_CLIENT_CONFIG);
+  
+  console.log('[XLM SOCKET] ✅ WalletConnect SignClient initialized successfully');
+  console.log('[XLM SOCKET] 📊 Project ID:', process.env.WALLET_CONNECT_PID?.slice(0, 8) + '...');
+  console.log('[XLM SOCKET] 🌐 Network:', process.env.ENV_TYPE === 'development' ? 'TESTNET' : 'MAINNET');
 
   //when user delete session from mobile wallet emit to frontend immediately
   walletConnectSignClient.on("session_delete", (e) => {
@@ -47,9 +61,15 @@ module.exports = async (socket, userSocket) => {
 
   const onSessionConnected = async (session) => {
     const publicKey = session?.namespaces?.stellar?.accounts[0]?.slice(15);
+    
+    console.log('[XLM SOCKET] ✅ WalletConnect session approved for publicKey:', publicKey?.slice(0, 8) + '...');
+    console.log('[XLM SOCKET] 🧩 Session topic:', session.topic?.slice(0, 16) + '...');
 
     sessions[publicKey] = session.topic;
+    
+    console.log('[XLM SOCKET] 🔄 Fetching XLM balances from Horizon...');
     await getXLMBalances(publicKey, userSocket);
+    console.log('[XLM SOCKET] ✅ Emitting account-response for publicKey:', publicKey?.slice(0, 8) + '...');
   };
 
   // socket.on("xlm-qr-code", async () => {
@@ -70,18 +90,26 @@ module.exports = async (socket, userSocket) => {
   // });
 
   socket.on("xlm-qr-code", async () => {
+    console.log('[XLM SOCKET] 🎯 xlm-qr-code received for socket:', socket.id);
+    console.log('[XLM SOCKET] 🔗 WalletConnect session init started...');
+    
     try {
       // Attempt to connect to WalletConnect
       const { uri, approval } = await walletConnectSignClient.connect(SIGN_CLIENT_CONNECT_CONFIG);
   
       if (uri) {
+        console.log('[XLM SOCKET] ✅ WalletConnect URI generated');
+        console.log('[XLM SOCKET] 📦 Emitting qr-app-response to client');
+        console.log('[XLM SOCKET] 🔗 URI:', uri.slice(0, 50) + '...');
         userSocket.emit("qr-app-response", uri);
       }
   
       // Create a promise that resolves safely even on timeout
+      console.log('[XLM SOCKET] ⏳ Waiting for wallet approval (5 minute timeout)...');
+      
       const approvalWithTimeout = new Promise(async (resolve) => {
         const approvalTimeout = setTimeout(() => {
-          console.warn("QR code approval timeout occurred.");
+          console.log('[XLM SOCKET] ⏱️ WalletConnect approval timeout, emitting connect-error');
           resolve({ error: "QR code approval timeout. Please try again." }); // Resolve with error message
         }, 300000); // 5 minutes timeout
   
@@ -100,14 +128,17 @@ module.exports = async (socket, userSocket) => {
   
       // Check if session contains an error message
       if (session?.error) {
-        console.log("Approval failed:", session.error);
+        console.log('[XLM SOCKET] ❌ Approval failed:', session.error);
+        console.log('[XLM SOCKET] 📦 Emitting connect-error to client');
         userSocket.emit("connect-error", session.error);
         return; // Exit safely
       }
   
+      console.log('[XLM SOCKET] ✅ Session approved, calling onSessionConnected()');
       await onSessionConnected(session);
     } catch (error) {
-      console.error("Connect error:", error);
+      console.error('[XLM SOCKET] ❌ XLM wallet error:', error.message);
+      console.log('[XLM SOCKET] 📦 Emitting connect-error to client');
   
       // Handle different error cases properly
       if (error.message.includes("Request expired")) {

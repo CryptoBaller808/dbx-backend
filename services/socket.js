@@ -34,6 +34,72 @@ const socketInit = async (io) => {
       console.log(`[Socket.IO] ❌ Connect error: ${err.message}`);
     });
 
+    // ========================================
+    // XLM/Lobstr Wallet Connection Handler
+    // Stage B - Step B4: Socket handler for SEP-7 deep link connection
+    // ========================================
+    console.log('[Socket.IO] ✅ Registering handler: xlm-connect');
+    socket.on('xlm-connect', async (data) => {
+      console.log('[XLM] STEP B4 – xlm-connect handler triggered:', socket.id);
+      console.log('[XLM] STEP B4 – Connection data:', JSON.stringify(data, null, 2));
+      
+      try {
+        // Stage B placeholder: Log connection attempt
+        // In future stages, this will:
+        // 1. Validate SEP-7 link format
+        // 2. Generate QR code for Lobstr scanning
+        // 3. Wait for callback from Lobstr app
+        // 4. Fetch wallet balance via Stellar SDK
+        // 5. Emit xlm-wallet-connected event
+        
+        const { sep7Link, network, timestamp } = data;
+        
+        console.log('[XLM] STEP B4 – SEP-7 Link:', sep7Link);
+        console.log('[XLM] STEP B4 – Network:', network);
+        console.log('[XLM] STEP B4 – Timestamp:', timestamp);
+        
+        // Placeholder: Generate QR code URL
+        // In production, this would use a QR code generation service
+        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(sep7Link)}`;
+        
+        console.log('[XLM] STEP B4 – Emitting xlm-qr-code event');
+        socket.emit('xlm-qr-code', {
+          qrCodeUrl,
+          sep7Link,
+          message: 'Scan this QR code with Lobstr wallet',
+        });
+        
+        // Placeholder: Simulate successful connection after 3 seconds
+        // In production, this would wait for actual Lobstr callback
+        setTimeout(() => {
+          console.log('[XLM] STEP B4 – Simulating wallet connection (placeholder)');
+          
+          // Placeholder wallet data
+          const placeholderWalletData = {
+            address: 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+            balance: {
+              xlm: '1000.00',
+              assets: [],
+            },
+            network: network || 'MAINNET',
+            connectedAt: Date.now(),
+          };
+          
+          console.log('[XLM] STEP B4 – Emitting xlm-wallet-connected event (placeholder)');
+          socket.emit('xlm-wallet-connected', placeholderWalletData);
+        }, 3000);
+        
+      } catch (error) {
+        console.error('[XLM] STEP B4 – Connection error:', error.message);
+        console.error('[XLM] STEP B4 – Full error:', error);
+        
+        socket.emit('xlm-connection-error', {
+          error: error.message || 'Failed to connect Lobstr wallet',
+          timestamp: Date.now(),
+        });
+      }
+    });
+
     console.log('[Socket.IO] ✅ Registered handler: xumm-qr-code');
     socket.on("xumm-qr-code", async () => {
       console.log('[DBX BACKEND] 🎯 XUMM HANDLER TRIGGERED:', socket.id);
