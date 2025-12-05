@@ -1026,10 +1026,31 @@ class MonitoringAndAlertingSystem {
   async collectAdapterMetrics() {
     const metrics = {};
     const supportedChains = this.adapterRegistry.getSupportedChains();
+    let activeAdapterCount = 0;
 
     for (const chainId of supportedChains) {
       try {
         const adapter = this.adapterRegistry.getAdapter(chainId);
+        
+        // Check if adapter is a stub (doesn't implement connectToRpc)
+        const isStub = adapter.connectToRpc.toString().includes('must be implemented by subclass');
+        
+        if (isStub) {
+          // Skip stub adapters - don't mark as failed
+          metrics[chainId] = {
+            health: { healthy: true, isStub: true },
+            performance: null,
+            config: {
+              name: adapter.config.name,
+              type: adapter.config.type,
+              isMainnet: adapter.config.isMainnet,
+              isStub: true
+            }
+          };
+          continue;
+        }
+        
+        activeAdapterCount++;
         const healthCheck = await adapter.healthCheck();
         const performanceMetrics = adapter.performanceMonitor.getMetrics();
 
@@ -1039,10 +1060,12 @@ class MonitoringAndAlertingSystem {
           config: {
             name: adapter.config.name,
             type: adapter.config.type,
-            isMainnet: adapter.config.isMainnet
+            isMainnet: adapter.config.isMainnet,
+            isStub: false
           }
         };
       } catch (error) {
+        activeAdapterCount++;
         metrics[chainId] = {
           health: { healthy: false, error: error.message },
           performance: null,
@@ -1050,6 +1073,9 @@ class MonitoringAndAlertingSystem {
         };
       }
     }
+    
+    // Store active adapter count for stub mode detection
+    this.activeAdapterCount = activeAdapterCount;
 
     return metrics;
   }
@@ -1059,7 +1085,13 @@ class MonitoringAndAlertingSystem {
    */
   calculateAggregateMetrics(adapterMetrics) {
     const chains = Object.keys(adapterMetrics);
-    const healthyChains = chains.filter(chainId => 
+    
+    // Filter out stub adapters from health calculations
+    const activeChains = chains.filter(chainId => 
+      !adapterMetrics[chainId].config?.isStub
+    );
+    
+    const healthyChains = activeChains.filter(chainId => 
       adapterMetrics[chainId].health.healthy
     );
 
@@ -1068,7 +1100,7 @@ class MonitoringAndAlertingSystem {
     let totalResponseTime = 0;
     let responseTimeCount = 0;
 
-    chains.forEach(chainId => {
+    activeChains.forEach(chainId => {
       const performance = adapterMetrics[chainId].performance;
       if (performance) {
         totalOperations += performance.totalOperations || 0;
@@ -1083,11 +1115,13 @@ class MonitoringAndAlertingSystem {
 
     const errorRate = totalOperations > 0 ? (totalErrors / totalOperations) * 100 : 0;
     const averageResponseTime = responseTimeCount > 0 ? totalResponseTime / responseTimeCount : 0;
-    const healthPercentage = chains.length > 0 ? (healthyChains.length / chains.length) * 100 : 0;
+    const healthPercentage = activeChains.length > 0 ? (healthyChains.length / activeChains.length) * 100 : 0;
 
     return {
       totalChains: chains.length,
+      activeChains: activeChains.length,
       healthyChains: healthyChains.length,
+      isStubMode: activeChains.length === 0,
       healthPercentage: Math.round(healthPercentage),
       totalOperations,
       totalErrors,
@@ -1102,6 +1136,12 @@ class MonitoringAndAlertingSystem {
    */
   async checkAlertConditions(metrics) {
     const alerts = [];
+    
+    // Skip alerts if in stub mode (no active adapters)
+    if (metrics.isStubMode) {
+      console.log('[UBAL] No active adapters — skipping health monitor (stub mode).');
+      return;
+    }
 
     // Check error rate
     const errorRateThreshold = this.alertThresholds.get('error_rate');
