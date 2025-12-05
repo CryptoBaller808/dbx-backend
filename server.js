@@ -1500,6 +1500,11 @@ function generateStubBars(from, to, resolution, basePrice) {
 
 app.use('/api/exchangeRates', exchangeRoutes);
 
+// Mount XRP Wallet Order Routes (Stage 3 - Phase 1: Wallet-backed orders)
+const xrpWalletOrderRoutes = require('./controllers/xrpWalletOrder');
+app.use('/api/xrp', xrpWalletOrderRoutes);
+console.log('✅ [STARTUP] XRP wallet order routes mounted at /api/xrp!');
+
 // Mount Price Routes (for spot price feed)
 app.use('/api/price', priceRoutes);
 
