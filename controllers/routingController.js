@@ -15,9 +15,9 @@ const routePlanner = new RoutePlanner();
  */
 exports.getRoutingQuote = async (req, res) => {
   try {
-    const { base, quote, amount, side = 'sell', preview = 'false', fromChain, toChain } = req.query;
+    const { base, quote, amount, side = 'sell', preview = 'false', fromChain, toChain, mode } = req.query;
 
-    console.log('[Routing API] Quote request:', { base, quote, amount, side, preview, fromChain, toChain });
+    console.log('[Routing API] Quote request:', { base, quote, amount, side, preview, fromChain, toChain, mode });
 
     // Validate required parameters
     if (!base || !quote || !amount) {
@@ -56,14 +56,15 @@ exports.getRoutingQuote = async (req, res) => {
       console.log('[Routing API] Preview mode enabled - bypassing wallet checks');
     }
 
-    // Plan routes
+    // Plan routes with optional mode override
     const routingResult = await routePlanner.planRoutes({
       fromToken,
       toToken,
       amount,
       side,
       fromChain,
-      toChain
+      toChain,
+      mode // Pass mode to route planner
     });
 
     if (!routingResult.success) {
@@ -142,7 +143,7 @@ exports.getPools = async (req, res) => {
  */
 exports.getPrice = async (req, res) => {
   try {
-    const { base, quote } = req.query;
+    const { base, quote, mode } = req.query;
 
     if (!base || !quote) {
       return res.status(400).json({
@@ -151,7 +152,9 @@ exports.getPrice = async (req, res) => {
       });
     }
 
-    const spotPrice = routePlanner.liquidityOracle.getSpotPrice(base, quote);
+    // Use new async getSpotPrice with mode support
+    const result = await routePlanner.liquidityOracle.getSpotPrice(base, quote, { mode });
+    const spotPrice = result.price;
 
     if (spotPrice === null) {
       return res.status(404).json({
@@ -165,6 +168,8 @@ exports.getPrice = async (req, res) => {
       base,
       quote,
       spotPrice,
+      provider: result.provider,
+      mode: result.mode,
       timestamp: new Date().toISOString()
     });
 
@@ -184,7 +189,7 @@ exports.getPrice = async (req, res) => {
  */
 exports.getMarketDepth = async (req, res) => {
   try {
-    const { chain, token0, token1 } = req.query;
+    const { chain, token0, token1, mode } = req.query;
 
     if (!chain || !token0 || !token1) {
       return res.status(400).json({
@@ -193,7 +198,9 @@ exports.getMarketDepth = async (req, res) => {
       });
     }
 
-    const depth = routePlanner.liquidityOracle.getMarketDepth(chain, token0, token1);
+    // Use new async getDepth with mode support
+    const result = await routePlanner.liquidityOracle.getDepth(token0, token1, { chain, mode });
+    const depth = result.depth;
 
     if (!depth) {
       return res.status(404).json({
@@ -208,6 +215,8 @@ exports.getMarketDepth = async (req, res) => {
       token0,
       token1,
       depth,
+      provider: result.provider,
+      mode: result.mode,
       timestamp: new Date().toISOString()
     });
 

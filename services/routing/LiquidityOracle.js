@@ -1,167 +1,401 @@
 /**
  * LiquidityOracle.js
- * Stage 4 - Phase 1 & 2: Liquidity Oracle
+ * Stage 5 - Phase 1: Multi-Provider Liquidity Oracle
  * 
- * Simulated liquidity + price discovery layer.
- * Pulls from config/liquidity.json and provides price/depth data.
+ * Orchestrates multiple liquidity providers (simulated, xrpl, evm, etc.)
+ * with configurable fallback and mode selection.
  */
 
 const fs = require('fs');
 const path = require('path');
+const SimulatedLiquidityProvider = require('./liquidity/SimulatedLiquidityProvider');
+const XrplLiquidityProvider = require('./liquidity/XrplLiquidityProvider');
+const EvmLiquidityProvider = require('./liquidity/EvmLiquidityProvider');
 
 class LiquidityOracle {
   constructor() {
-    this.liquidityData = null;
-    this.loadLiquidityData();
+    this.providers = new Map();
+    this.providerConfig = null;
+    this.mode = process.env.ROUTING_LIQUIDITY_MODE || 'auto'; // 'simulated' | 'live' | 'auto'
+    
+    this.loadProviderConfig();
+    this.initializeProviders();
+    
+    console.log(`[LiquidityOracle] Initialized in '${this.mode}' mode with ${this.providers.size} providers`);
   }
 
   /**
-   * Load liquidity data from config file
+   * Load provider configuration
    */
-  loadLiquidityData() {
+  loadProviderConfig() {
     try {
-      const configPath = path.join(__dirname, '../../config/liquidity.json');
+      const configPath = path.join(__dirname, '../../config/liquidity_providers.json');
       const rawData = fs.readFileSync(configPath, 'utf8');
-      this.liquidityData = JSON.parse(rawData);
-      console.log('[LiquidityOracle] Loaded liquidity data successfully');
+      this.providerConfig = JSON.parse(rawData);
+      
+      // Override mode from config if not set via env var
+      if (!process.env.ROUTING_LIQUIDITY_MODE && this.providerConfig.mode) {
+        this.mode = this.providerConfig.mode;
+      }
+      
+      console.log('[LiquidityOracle] Loaded provider configuration');
     } catch (error) {
-      console.error('[LiquidityOracle] Failed to load liquidity data:', error.message);
-      this.liquidityData = { pools: {}, bridges: {}, syntheticPairs: {}, priceOracles: {} };
+      console.error('[LiquidityOracle] Failed to load provider config:', error.message);
+      this.providerConfig = {
+        mode: 'simulated',
+        providers: {
+          simulated: { enabled: true, priority: 999 }
+        },
+        chainPriorities: {}
+      };
     }
   }
 
   /**
-   * Get pool for a token pair on a specific chain
-   * @param {string} chain - Chain name
-   * @param {string} token0 - First token
-   * @param {string} token1 - Second token
-   * @returns {Object|null} Pool data
+   * Initialize all enabled providers
    */
-  getPool(chain, token0, token1) {
-    const chainPools = this.liquidityData.pools[chain];
-    if (!chainPools) return null;
+  initializeProviders() {
+    // Always initialize simulated provider
+    const simulatedProvider = new SimulatedLiquidityProvider(
+      this.providerConfig.providers.simulated || {}
+    );
+    this.providers.set('simulated', simulatedProvider);
+    
+    // Initialize XRPL provider if enabled
+    if (this.providerConfig.providers.xrpl?.enabled) {
+      try {
+        const xrplProvider = new XrplLiquidityProvider(
+          this.providerConfig.providers.xrpl.config || {}
+        );
+        this.providers.set('xrpl', xrplProvider);
+        console.log('[LiquidityOracle] XRPL provider initialized');
+      } catch (error) {
+        console.error('[LiquidityOracle] Failed to initialize XRPL provider:', error.message);
+      }
+    }
+    
+    // Initialize EVM provider if enabled
+    if (this.providerConfig.providers.evm?.enabled) {
+      try {
+        const evmProvider = new EvmLiquidityProvider(
+          this.providerConfig.providers.evm.config || {}
+        );
+        this.providers.set('evm', evmProvider);
+        console.log('[LiquidityOracle] EVM provider initialized');
+      } catch (error) {
+        console.error('[LiquidityOracle] Failed to initialize EVM provider:', error.message);
+      }
+    }
+  }
 
-    // Try direct pair
-    const directKey = `${token0}_${token1}`;
-    if (chainPools[directKey] && chainPools[directKey].enabled) {
-      return chainPools[directKey];
+  /**
+   * Register a new provider
+   * @param {string} name - Provider name
+   * @param {BaseLiquidityProvider} provider - Provider instance
+   */
+  registerProvider(name, provider) {
+    this.providers.set(name, provider);
+    console.log(`[LiquidityOracle] Registered provider: ${name}`);
+  }
+
+  /**
+   * Get provider by name
+   * @param {string} name - Provider name
+   * @returns {BaseLiquidityProvider|null} Provider instance
+   */
+  getProvider(name) {
+    return this.providers.get(name) || null;
+  }
+
+  /**
+   * Get ordered list of providers to try for a given context
+   * @param {Object} opts - Context options (chain, etc.)
+   * @returns {Array<string>} Ordered provider names
+   */
+  getProviderPriority(opts = {}) {
+    const { chain, mode } = opts;
+    const effectiveMode = mode || this.mode;
+
+    // In 'simulated' mode, only use simulated provider
+    if (effectiveMode === 'simulated') {
+      return ['simulated'];
     }
 
-    // Try reverse pair
-    const reverseKey = `${token1}_${token0}`;
-    if (chainPools[reverseKey] && chainPools[reverseKey].enabled) {
-      // Swap reserves for reverse pair
-      const pool = { ...chainPools[reverseKey] };
-      [pool.reserve0, pool.reserve1] = [pool.reserve1, pool.reserve0];
-      [pool.token0, pool.token1] = [pool.token1, pool.token0];
-      pool.spotPrice = 1 / pool.spotPrice;
-      return pool;
+    // In 'live' mode, exclude simulated provider
+    if (effectiveMode === 'live') {
+      const liveProviders = [];
+      
+      // Get chain-specific priorities
+      if (chain && this.providerConfig.chainPriorities[chain]) {
+        const chainPriorities = this.providerConfig.chainPriorities[chain]
+          .filter(p => p !== 'simulated' && this.providers.has(p));
+        liveProviders.push(...chainPriorities);
+      }
+      
+      // Add any other enabled live providers
+      for (const [name, provider] of this.providers.entries()) {
+        if (name !== 'simulated' && provider.isEnabled() && !liveProviders.includes(name)) {
+          liveProviders.push(name);
+        }
+      }
+      
+      return liveProviders;
     }
 
-    return null;
+    // In 'auto' mode, try live providers first, then simulated
+    const autoProviders = [];
+    
+    // Get chain-specific priorities
+    if (chain && this.providerConfig.chainPriorities[chain]) {
+      autoProviders.push(...this.providerConfig.chainPriorities[chain]);
+    } else {
+      // Default priority: all enabled providers sorted by priority
+      const sortedProviders = Array.from(this.providers.entries())
+        .filter(([_, provider]) => provider.isEnabled())
+        .map(([name, _]) => ({
+          name,
+          priority: this.providerConfig.providers[name]?.priority || 999
+        }))
+        .sort((a, b) => a.priority - b.priority)
+        .map(p => p.name);
+      
+      autoProviders.push(...sortedProviders);
+    }
+    
+    // Ensure simulated is always last in auto mode
+    const filtered = autoProviders.filter(p => this.providers.has(p));
+    if (!filtered.includes('simulated')) {
+      filtered.push('simulated');
+    }
+    
+    return filtered;
   }
 
   /**
    * Get spot price for a token pair
-   * @param {string} token0 - Base token
-   * @param {string} token1 - Quote token
-   * @returns {number|null} Spot price
+   * @param {string} base - Base token
+   * @param {string} quote - Quote token
+   * @param {Object} opts - Options (chain, mode, etc.)
+   * @returns {Promise<Object>} Price result with metadata
    */
-  getSpotPrice(token0, token1) {
-    // Check if it's a direct price oracle entry
-    if (token1 === 'USD' || token1 === 'USDT' || token1 === 'USDC') {
-      return this.liquidityData.priceOracles[token0] || null;
-    }
+  async getSpotPrice(base, quote, opts = {}) {
+    const startTime = Date.now();
+    const providerPriority = this.getProviderPriority(opts);
+    const providersTried = [];
 
-    // Check synthetic pairs
-    const syntheticKey = `${token0}_${token1}`;
-    if (this.liquidityData.syntheticPairs[syntheticKey]) {
-      return this.liquidityData.syntheticPairs[syntheticKey].spotPrice;
-    }
+    for (const providerName of providerPriority) {
+      const provider = this.providers.get(providerName);
+      if (!provider || !provider.isEnabled()) continue;
 
-    // Calculate from price oracles
-    const price0 = this.liquidityData.priceOracles[token0];
-    const price1 = this.liquidityData.priceOracles[token1];
-    if (price0 && price1) {
-      return price0 / price1;
-    }
-
-    return null;
-  }
-
-  /**
-   * Calculate output amount for a swap
-   * @param {string} chain - Chain name
-   * @param {string} tokenIn - Input token
-   * @param {string} tokenOut - Output token
-   * @param {string} amountIn - Input amount
-   * @returns {Object|null} Swap calculation result
-   */
-  calculateSwapOutput(chain, tokenIn, tokenOut, amountIn) {
-    const pool = this.getPool(chain, tokenIn, tokenOut);
-    if (!pool) return null;
-
-    const amountInFloat = parseFloat(amountIn);
-    const reserve0 = parseFloat(pool.reserve0);
-    const reserve1 = parseFloat(pool.reserve1);
-    const fee = pool.fee || 0.003;
-
-    // Constant product formula: (x + Δx * (1 - fee)) * (y - Δy) = x * y
-    const amountInWithFee = amountInFloat * (1 - fee);
-    const numerator = amountInWithFee * reserve1;
-    const denominator = reserve0 + amountInWithFee;
-    const amountOut = numerator / denominator;
-
-    // Calculate price impact
-    const priceImpact = (amountInFloat / reserve0) * 100;
-
-    return {
-      amountOut: amountOut.toFixed(6),
-      priceImpact: priceImpact.toFixed(4),
-      spotPrice: pool.spotPrice,
-      effectivePrice: (amountInFloat / amountOut).toFixed(6),
-      pool: {
-        reserve0: pool.reserve0,
-        reserve1: pool.reserve1,
-        fee: pool.fee
+      try {
+        providersTried.push(providerName);
+        const price = await provider.getSpotPrice(base, quote, opts);
+        
+        if (price !== null) {
+          const timing = Date.now() - startTime;
+          console.log(`[LiquidityOracle] getSpotPrice(${base}/${quote}) -> ${price} via ${providerName} (${timing}ms)`);
+          
+          return {
+            price,
+            provider: providerName,
+            providersTried,
+            timing,
+            mode: opts.mode || this.mode
+          };
+        }
+      } catch (error) {
+        console.warn(`[LiquidityOracle] Provider ${providerName} failed for ${base}/${quote}:`, error.message);
       }
+    }
+
+    // No provider succeeded
+    const timing = Date.now() - startTime;
+    console.error(`[LiquidityOracle] No provider found for ${base}/${quote} (tried: ${providersTried.join(', ')})`);
+    
+    return {
+      price: null,
+      provider: null,
+      providersTried,
+      timing,
+      mode: opts.mode || this.mode,
+      error: 'NO_LIQUIDITY_PROVIDER'
     };
   }
 
   /**
-   * Calculate VWAP (Volume-Weighted Average Price)
-   * @param {string} chain - Chain name
-   * @param {string} tokenIn - Input token
-   * @param {string} tokenOut - Output token
-   * @param {string} amountIn - Input amount
-   * @returns {number|null} VWAP
+   * Get market depth for a token pair
+   * @param {string} base - Base token
+   * @param {string} quote - Quote token
+   * @param {Object} opts - Options (chain, notionalHint, mode, etc.)
+   * @returns {Promise<Object>} Depth result with metadata
+   */
+  async getDepth(base, quote, opts = {}) {
+    const startTime = Date.now();
+    const providerPriority = this.getProviderPriority(opts);
+    const providersTried = [];
+
+    for (const providerName of providerPriority) {
+      const provider = this.providers.get(providerName);
+      if (!provider || !provider.isEnabled()) continue;
+
+      try {
+        providersTried.push(providerName);
+        const depth = await provider.getDepth(base, quote, opts);
+        
+        if (depth !== null) {
+          const timing = Date.now() - startTime;
+          console.log(`[LiquidityOracle] getDepth(${base}/${quote}) via ${providerName} (${timing}ms)`);
+          
+          return {
+            depth,
+            provider: providerName,
+            providersTried,
+            timing,
+            mode: opts.mode || this.mode
+          };
+        }
+      } catch (error) {
+        console.warn(`[LiquidityOracle] Provider ${providerName} failed for ${base}/${quote} depth:`, error.message);
+      }
+    }
+
+    // No provider succeeded
+    const timing = Date.now() - startTime;
+    console.error(`[LiquidityOracle] No depth provider found for ${base}/${quote} (tried: ${providersTried.join(', ')})`);
+    
+    return {
+      depth: null,
+      provider: null,
+      providersTried,
+      timing,
+      mode: opts.mode || this.mode,
+      error: 'NO_LIQUIDITY_PROVIDER'
+    };
+  }
+
+  /**
+   * Get slippage curve for a token pair
+   * @param {string} base - Base token
+   * @param {string} quote - Quote token
+   * @param {Object} opts - Options (chain, amounts, mode, etc.)
+   * @returns {Promise<Object>} Slippage curve result with metadata
+   */
+  async getSlippageCurve(base, quote, opts = {}) {
+    const startTime = Date.now();
+    const providerPriority = this.getProviderPriority(opts);
+    const providersTried = [];
+
+    for (const providerName of providerPriority) {
+      const provider = this.providers.get(providerName);
+      if (!provider || !provider.isEnabled()) continue;
+
+      try {
+        providersTried.push(providerName);
+        const curve = await provider.getSlippageCurve(base, quote, opts);
+        
+        if (curve !== null) {
+          const timing = Date.now() - startTime;
+          console.log(`[LiquidityOracle] getSlippageCurve(${base}/${quote}) via ${providerName} (${timing}ms)`);
+          
+          return {
+            curve,
+            provider: providerName,
+            providersTried,
+            timing,
+            mode: opts.mode || this.mode
+          };
+        }
+      } catch (error) {
+        console.warn(`[LiquidityOracle] Provider ${providerName} failed for ${base}/${quote} slippage:`, error.message);
+      }
+    }
+
+    // No provider succeeded
+    const timing = Date.now() - startTime;
+    
+    return {
+      curve: null,
+      provider: null,
+      providersTried,
+      timing,
+      mode: opts.mode || this.mode,
+      error: 'NO_LIQUIDITY_PROVIDER'
+    };
+  }
+
+  /**
+   * Set liquidity mode
+   * @param {string} mode - 'simulated' | 'live' | 'auto'
+   */
+  setMode(mode) {
+    if (!['simulated', 'live', 'auto'].includes(mode)) {
+      throw new Error(`Invalid mode: ${mode}. Must be 'simulated', 'live', or 'auto'`);
+    }
+    this.mode = mode;
+    console.log(`[LiquidityOracle] Mode changed to '${mode}'`);
+  }
+
+  /**
+   * Get current mode
+   * @returns {string} Current mode
+   */
+  getMode() {
+    return this.mode;
+  }
+
+  /**
+   * Reload provider configuration
+   */
+  reload() {
+    this.loadProviderConfig();
+    
+    // Reload simulated provider data
+    const simulatedProvider = this.providers.get('simulated');
+    if (simulatedProvider && simulatedProvider.reload) {
+      simulatedProvider.reload();
+    }
+    
+    console.log('[LiquidityOracle] Reloaded configuration');
+  }
+
+  // ============================================
+  // BACKWARD COMPATIBILITY METHODS (Stage 4)
+  // ============================================
+
+  /**
+   * Get pool (backward compatible with Stage 4)
+   */
+  getPool(chain, token0, token1) {
+    const simulatedProvider = this.providers.get('simulated');
+    return simulatedProvider ? simulatedProvider.getPool(chain, token0, token1) : null;
+  }
+
+  /**
+   * Calculate swap output (backward compatible with Stage 4)
+   */
+  calculateSwapOutput(chain, tokenIn, tokenOut, amountIn) {
+    const simulatedProvider = this.providers.get('simulated');
+    return simulatedProvider ? simulatedProvider.calculateSwapOutput(chain, tokenIn, tokenOut, amountIn) : null;
+  }
+
+  /**
+   * Calculate VWAP (backward compatible with Stage 4)
    */
   calculateVWAP(chain, tokenIn, tokenOut, amountIn) {
-    const swapResult = this.calculateSwapOutput(chain, tokenIn, tokenOut, amountIn);
-    if (!swapResult) return null;
-
-    // For simulated liquidity, VWAP ≈ effective price
-    return parseFloat(swapResult.effectivePrice);
+    const result = this.calculateSwapOutput(chain, tokenIn, tokenOut, amountIn);
+    return result ? parseFloat(result.effectivePrice) : null;
   }
 
   /**
-   * Get bridge information
-   * @param {string} fromChain - Source chain
-   * @param {string} toChain - Destination chain
-   * @returns {Object|null} Bridge data
+   * Get bridge (backward compatible with Stage 4)
    */
   getBridge(fromChain, toChain) {
-    const bridgeKey = `${fromChain}_${toChain}`;
-    const bridge = this.liquidityData.bridges[bridgeKey];
-    return (bridge && bridge.enabled) ? bridge : null;
+    const simulatedProvider = this.providers.get('simulated');
+    return simulatedProvider ? simulatedProvider.getBridge(fromChain, toChain) : null;
   }
 
   /**
-   * Check if token can be bridged
-   * @param {string} fromChain - Source chain
-   * @param {string} toChain - Destination chain
-   * @param {string} token - Token to bridge
-   * @returns {boolean} Whether bridging is supported
+   * Can bridge (backward compatible with Stage 4)
    */
   canBridge(fromChain, toChain, token) {
     const bridge = this.getBridge(fromChain, toChain);
@@ -170,70 +404,45 @@ class LiquidityOracle {
   }
 
   /**
-   * Get all available pools for a chain
-   * @param {string} chain - Chain name
-   * @returns {Array} Array of pool objects
+   * Get chain pools (backward compatible with Stage 4)
    */
   getChainPools(chain) {
-    const chainPools = this.liquidityData.pools[chain];
-    if (!chainPools) return [];
-
-    return Object.entries(chainPools)
-      .filter(([_, pool]) => pool.enabled)
-      .map(([pairKey, pool]) => ({
-        pairKey,
-        ...pool
-      }));
+    const simulatedProvider = this.providers.get('simulated');
+    return simulatedProvider ? simulatedProvider.getChainPools(chain) : [];
   }
 
   /**
-   * Get price for a token in USD
-   * @param {string} token - Token symbol
-   * @returns {number|null} Price in USD
+   * Get token price USD (backward compatible with Stage 4)
    */
   getTokenPriceUSD(token) {
-    return this.liquidityData.priceOracles[token] || null;
+    const simulatedProvider = this.providers.get('simulated');
+    if (!simulatedProvider) return null;
+    return simulatedProvider.liquidityData.priceOracles[token] || null;
   }
 
   /**
-   * Calculate market depth for a pool
-   * @param {string} chain - Chain name
-   * @param {string} token0 - First token
-   * @param {string} token1 - Second token
-   * @returns {Object|null} Market depth information
+   * Get market depth (backward compatible with Stage 4)
    */
   getMarketDepth(chain, token0, token1) {
-    const pool = this.getPool(chain, token0, token1);
+    const simulatedProvider = this.providers.get('simulated');
+    if (!simulatedProvider) return null;
+    
+    const pool = simulatedProvider.getPool(chain, token0, token1);
     if (!pool) return null;
-
-    const reserve0USD = parseFloat(pool.reserve0) * (this.getTokenPriceUSD(token0) || 0);
-    const reserve1USD = parseFloat(pool.reserve1) * (this.getTokenPriceUSD(token1) || 0);
-    const totalLiquidityUSD = reserve0USD + reserve1USD;
-
-    return {
-      reserve0: pool.reserve0,
-      reserve1: pool.reserve1,
-      reserve0USD: reserve0USD.toFixed(2),
-      reserve1USD: reserve1USD.toFixed(2),
-      totalLiquidityUSD: totalLiquidityUSD.toFixed(2),
-      depth: pool.depth,
-      spotPrice: pool.spotPrice
-    };
+    
+    return simulatedProvider.calculateDepth(pool, token0, token1);
   }
 
   /**
-   * Simulate slippage curve
-   * @param {string} chain - Chain name
-   * @param {string} tokenIn - Input token
-   * @param {string} tokenOut - Output token
-   * @param {Array} amounts - Array of input amounts to test
-   * @returns {Array} Slippage curve data points
+   * Get slippage curve (backward compatible with Stage 4)
    */
   getSlippageCurve(chain, tokenIn, tokenOut, amounts) {
+    const simulatedProvider = this.providers.get('simulated');
+    if (!simulatedProvider) return [];
+    
     const curve = [];
-
     for (const amount of amounts) {
-      const result = this.calculateSwapOutput(chain, tokenIn, tokenOut, amount);
+      const result = simulatedProvider.calculateSwapOutput(chain, tokenIn, tokenOut, amount);
       if (result) {
         curve.push({
           amountIn: amount,
@@ -243,17 +452,11 @@ class LiquidityOracle {
         });
       }
     }
-
     return curve;
   }
 
   /**
-   * Check if pool has sufficient liquidity
-   * @param {string} chain - Chain name
-   * @param {string} tokenIn - Input token
-   * @param {string} tokenOut - Output token
-   * @param {string} amountIn - Input amount
-   * @returns {Object} Liquidity check result
+   * Check liquidity (backward compatible with Stage 4)
    */
   checkLiquidity(chain, tokenIn, tokenOut, amountIn) {
     const pool = this.getPool(chain, tokenIn, tokenOut);
@@ -267,7 +470,7 @@ class LiquidityOracle {
     const amountInFloat = parseFloat(amountIn);
     const reserve0 = parseFloat(pool.reserve0);
 
-    // Check if amount exceeds 50% of pool reserve (exhaustion threshold)
+    // Check if amount exceeds 50% of pool reserve
     if (amountInFloat > reserve0 * 0.5) {
       return {
         sufficient: false,
@@ -281,13 +484,6 @@ class LiquidityOracle {
       reserve: pool.reserve0,
       utilizationPercent: ((amountInFloat / reserve0) * 100).toFixed(2)
     };
-  }
-
-  /**
-   * Reload liquidity data from config file
-   */
-  reload() {
-    this.loadLiquidityData();
   }
 }
 
