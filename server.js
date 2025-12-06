@@ -1505,6 +1505,15 @@ const xrpWalletOrderRoutes = require('./controllers/xrpWalletOrder');
 app.use('/api/xrp', xrpWalletOrderRoutes);
 console.log('✅ [STARTUP] XRP wallet order routes mounted at /api/xrp!');
 
+// Mount Routing API Routes (Stage 4: Cross-Chain Routing Engine)
+const routingController = require('./controllers/routingController');
+app.get('/api/routing/quote', routingController.getRoutingQuote);
+app.get('/api/routing/pools', routingController.getPools);
+app.get('/api/routing/price', routingController.getPrice);
+app.get('/api/routing/depth', routingController.getMarketDepth);
+app.post('/api/routing/reload', routingController.reloadLiquidity);
+console.log('✅ [STARTUP] Routing API routes mounted at /api/routing!');
+
 // Mount Price Routes (for spot price feed)
 app.use('/api/price', priceRoutes);
 

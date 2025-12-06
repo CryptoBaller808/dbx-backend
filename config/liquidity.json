@@ -1,0 +1,211 @@
+{
+  "pools": {
+    "XRPL": {
+      "XRP_USDT": {
+        "chain": "XRPL",
+        "protocol": "XRPL_AMM",
+        "token0": "XRP",
+        "token1": "USDT",
+        "reserve0": "1000000",
+        "reserve1": "2070000",
+        "fee": 0.003,
+        "spotPrice": 2.07,
+        "depth": "high",
+        "enabled": true
+      },
+      "XRP_USD": {
+        "chain": "XRPL",
+        "protocol": "XRPL_DEX",
+        "token0": "XRP",
+        "token1": "USD",
+        "reserve0": "500000",
+        "reserve1": "1035000",
+        "fee": 0.0001,
+        "spotPrice": 2.07,
+        "depth": "medium",
+        "enabled": true
+      },
+      "XRP_EUR": {
+        "chain": "XRPL",
+        "protocol": "XRPL_DEX",
+        "token0": "XRP",
+        "token1": "EUR",
+        "reserve0": "300000",
+        "reserve1": "621000",
+        "fee": 0.0001,
+        "spotPrice": 2.07,
+        "depth": "medium",
+        "enabled": true
+      }
+    },
+    "ETH": {
+      "ETH_USDT": {
+        "chain": "ETH",
+        "protocol": "UNISWAP_V2",
+        "token0": "ETH",
+        "token1": "USDT",
+        "reserve0": "10000",
+        "reserve1": "38000000",
+        "fee": 0.003,
+        "spotPrice": 3800,
+        "depth": "high",
+        "enabled": true
+      },
+      "ETH_USDC": {
+        "chain": "ETH",
+        "protocol": "UNISWAP_V2",
+        "token0": "ETH",
+        "token1": "USDC",
+        "reserve0": "8000",
+        "reserve1": "30400000",
+        "fee": 0.003,
+        "spotPrice": 3800,
+        "depth": "high",
+        "enabled": true
+      },
+      "USDT_USDC": {
+        "chain": "ETH",
+        "protocol": "UNISWAP_V2",
+        "token0": "USDT",
+        "token1": "USDC",
+        "reserve0": "5000000",
+        "reserve1": "5000000",
+        "fee": 0.001,
+        "spotPrice": 1.0,
+        "depth": "high",
+        "enabled": true
+      }
+    },
+    "BSC": {
+      "BNB_USDT": {
+        "chain": "BSC",
+        "protocol": "PANCAKESWAP",
+        "token0": "BNB",
+        "token1": "USDT",
+        "reserve0": "50000",
+        "reserve1": "30000000",
+        "fee": 0.0025,
+        "spotPrice": 600,
+        "depth": "high",
+        "enabled": true
+      }
+    },
+    "MATIC": {
+      "MATIC_USDT": {
+        "chain": "MATIC",
+        "protocol": "QUICKSWAP",
+        "token0": "MATIC",
+        "token1": "USDT",
+        "reserve0": "1000000",
+        "reserve1": "850000",
+        "fee": 0.003,
+        "spotPrice": 0.85,
+        "depth": "medium",
+        "enabled": true
+      }
+    },
+    "XDC": {
+      "XDC_USDT": {
+        "chain": "XDC",
+        "protocol": "XDCSWAP",
+        "token0": "XDC",
+        "token1": "USDT",
+        "reserve0": "5000000",
+        "reserve1": "250000",
+        "fee": 0.003,
+        "spotPrice": 0.05,
+        "depth": "low",
+        "enabled": true
+      }
+    }
+  },
+  "bridges": {
+    "XRPL_ETH": {
+      "fromChain": "XRPL",
+      "toChain": "ETH",
+      "supportedTokens": ["USDT", "USDC", "USD"],
+      "fixedFee": 0.1,
+      "percentageFee": 0.001,
+      "estimatedTime": 300,
+      "enabled": true
+    },
+    "ETH_XRPL": {
+      "fromChain": "ETH",
+      "toChain": "XRPL",
+      "supportedTokens": ["USDT", "USDC"],
+      "fixedFee": 0.1,
+      "percentageFee": 0.001,
+      "estimatedTime": 300,
+      "enabled": true
+    },
+    "ETH_BSC": {
+      "fromChain": "ETH",
+      "toChain": "BSC",
+      "supportedTokens": ["USDT", "USDC", "ETH"],
+      "fixedFee": 0.05,
+      "percentageFee": 0.0005,
+      "estimatedTime": 180,
+      "enabled": true
+    },
+    "BSC_ETH": {
+      "fromChain": "BSC",
+      "toChain": "ETH",
+      "supportedTokens": ["USDT", "USDC", "BNB"],
+      "fixedFee": 0.05,
+      "percentageFee": 0.0005,
+      "estimatedTime": 180,
+      "enabled": true
+    }
+  },
+  "syntheticPairs": {
+    "XRP_ETH": {
+      "token0": "XRP",
+      "token1": "ETH",
+      "viaToken": "USDT",
+      "spotPrice": 0.000545,
+      "enabled": true
+    },
+    "XRP_BTC": {
+      "token0": "XRP",
+      "token1": "BTC",
+      "viaToken": "USDT",
+      "spotPrice": 0.0000218,
+      "enabled": true
+    },
+    "ETH_BTC": {
+      "token0": "ETH",
+      "token1": "BTC",
+      "viaToken": "USDT",
+      "spotPrice": 0.04,
+      "enabled": true
+    }
+  },
+  "priceOracles": {
+    "XRP": 2.07,
+    "ETH": 3800,
+    "BNB": 600,
+    "MATIC": 0.85,
+    "XDC": 0.05,
+    "BTC": 95000,
+    "SOL": 200,
+    "XLM": 0.35,
+    "USDT": 1.0,
+    "USDC": 1.0,
+    "USD": 1.0,
+    "EUR": 1.05
+  },
+  "depthCategories": {
+    "high": {
+      "minReserveUSD": 1000000,
+      "slippageMultiplier": 1.0
+    },
+    "medium": {
+      "minReserveUSD": 100000,
+      "slippageMultiplier": 1.5
+    },
+    "low": {
+      "minReserveUSD": 10000,
+      "slippageMultiplier": 2.0
+    }
+  }
+}
