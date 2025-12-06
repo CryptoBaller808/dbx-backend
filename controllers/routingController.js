@@ -6,8 +6,10 @@
  */
 
 const RoutePlanner = require('../services/routing/RoutePlanner');
+const RouteExecutionService = require('../services/routing/RouteExecutionService');
 
 const routePlanner = new RoutePlanner();
+const routeExecutionService = new RouteExecutionService();
 
 /**
  * GET /api/routing/quote
@@ -250,6 +252,110 @@ exports.reloadLiquidity = async (req, res) => {
       success: false,
       error: 'Internal server error',
       message: error.message
+    });
+  }
+};
+
+/**
+ * POST /api/routing/execute
+ * Execute a route end-to-end (Stage 6)
+ */
+exports.executeRoute = async (req, res) => {
+  try {
+    const {
+      base,
+      quote,
+      amount,
+      side = 'sell',
+      fromChain,
+      toChain,
+      mode = 'auto',
+      routeId,
+      preview = true,
+      executionMode = 'demo'
+    } = req.body;
+
+    console.log('[Routing API] Execute request:', {
+      base,
+      quote,
+      amount,
+      side,
+      fromChain,
+      toChain,
+      mode,
+      executionMode
+    });
+
+    // Validate required parameters
+    if (!base || !quote || !amount) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: base, quote, amount'
+      });
+    }
+
+    // Validate amount
+    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_AMOUNT',
+        message: 'Invalid amount: must be a positive number'
+      });
+    }
+
+    // Validate side
+    if (!['sell', 'buy'].includes(side)) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_SIDE',
+        message: 'Invalid side: must be "sell" or "buy"'
+      });
+    }
+
+    // Execute route
+    const result = await routeExecutionService.executeRoute({
+      base,
+      quote,
+      amount,
+      side,
+      fromChain,
+      toChain,
+      mode,
+      routeId,
+      preview,
+      executionMode
+    });
+
+    // Return result (success or error)
+    if (result.success) {
+      return res.json(result);
+    } else {
+      // Map error codes to HTTP status codes
+      const statusCode = {
+        'MISSING_PARAMETERS': 400,
+        'INVALID_AMOUNT': 400,
+        'INVALID_SIDE': 400,
+        'INVALID_EXECUTION_MODE': 400,
+        'NO_ROUTE': 404,
+        'UNSUPPORTED_CHAIN': 501,
+        'UNSUPPORTED_PATH_TYPE': 501,
+        'EXECUTION_DISABLED': 503,
+        'EXECUTION_FAILED': 500
+      }[result.errorCode] || 500;
+
+      return res.status(statusCode).json(result);
+    }
+
+  } catch (error) {
+    console.error('[Routing API] Error executing route:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {
+        error: error.message
+      }
     });
   }
 };

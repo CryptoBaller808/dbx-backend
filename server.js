@@ -1512,6 +1512,7 @@ app.get('/api/routing/pools', routingController.getPools);
 app.get('/api/routing/price', routingController.getPrice);
 app.get('/api/routing/depth', routingController.getMarketDepth);
 app.post('/api/routing/reload', routingController.reloadLiquidity);
+app.post('/api/routing/execute', routingController.executeRoute); // Stage 6: Route Execution
 console.log('✅ [STARTUP] Routing API routes mounted at /api/routing!');
 
 // Mount Price Routes (for spot price feed)
