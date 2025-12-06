@@ -11,7 +11,7 @@
  */
 
 const RoutePlanner = require('./RoutePlanner');
-const { XRPLTransactionService } = require('../xrpl');
+const { XRPLTransactionService } = require('../XRPLTransactionService');
 
 class RouteExecutionService {
   constructor() {
