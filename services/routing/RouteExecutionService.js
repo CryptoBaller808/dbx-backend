@@ -87,7 +87,7 @@ class RouteExecutionService {
       } else {
         // Compute best route
         console.log('[RouteExecution] Computing best route...');
-        const routeResult = await this.routePlanner.findBestRoute({
+        route = await this.routePlanner.findBestRoute({
           fromToken: base,
           toToken: quote,
           amount: parseFloat(amount),
@@ -97,7 +97,7 @@ class RouteExecutionService {
           mode
         });
         
-        if (!routeResult.success || !routeResult.bestRoute) {
+        if (!route) {
           return this._errorResponse('NO_ROUTE', 'No valid route found for the given parameters', {
             base,
             quote,
@@ -105,8 +105,6 @@ class RouteExecutionService {
             side
           });
         }
-        
-        route = routeResult.bestRoute;
       }
       
       console.log('[RouteExecution] Route selected:', {

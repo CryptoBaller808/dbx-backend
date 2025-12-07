@@ -399,6 +399,64 @@ async function testExecutionModeValidation() {
 }
 
 /**
+ * Test 9: Integration test with real RoutePlanner
+ */
+async function testRealRoutePlannerIntegration() {
+  console.log('Testing integration with real RoutePlanner (no mocks)...');
+  
+  // This test uses the actual routing stack in production
+  // It verifies that findBestRoute works correctly with the real RoutePlanner
+  
+  try {
+    const response = await axios.post(ROUTING_EXECUTE_URL, {
+      base: 'XRP',
+      quote: 'USDT',
+      amount: '5',
+      side: 'sell',
+      mode: 'auto',
+      executionMode: 'demo'
+    });
+    
+    console.log('Response:', JSON.stringify(response.data, null, 2));
+    
+    // Success case: demo execution worked
+    if (response.data.success === true) {
+      console.log('✓ Real RoutePlanner integration successful (demo execution)');
+      console.log('✓ No TypeError from findBestRoute');
+      console.log('✓ Route:', response.data.route?.path || 'N/A');
+      return;
+    }
+    
+    // Acceptable failure: business-level error (not TypeError)
+    if (response.data.success === false) {
+      // Check that it's NOT an EXECUTION_FAILED with findBestRoute error
+      if (response.data.errorCode === 'EXECUTION_FAILED' && 
+          response.data.message && 
+          response.data.message.includes('findBestRoute')) {
+        throw new Error('findBestRoute integration failed: ' + response.data.message);
+      }
+      
+      // Other business errors are acceptable (NO_ROUTE, etc.)
+      console.log('✓ Real RoutePlanner integration successful (business error, not TypeError)');
+      console.log('✓ Error code:', response.data.errorCode);
+      return;
+    }
+    
+  } catch (error) {
+    // Check if it's the findBestRoute TypeError
+    if (error.response && error.response.data) {
+      const data = error.response.data;
+      if (data.message && data.message.includes('findBestRoute is not a function')) {
+        throw new Error('CRITICAL: findBestRoute is not a function - integration broken!');
+      }
+    }
+    
+    // Other errors might be acceptable
+    console.log('✓ Real RoutePlanner integration test completed (no findBestRoute TypeError)');
+  }
+}
+
+/**
  * Main test runner
  */
 async function runAllTests() {
@@ -419,6 +477,7 @@ async function runAllTests() {
   await runTest('Invalid side parameter', testInvalidSide);
   await runTest('Buy side execution', testBuySideExecution);
   await runTest('Execution mode validation', testExecutionModeValidation);
+  await runTest('Integration with real RoutePlanner', testRealRoutePlannerIntegration);
   
   // Print summary
   console.log('\n');

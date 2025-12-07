@@ -422,7 +422,19 @@ class RoutePlanner {
     }
 
     return explanation;
+   }
+
+  /**
+   * Find the best route (wrapper for Stage 6 compatibility)
+   * @param {Object} params - Routing parameters
+   * @returns {UniversalRoute|null} Best route or null if no route found
+   */
+  async findBestRoute(params) {
+    const result = await this.planRoutes(params);
+    if (!result || !result.bestRoute) {
+      return null;
+    }
+    return result.bestRoute;
   }
 }
-
 module.exports = RoutePlanner;
