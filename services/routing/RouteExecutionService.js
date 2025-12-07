@@ -12,11 +12,13 @@
 
 const RoutePlanner = require('./RoutePlanner');
 const { XRPLTransactionService } = require('../XRPLTransactionService');
+const EvmRouteExecutionService = require('./EvmRouteExecutionService');
 
 class RouteExecutionService {
   constructor() {
     this.routePlanner = new RoutePlanner();
     this.xrplService = new XRPLTransactionService();
+    this.evmService = new EvmRouteExecutionService();
     
     // Execution mode from environment
     this.executionMode = process.env.XRPL_EXECUTION_MODE || 'demo';
@@ -113,53 +115,79 @@ class RouteExecutionService {
         expectedOutput: route.expectedOutput
       });
       
-      // Step 3: Validate route is XRPL-based
-      if (route.chain !== 'XRPL') {
-        return this._errorResponse('UNSUPPORTED_CHAIN', `Stage 6 only supports XRPL route execution. Route chain: ${route.chain}`, {
-          routeChain: route.chain,
-          supportedChains: ['XRPL']
+      // Step 3: Route to appropriate execution service based on chain
+      const chain = route.chain;
+      console.log('[RouteExecution] Route chain detected:', chain);
+      
+      // Determine which execution service to use
+      if (chain === 'XRPL') {
+        // Use XRPL execution path (existing, stable)
+        console.log('[RouteExecution] Routing to XRPL execution service...');
+        
+        // Validate XRPL route path type
+        const supportedPathTypes = ['direct', 'XRPL_AMM', 'XRPL_DEX'];
+        if (!supportedPathTypes.includes(route.pathType)) {
+          return this._errorResponse('UNSUPPORTED_PATH_TYPE', `Path type ${route.pathType} is not supported for XRPL`, {
+            pathType: route.pathType,
+            supportedPathTypes
+          });
+        }
+        
+        // Execute XRPL transaction
+        console.log('[RouteExecution] Executing XRPL transaction...');
+        const txResult = await this._executeXrplRoute(route, {
+          base,
+          quote,
+          amount,
+          side,
+          executionMode,
+          routeId: routeId || `route_${Date.now()}`
+        });
+        
+        const executionTime = Date.now() - startTime;
+        
+        // Build XRPL success response
+        return {
+          success: true,
+          chain: 'XRPL',
+          executionMode,
+          route: {
+            pathType: route.pathType,
+            expectedOutput: route.expectedOutput,
+            hops: route.hops,
+            fees: route.fees,
+            slippage: route.slippage
+          },
+          transaction: txResult.transaction,
+          settlement: txResult.settlement,
+          timestamp: new Date().toISOString(),
+          executionTimeMs: executionTime
+        };
+        
+      } else if (['ETH', 'BSC', 'AVAX', 'MATIC'].includes(chain)) {
+        // Use EVM execution path (Stage 6A)
+        console.log('[RouteExecution] Routing to EVM execution service...');
+        
+        // Delegate to EvmRouteExecutionService
+        const evmResult = await this.evmService.executeRoute(route, {
+          base,
+          quote,
+          amount,
+          side,
+          executionMode,
+          routeId: routeId || `route_${Date.now()}`
+        });
+        
+        // EvmRouteExecutionService already returns structured response
+        return evmResult;
+        
+      } else {
+        // Unsupported chain
+        return this._errorResponse('UNSUPPORTED_CHAIN', `Chain ${chain} is not supported for route execution`, {
+          routeChain: chain,
+          supportedChains: ['XRPL', 'ETH', 'BSC', 'AVAX', 'MATIC']
         });
       }
-      
-      // Step 4: Validate route path type
-      const supportedPathTypes = ['direct', 'XRPL_AMM', 'XRPL_DEX'];
-      if (!supportedPathTypes.includes(route.pathType)) {
-        return this._errorResponse('UNSUPPORTED_PATH_TYPE', `Path type ${route.pathType} is not supported in Stage 6`, {
-          pathType: route.pathType,
-          supportedPathTypes
-        });
-      }
-      
-      // Step 5: Execute XRPL transaction
-      console.log('[RouteExecution] Executing XRPL transaction...');
-      const txResult = await this._executeXrplRoute(route, {
-        base,
-        quote,
-        amount,
-        side,
-        executionMode,
-        routeId: routeId || `route_${Date.now()}`
-      });
-      
-      const executionTime = Date.now() - startTime;
-      
-      // Step 6: Build success response
-      return {
-        success: true,
-        chain: 'XRPL',
-        executionMode,
-        route: {
-          pathType: route.pathType,
-          expectedOutput: route.expectedOutput,
-          hops: route.hops,
-          fees: route.fees,
-          slippage: route.slippage
-        },
-        transaction: txResult.transaction,
-        settlement: txResult.settlement,
-        timestamp: new Date().toISOString(),
-        executionTimeMs: executionTime
-      };
       
     } catch (error) {
       console.error('[RouteExecution] Execution failed:', error);
