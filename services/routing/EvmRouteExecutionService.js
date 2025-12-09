@@ -152,108 +152,56 @@ class EvmRouteExecutionService {
   
   /**
    * Execute demo transaction on EVM chain
+   * Stage 6B Fix #2: Fully simulated - no real Sepolia funds required
    * @private
    */
   async _executeDemoTransaction(chain, route, params) {
     const { base, quote, amount, side, routeId } = params;
     
-    console.log('[EvmRouteExecution][Demo] Preparing demo transaction for chain:', chain);
+    console.log('[EvmRouteExecution][Demo] Preparing SIMULATED demo transaction for chain:', chain);
+    console.log('[EvmRouteExecution][Demo] Stage 6B Fix #2: Using fully simulated execution (no real Sepolia broadcast)');
     
-    // Step 1: Get RPC URL and private key
-    const rpcUrl = this.config.getRpcUrl(chain);
-    const privateKey = this.config.getDemoPrivateKey(chain);
-    
-    if (!rpcUrl) {
-      throw new Error(`RPC URL not configured for chain: ${chain}`);
-    }
-    
-    if (!privateKey) {
-      throw new Error(`Demo private key not configured for chain: ${chain}`);
-    }
-    
-    // Step 2: Create provider and wallet
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = new ethers.Wallet(privateKey, provider);
-    
-    console.log('[EvmRouteExecution][Demo] Demo wallet address:', wallet.address);
-    
-    // Step 3: Get wallet balance
-    const balance = await provider.getBalance(wallet.address);
-    const balanceEth = ethers.formatEther(balance);
-    
-    console.log('[EvmRouteExecution][Demo] Wallet balance:', balanceEth, this.config.getNativeCurrency(chain));
-    
-    // Step 4: Build demo transaction (simple native token transfer)
-    // For Stage 6A, we'll do a simple self-transfer to demonstrate execution
-    // In Stage 6B, this will be replaced with actual swap transactions
+    // Stage 6B Fix #2: Fully simulated execution
+    // No real RPC calls, no wallet balance checks, no Sepolia broadcast
+    // This eliminates EVM_INSUFFICIENT_FUNDS errors and faucet dependencies
     
     const nativeCurrency = this.config.getNativeCurrency(chain);
     const demoAmount = '0.001'; // Small amount for demo
     
-    console.log('[EvmRouteExecution][Demo] Building demo transaction:', {
-      from: wallet.address,
-      to: wallet.address, // Self-transfer for demo
+    // Generate deterministic pseudo transaction hash
+    // Use keccak256(routeId + timestamp) for uniqueness
+    const hashInput = `${routeId}_${Date.now()}_${base}_${quote}_${amount}`;
+    const pseudoHash = ethers.keccak256(ethers.toUtf8Bytes(hashInput));
+    
+    // Generate pseudo block number (current timestamp in seconds)
+    const pseudoBlockNumber = Math.floor(Date.now() / 1000);
+    
+    // Simulated wallet address (demo address, not real)
+    const demoWalletAddress = '0xDEMO1234567890123456789012345678901234';
+    
+    console.log('[EvmRouteExecution][Demo] Simulated transaction:', {
+      hash: pseudoHash,
+      from: demoWalletAddress,
+      to: demoWalletAddress,
       value: demoAmount,
-      currency: nativeCurrency
+      currency: nativeCurrency,
+      blockNumber: pseudoBlockNumber,
+      note: 'SIMULATED - No real Sepolia broadcast'
     });
     
-    // Build transaction
-    const tx = {
-      to: wallet.address, // Self-transfer
-      value: ethers.parseEther(demoAmount),
-      // Gas limit will be estimated automatically
-      // Gas price will be determined by provider
-    };
-    
-    // Step 5: Estimate gas
-    console.log('[EvmRouteExecution][Demo] Estimating gas...');
-    const gasEstimate = await wallet.estimateGas(tx);
-    tx.gasLimit = gasEstimate;
-    
-    console.log('[EvmRouteExecution][Demo] Gas estimate:', gasEstimate.toString());
-    
-    // Step 6: Get current gas price
-    const feeData = await provider.getFeeData();
-    if (feeData.gasPrice) {
-      tx.gasPrice = feeData.gasPrice;
-      console.log('[EvmRouteExecution][Demo] Gas price:', ethers.formatUnits(feeData.gasPrice, 'gwei'), 'gwei');
-    }
-    
-    // Step 7: Send transaction
-    console.log('[EvmRouteExecution][Demo] Sending transaction...');
-    const txResponse = await wallet.sendTransaction(tx);
-    
-    console.log('[EvmRouteExecution][Demo] Transaction sent:', {
-      hash: txResponse.hash,
-      nonce: txResponse.nonce,
-      from: txResponse.from,
-      to: txResponse.to
-    });
-    
-    // Step 8: Wait for confirmation
-    console.log('[EvmRouteExecution][Demo] Waiting for confirmation...');
-    const receipt = await txResponse.wait(1); // Wait for 1 confirmation
-    
-    console.log('[EvmRouteExecution][Demo] Transaction confirmed:', {
-      hash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed.toString(),
-      status: receipt.status
-    });
-    
-    // Step 9: Build transaction result
+    // Build simulated transaction result
     return {
       transaction: {
-        hash: receipt.hash,
+        hash: pseudoHash,
         chainId: this.config.getChainId(chain),
-        from: receipt.from,
-        to: receipt.to,
+        from: demoWalletAddress,
+        to: demoWalletAddress,
         value: demoAmount,
-        gasUsed: receipt.gasUsed.toString(),
-        gasPrice: receipt.gasPrice ? ethers.formatUnits(receipt.gasPrice, 'gwei') + ' gwei' : 'N/A',
-        nonce: txResponse.nonce,
-        blockNumber: receipt.blockNumber,
-        network: `${chain.toLowerCase()}-testnet`,
+        gasUsed: '21000', // Standard ETH transfer gas
+        gasPrice: '1 gwei', // Simulated gas price
+        nonce: Math.floor(Math.random() * 1000), // Random nonce for demo
+        blockNumber: pseudoBlockNumber,
+        network: `${chain.toLowerCase()}-sepolia-demo`, // Clearly mark as demo
         currency: nativeCurrency,
         memo: routeId,
         // Include route execution details
@@ -262,15 +210,16 @@ class EvmRouteExecutionService {
           quote,
           amount,
           side,
-          executionType: 'demo_self_transfer',
-          note: 'Stage 6A demo execution - simple native token self-transfer'
+          executionType: 'simulated_demo',
+          note: 'Stage 6B Fix #2: Fully simulated execution - no real Sepolia funds required'
         }
       },
       settlement: {
-        status: receipt.status === 1 ? 'confirmed' : 'failed',
-        blockNumber: receipt.blockNumber,
+        status: 'confirmed',
+        blockNumber: pseudoBlockNumber,
         confirmations: 1,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        note: 'Simulated settlement - no real blockchain state change'
       }
     };
   }
