@@ -21,6 +21,13 @@
       "rpcUrl": "https://polygon-rpc.com",
       "enabled": true
     },
+    "AVAX": {
+      "chainId": 43114,
+      "name": "Avalanche C-Chain",
+      "nativeCurrency": "AVAX",
+      "rpcUrl": "https://api.avax.network/ext/bc/C/rpc",
+      "enabled": true
+    },
     "XDC": {
       "chainId": 50,
       "name": "XDC Network",
@@ -48,6 +55,12 @@
       "USDC": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
       "WMATIC": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
     },
+    "AVAX": {
+      "AVAX": "native",
+      "USDT": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
+      "USDC": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+      "WAVAX": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7"
+    },
     "XDC": {
       "XDC": "native",
       "USDT": "0xd4b5f10d61916bd6e0860144a91ac658de8a1437",
@@ -62,6 +75,7 @@
       "ETH": "ethereum",
       "BNB": "binancecoin",
       "MATIC": "matic-network",
+      "AVAX": "avalanche-2",
       "XDC": "xdce-crowd-sale",
       "USDT": "tether",
       "USDC": "usd-coin",

@@ -432,12 +432,23 @@ class RoutePlanner {
   async findBestRoute(params) {
     const { fromToken, toToken, executionMode } = params;
     
-    // Stage 6B: Generate deterministic single-hop EVM demo route for ETH/USDT
-    // This enables successful demo execution on Sepolia testnet
-    if (executionMode === 'demo' && 
-        ((fromToken === 'ETH' && toToken === 'USDT') || (fromToken === 'USDT' && toToken === 'ETH'))) {
-      console.log('[RoutePlanner] Generating single-hop EVM demo route for ETH/USDT');
-      return this._generateEvmDemoRoute(params);
+    // Stage 6C: Generate deterministic single-hop EVM demo route for all EVM pairs
+    // Supports: ETH/USDT, BNB/USDT, AVAX/USDT, MATIC/USDT
+    if (executionMode === 'demo') {
+      const evmPairs = [
+        { base: 'ETH', quote: 'USDT', chain: 'ETH' },
+        { base: 'BNB', quote: 'USDT', chain: 'BSC' },
+        { base: 'AVAX', quote: 'USDT', chain: 'AVAX' },
+        { base: 'MATIC', quote: 'USDT', chain: 'MATIC' }
+      ];
+      
+      for (const pair of evmPairs) {
+        if ((fromToken === pair.base && toToken === pair.quote) || 
+            (fromToken === pair.quote && toToken === pair.base)) {
+          console.log(`[RoutePlanner] Generating single-hop EVM demo route for ${pair.base}/${pair.quote}`);
+          return this._generateEvmDemoRoute({ ...params, chain: pair.chain, baseToken: pair.base });
+        }
+      }
     }
     
     const result = await this.planRoutes(params);
@@ -448,73 +459,88 @@ class RoutePlanner {
   }
   
   /**
-   * Generate a deterministic single-hop EVM demo route for ETH/USDT
-   * Stage 6B: This enables successful demo execution without relying on hybrid routes
+   * Generate a deterministic single-hop EVM demo route for all EVM pairs
+   * Stage 6C: Supports ETH/USDT, BNB/USDT, AVAX/USDT, MATIC/USDT
    * @private
    * @param {Object} params - Routing parameters
    * @returns {Object} Single-hop EVM demo route
    */
   _generateEvmDemoRoute(params) {
-    const { fromToken, toToken, amount, side = 'sell' } = params;
+    const { fromToken, toToken, amount, side = 'sell', chain, baseToken: paramBaseToken } = params;
     
     // Determine direction
     const isBuy = side === 'buy';
-    const baseToken = isBuy ? toToken : fromToken;
+    const baseToken = paramBaseToken || (isBuy ? toToken : fromToken);
     const quoteToken = isBuy ? fromToken : toToken;
     
-    // Use simple 1:1 pricing for demo (in production, use oracle pricing)
-    // For demo purposes, assume 1 ETH = 3000 USDT
-    const ethUsdtPrice = 3000;
+    // Demo pricing for each EVM token (approximate market prices)
+    // In production, these would come from CoinGecko or other oracle
+    const demoPrices = {
+      'ETH': 3000,   // 1 ETH = $3000
+      'BNB': 600,    // 1 BNB = $600
+      'AVAX': 40,    // 1 AVAX = $40
+      'MATIC': 1     // 1 MATIC = $1
+    };
+    
+    const baseUsdtPrice = demoPrices[baseToken] || 1;
     
     let amountIn, amountOut;
-    if (baseToken === 'ETH') {
-      // Selling ETH for USDT or buying ETH with USDT
+    if (fromToken === baseToken) {
+      // Selling base token for USDT
       if (isBuy) {
-        // Buy: amount is in ETH, need USDT
+        // Buy: amount is in base token, need USDT
         amountOut = parseFloat(amount);
-        amountIn = amountOut * ethUsdtPrice;
+        amountIn = amountOut * baseUsdtPrice;
       } else {
-        // Sell: amount is in ETH, get USDT
+        // Sell: amount is in base token, get USDT
         amountIn = parseFloat(amount);
-        amountOut = amountIn * ethUsdtPrice;
+        amountOut = amountIn * baseUsdtPrice;
       }
     } else {
-      // Selling USDT for ETH or buying USDT with ETH
+      // Selling USDT for base token
       if (isBuy) {
-        // Buy: amount is in USDT, need ETH
+        // Buy: amount is in USDT, need base token
         amountOut = parseFloat(amount);
-        amountIn = amountOut / ethUsdtPrice;
+        amountIn = amountOut / baseUsdtPrice;
       } else {
-        // Sell: amount is in USDT, get ETH
+        // Sell: amount is in USDT, get base token
         amountIn = parseFloat(amount);
-        amountOut = amountIn / ethUsdtPrice;
+        amountOut = amountIn / baseUsdtPrice;
       }
     }
     
     // Calculate fees (0.3% for demo, similar to Uniswap V2)
     const feePercentage = 0.003;
-    const feeUSD = amountOut * ethUsdtPrice * feePercentage;
+    const feeUSD = amountOut * baseUsdtPrice * feePercentage;
+    
+    // Determine protocol name based on chain
+    const protocolNames = {
+      'ETH': 'EVM_DEMO_UNISWAP',
+      'BSC': 'EVM_DEMO_PANCAKESWAP',
+      'AVAX': 'EVM_DEMO_TRADERJOE',
+      'MATIC': 'EVM_DEMO_QUICKSWAP'
+    };
     
     // Build single-hop EVM demo route
     const demoRoute = {
       routeId: `evm_demo_${Date.now()}`,
-      chain: 'ETH',
+      chain: chain || 'ETH',
       pathType: 'direct',
       strategy: 'evm-demo',
       hops: [{
         hopIndex: 0,
-        chain: 'ETH',
-        protocol: 'EVM_DEMO_UNISWAP',
+        chain: chain || 'ETH',
+        protocol: protocolNames[chain] || 'EVM_DEMO_DEX',
         fromToken,
         toToken,
         amountIn: amountIn.toString(),
         amountOut: amountOut.toString(),
-        pool: 'DEMO_ETH_USDT_POOL',
+        pool: `DEMO_${baseToken}_USDT_POOL`,
         fee: '0.3%'
       }],
       fees: {
         totalFeeUSD: feeUSD,
-        totalFeeNative: feeUSD / ethUsdtPrice,
+        totalFeeNative: feeUSD / baseUsdtPrice,
         breakdown: [{
           type: 'swap',
           amount: feeUSD,
@@ -538,8 +564,10 @@ class RoutePlanner {
       toToken,
       amountIn,
       amountOut,
-      chain: 'ETH',
-      pathType: 'direct'
+      chain: chain || 'ETH',
+      pathType: 'direct',
+      baseToken,
+      price: baseUsdtPrice
     });
     
     return demoRoute;

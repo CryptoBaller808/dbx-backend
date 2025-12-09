@@ -201,7 +201,7 @@ class EvmRouteExecutionService {
         gasPrice: '1 gwei', // Simulated gas price
         nonce: Math.floor(Math.random() * 1000), // Random nonce for demo
         blockNumber: pseudoBlockNumber,
-        network: `${chain.toLowerCase()}-sepolia-demo`, // Clearly mark as demo
+        network: this._getNetworkLabel(chain), // Chain-specific demo label
         currency: nativeCurrency,
         memo: routeId,
         // Include route execution details
@@ -222,6 +222,21 @@ class EvmRouteExecutionService {
         note: 'Simulated settlement - no real blockchain state change'
       }
     };
+  }
+  
+  /**
+   * Get network label for a chain
+   * Stage 6C: Chain-specific demo labels
+   * @private
+   */
+  _getNetworkLabel(chain) {
+    const labels = {
+      'ETH': 'eth-sepolia-demo',
+      'BSC': 'bsc-demo',
+      'AVAX': 'avax-demo',
+      'MATIC': 'polygon-demo'
+    };
+    return labels[chain] || `${chain.toLowerCase()}-demo`;
   }
   
   /**
