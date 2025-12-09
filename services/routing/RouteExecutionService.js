@@ -96,7 +96,8 @@ class RouteExecutionService {
           side,
           fromChain,
           toChain,
-          mode
+          mode,
+          executionMode  // Pass executionMode for demo route generation
         });
         
         if (!route) {

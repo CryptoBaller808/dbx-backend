@@ -430,11 +430,119 @@ class RoutePlanner {
    * @returns {UniversalRoute|null} Best route or null if no route found
    */
   async findBestRoute(params) {
+    const { fromToken, toToken, executionMode } = params;
+    
+    // Stage 6B: Generate deterministic single-hop EVM demo route for ETH/USDT
+    // This enables successful demo execution on Sepolia testnet
+    if (executionMode === 'demo' && 
+        ((fromToken === 'ETH' && toToken === 'USDT') || (fromToken === 'USDT' && toToken === 'ETH'))) {
+      console.log('[RoutePlanner] Generating single-hop EVM demo route for ETH/USDT');
+      return this._generateEvmDemoRoute(params);
+    }
+    
     const result = await this.planRoutes(params);
     if (!result || !result.bestRoute) {
       return null;
     }
     return result.bestRoute;
+  }
+  
+  /**
+   * Generate a deterministic single-hop EVM demo route for ETH/USDT
+   * Stage 6B: This enables successful demo execution without relying on hybrid routes
+   * @private
+   * @param {Object} params - Routing parameters
+   * @returns {Object} Single-hop EVM demo route
+   */
+  _generateEvmDemoRoute(params) {
+    const { fromToken, toToken, amount, side = 'sell' } = params;
+    
+    // Determine direction
+    const isBuy = side === 'buy';
+    const baseToken = isBuy ? toToken : fromToken;
+    const quoteToken = isBuy ? fromToken : toToken;
+    
+    // Use simple 1:1 pricing for demo (in production, use oracle pricing)
+    // For demo purposes, assume 1 ETH = 3000 USDT
+    const ethUsdtPrice = 3000;
+    
+    let amountIn, amountOut;
+    if (baseToken === 'ETH') {
+      // Selling ETH for USDT or buying ETH with USDT
+      if (isBuy) {
+        // Buy: amount is in ETH, need USDT
+        amountOut = parseFloat(amount);
+        amountIn = amountOut * ethUsdtPrice;
+      } else {
+        // Sell: amount is in ETH, get USDT
+        amountIn = parseFloat(amount);
+        amountOut = amountIn * ethUsdtPrice;
+      }
+    } else {
+      // Selling USDT for ETH or buying USDT with ETH
+      if (isBuy) {
+        // Buy: amount is in USDT, need ETH
+        amountOut = parseFloat(amount);
+        amountIn = amountOut / ethUsdtPrice;
+      } else {
+        // Sell: amount is in USDT, get ETH
+        amountIn = parseFloat(amount);
+        amountOut = amountIn / ethUsdtPrice;
+      }
+    }
+    
+    // Calculate fees (0.3% for demo, similar to Uniswap V2)
+    const feePercentage = 0.003;
+    const feeUSD = amountOut * ethUsdtPrice * feePercentage;
+    
+    // Build single-hop EVM demo route
+    const demoRoute = {
+      routeId: `evm_demo_${Date.now()}`,
+      chain: 'ETH',
+      pathType: 'direct',
+      strategy: 'evm-demo',
+      hops: [{
+        hopIndex: 0,
+        chain: 'ETH',
+        protocol: 'EVM_DEMO_UNISWAP',
+        fromToken,
+        toToken,
+        amountIn: amountIn.toString(),
+        amountOut: amountOut.toString(),
+        pool: 'DEMO_ETH_USDT_POOL',
+        fee: '0.3%'
+      }],
+      fees: {
+        totalFeeUSD: feeUSD,
+        totalFeeNative: feeUSD / ethUsdtPrice,
+        breakdown: [{
+          type: 'swap',
+          amount: feeUSD,
+          percentage: feePercentage * 100
+        }],
+        timestamp: new Date().toISOString()
+      },
+      slippage: {
+        percentage: 0.5,
+        minOutput: amountOut * 0.995,
+        maxInput: amountIn * 1.005
+      },
+      expectedOutput: amountOut,
+      oracleSources: ['Demo_Oracle'],
+      timestamp: new Date().toISOString(),
+      isDemo: true
+    };
+    
+    console.log('[RoutePlanner] Generated EVM demo route:', {
+      fromToken,
+      toToken,
+      amountIn,
+      amountOut,
+      chain: 'ETH',
+      pathType: 'direct'
+    });
+    
+    return demoRoute;
   }
 }
 module.exports = RoutePlanner;
