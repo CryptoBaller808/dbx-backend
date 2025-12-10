@@ -46,6 +46,28 @@ async function routeQuote({ base, quote, side, amountUsd }) {
     };
   }
 
+  // Stage 6C: Override routing for EVM pairs (ETH, BNB, AVAX, MATIC)
+  const evmPairs = ['ETH', 'BNB', 'AVAX', 'MATIC'];
+  const isEvmPair = evmPairs.includes(base.toUpperCase()) && quote.toUpperCase() === 'USDT';
+  
+  if (isEvmPair) {
+    console.log(`[Router] EVM routing override for ${base}/${quote}`);
+    return {
+      ok: true,
+      strategy: 'evm-demo',
+      primary: 'binance',
+      splits: [],
+      chosen: {
+        source: 'binance',
+        strategy: 'evm-demo'
+      },
+      policy: {
+        strategy: 'evm-demo',
+        reason: 'EVM demo routing for Stage 6C'
+      }
+    };
+  }
+
   const startTime = Date.now();
 
   try {
