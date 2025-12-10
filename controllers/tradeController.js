@@ -264,7 +264,28 @@ exports.getQuote = async (req, res) => {
       let chosen = null;
       let policy = null;
       
-      if (process.env.ROUTING_ENGINE_V1 === 'true') {
+      // Stage 6C: Override routing for EVM pairs (ETH, BNB, AVAX, MATIC)
+      const evmPairs = ['ETH', 'BNB', 'AVAX', 'MATIC'];
+      const isEvmPair = evmPairs.includes(base.toUpperCase()) && quote.toUpperCase() === 'USDT';
+      
+      if (isEvmPair) {
+        // Return EVM demo routing for Stage 6C
+        console.log(`[TRADE] preview routing override for EVM pair: ${base}/${quote}`);
+        routing = {
+          ok: true,
+          strategy: 'evm-demo',
+          primary: 'binance',
+          splits: []
+        };
+        chosen = {
+          source: 'binance',
+          strategy: 'evm-demo'
+        };
+        policy = {
+          strategy: 'evm-demo',
+          reason: 'EVM demo routing for Stage 6C'
+        };
+      } else if (process.env.ROUTING_ENGINE_V1 === 'true') {
         try {
           const smartRouter = require('../services/routing/router');
           const routingResult = await smartRouter.routeQuote({
