@@ -100,7 +100,11 @@ async function getCurrentPrice(base, quote) {
       'XRP': 'ripple',
       'XLM': 'stellar',
       'USDT': 'tether',
-      'USDC': 'usd-coin'
+      'USDC': 'usd-coin',
+      'BNB': 'binancecoin',
+      'AVAX': 'avalanche-2',
+      'MATIC': 'matic-network',
+      'SOL': 'solana'
     };
     
     const baseCoinId = coinIds[base.toUpperCase()];
