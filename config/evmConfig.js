@@ -173,17 +173,19 @@ class EvmConfig {
   validateChainConfig(chain, executionMode) {
     const errors = [];
     
-    // Check RPC URL
+    // Check RPC URL (not required for simulated demo mode)
     const rpcUrl = this.getRpcUrl(chain);
-    if (!rpcUrl) {
+    if (!rpcUrl && executionMode !== 'demo') {
       errors.push(`Missing RPC URL for chain: ${chain}`);
     }
     
-    // Check demo private key (only for demo mode)
-    if (executionMode === 'demo') {
+    // Stage 6D: Demo mode uses fully simulated execution
+    // No private key or RPC required - all transactions are simulated
+    // Private key validation only needed for production mode
+    if (executionMode === 'production') {
       const privateKey = this.getDemoPrivateKey(chain);
       if (!privateKey) {
-        errors.push(`Missing demo private key for chain: ${chain}`);
+        errors.push(`Missing private key for chain: ${chain}`);
       }
     }
     
