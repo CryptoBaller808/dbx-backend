@@ -57,18 +57,31 @@ class EvmRouteExecutionService {
       
       // Step 2: Validate chain is supported
       if (!this.config.isChainSupported(chain)) {
-        return this._errorResponse('UNSUPPORTED_CHAIN', `Chain ${chain} is not supported for EVM execution`, {
-          chain,
-          supportedChains: this.config.getSupportedChains()
-        });
+        console.error(`[EvmRouteExecution] Unsupported chain: ${chain}`);
+        return this._errorResponse(
+          'EXECUTION_FAILED',
+          `EVM demo is not available for ${chain}. Supported chains: ${this.config.getSupportedChains().join(', ')}`,
+          {
+            chain,
+            supportedChains: this.config.getSupportedChains()
+          }
+        );
       }
       
       // Step 3: Validate configuration for chain
       const configValidation = this.config.validateChainConfig(chain, executionMode);
       if (!configValidation.valid) {
-        return this._errorResponse('INVALID_CONFIG', `Configuration validation failed for chain ${chain}`, {
-          errors: configValidation.errors
-        });
+        console.error(`[EvmRouteExecution] Config validation failed for chain=${chain}:`, configValidation.errors);
+        return this._errorResponse(
+          'EXECUTION_FAILED',
+          'EVM demo is temporarily unavailable for this chain. Please try again later.',
+          {
+            chain,
+            executionMode,
+            configErrors: configValidation.errors,
+            note: 'Chain configuration is incomplete or missing required parameters'
+          }
+        );
       }
       
       // Step 4: Validate execution mode
@@ -230,13 +243,20 @@ class EvmRouteExecutionService {
    * @private
    */
   _getNetworkLabel(chain) {
+    // Try to get network label from config first
+    const networkConfig = this.config.networkConfig.networks[chain];
+    if (networkConfig && networkConfig.networkLabel) {
+      return networkConfig.networkLabel;
+    }
+    
+    // Fallback to default labels
     const labels = {
-      'ETH': 'eth-sepolia-demo',
-      'BSC': 'bsc-demo',
-      'AVAX': 'avax-demo',
-      'MATIC': 'polygon-demo'
+      'ETH': 'Sepolia – Demo',
+      'BSC': 'BSC Testnet – Demo',
+      'AVAX': 'Fuji – Demo',
+      'MATIC': 'Mumbai – Demo'
     };
-    return labels[chain] || `${chain.toLowerCase()}-demo`;
+    return labels[chain] || `${chain} – Demo`;
   }
   
   /**

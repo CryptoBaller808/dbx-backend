@@ -1,65 +1,74 @@
 {
   "networks": {
     "ETH": {
-      "chainId": 1,
-      "name": "Ethereum Mainnet",
+      "chainId": 11155111,
+      "name": "Ethereum Sepolia",
       "nativeCurrency": "ETH",
-      "rpcUrl": "https://eth.llamarpc.com",
-      "enabled": true
+      "rpcUrl": "https://eth-sepolia.g.alchemy.com/v2/demo",
+      "enabled": true,
+      "demoSupported": true,
+      "networkLabel": "Sepolia – Demo"
     },
     "BSC": {
-      "chainId": 56,
-      "name": "BNB Smart Chain",
+      "chainId": 97,
+      "name": "BSC Testnet",
       "nativeCurrency": "BNB",
-      "rpcUrl": "https://bsc-dataseed.binance.org",
-      "enabled": true
+      "rpcUrl": "https://data-seed-prebsc-1-s1.binance.org:8545",
+      "enabled": true,
+      "demoSupported": true,
+      "networkLabel": "BSC Testnet – Demo"
     },
     "MATIC": {
-      "chainId": 137,
-      "name": "Polygon",
+      "chainId": 80001,
+      "name": "Polygon Mumbai",
       "nativeCurrency": "MATIC",
-      "rpcUrl": "https://polygon-rpc.com",
-      "enabled": true
+      "rpcUrl": "https://rpc-mumbai.maticvigil.com",
+      "enabled": true,
+      "demoSupported": true,
+      "networkLabel": "Mumbai – Demo"
     },
     "AVAX": {
-      "chainId": 43114,
-      "name": "Avalanche C-Chain",
+      "chainId": 43113,
+      "name": "Avalanche Fuji",
       "nativeCurrency": "AVAX",
-      "rpcUrl": "https://api.avax.network/ext/bc/C/rpc",
-      "enabled": true
+      "rpcUrl": "https://api.avax-test.network/ext/bc/C/rpc",
+      "enabled": true,
+      "demoSupported": true,
+      "networkLabel": "Fuji – Demo"
     },
     "XDC": {
       "chainId": 50,
       "name": "XDC Network",
       "nativeCurrency": "XDC",
       "rpcUrl": "https://rpc.xinfin.network",
-      "enabled": true
+      "enabled": true,
+      "demoSupported": false
     }
   },
   "tokenMappings": {
     "ETH": {
       "ETH": "native",
-      "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
-      "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-      "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      "USDT": "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06",
+      "USDC": "0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8",
+      "WETH": "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9"
     },
     "BSC": {
       "BNB": "native",
-      "USDT": "0x55d398326f99059ff775485246999027b3197955",
-      "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
-      "WBNB": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+      "USDT": "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
+      "USDC": "0x64544969ed7EBf5f083679233325356EbE738930",
+      "WBNB": "0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd"
     },
     "MATIC": {
       "MATIC": "native",
-      "USDT": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
-      "USDC": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-      "WMATIC": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
+      "USDT": "0xA02f6adc7926efeBBd59Fd43A84f4E0c0c91e832",
+      "USDC": "0x0FA8781a83E46826621b3BC094Ea2A0212e71B23",
+      "WMATIC": "0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889"
     },
     "AVAX": {
       "AVAX": "native",
-      "USDT": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7",
-      "USDC": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
-      "WAVAX": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7"
+      "USDT": "0xAb231A5744C8E6c45481754928cCfFFFD4aa0732",
+      "USDC": "0x5425890298aed601595a70AB815c96711a31Bc65",
+      "WAVAX": "0xd00ae08403B9bbb9124bB305C09058E32C39A48c"
     },
     "XDC": {
       "XDC": "native",
@@ -74,7 +83,7 @@
     "tokenIds": {
       "ETH": "ethereum",
       "BNB": "binancecoin",
-      "MATIC": "matic-network",
+      "MATIC": "polygon-ecosystem-token",
       "AVAX": "avalanche-2",
       "XDC": "xdce-crowd-sale",
       "USDT": "tether",
