@@ -103,7 +103,7 @@ async function getCurrentPrice(base, quote) {
       'USDC': 'usd-coin',
       'BNB': 'binancecoin',
       'AVAX': 'avalanche-2',
-      'MATIC': 'matic-network',
+      'MATIC': 'polygon-ecosystem-token',
       'SOL': 'solana'
     };
     
