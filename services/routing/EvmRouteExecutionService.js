@@ -13,6 +13,7 @@
 
 const { ethers } = require('ethers');
 const evmConfig = require('../../config/evmConfig');
+const executionConfig = require('../../config/executionConfig');
 
 class EvmRouteExecutionService {
   constructor() {
@@ -85,17 +86,28 @@ class EvmRouteExecutionService {
       }
       
       // Step 4: Validate execution mode
-      if (executionMode === 'production') {
-        return this._errorResponse('NOT_IMPLEMENTED', 'Production execution mode is not implemented yet for EVM chains', {
-          executionMode,
-          supportedModes: ['demo']
-        });
+      const modeValidation = executionConfig.validateExecution(chain, executionMode);
+      if (!modeValidation.allowed) {
+        return this._errorResponse(
+          modeValidation.code || 'EXECUTION_NOT_ALLOWED',
+          modeValidation.reason,
+          { chain, executionMode }
+        );
       }
       
-      if (executionMode !== 'demo') {
+      // Step 4b: Route to appropriate execution path
+      if (executionMode === 'live') {
+        // Live execution path (Stage 7.0)
+        console.log('[EvmRouteExecution] Routing to LIVE execution...');
+        return await this._executeLiveTransaction(chain, route, params);
+      } else if (executionMode === 'demo') {
+        // Demo execution path (Stage 6D - unchanged)
+        console.log('[EvmRouteExecution] Routing to DEMO execution...');
+        // Continue to demo execution below
+      } else {
         return this._errorResponse('INVALID_EXECUTION_MODE', `Invalid execution mode: ${executionMode}`, {
           executionMode,
-          supportedModes: ['demo']
+          supportedModes: ['demo', 'live']
         });
       }
       
@@ -159,6 +171,217 @@ class EvmRouteExecutionService {
       return this._errorResponse('EXECUTION_FAILED', error.message, {
         error: error.toString(),
         stack: error.stack
+      });
+    }
+  }
+  
+  /**
+   * Execute LIVE transaction on EVM chain
+   * Stage 7.0: Real wallet-connected execution
+   * @private
+   */
+  async _executeLiveTransaction(chain, route, params) {
+    const { base, quote, amount, side, walletAddress, routeId } = params;
+    
+    console.log('[EvmRouteExecution][Live] Preparing LIVE transaction for chain:', chain);
+    console.log('[EvmRouteExecution][Live] Wallet:', walletAddress);
+    
+    try {
+      // Step 1: Validate wallet address
+      if (!walletAddress || !ethers.isAddress(walletAddress)) {
+        throw {
+          code: 'WALLET_NOT_CONNECTED',
+          message: 'Valid wallet address is required for live execution'
+        };
+      }
+      
+      // Step 2: Validate chain is ETH (Stage 7.0 only supports ETH)
+      if (chain !== 'ETH') {
+        throw {
+          code: 'UNSUPPORTED_CHAIN',
+          message: `Live execution is only supported for ETH in Stage 7.0. Requested chain: ${chain}`
+        };
+      }
+      
+      // Step 3: Get RPC provider for chain
+      const rpcUrl = this.config.getRpcUrl(chain);
+      if (!rpcUrl) {
+        throw {
+          code: 'RPC_NOT_CONFIGURED',
+          message: `RPC URL not configured for chain: ${chain}`
+        };
+      }
+      
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      // Step 4: Fetch on-chain balance
+      console.log('[EvmRouteExecution][Live] Fetching on-chain balance...');
+      const balance = await provider.getBalance(walletAddress);
+      const balanceEth = ethers.formatEther(balance);
+      
+      console.log('[EvmRouteExecution][Live] Wallet balance:', balanceEth, 'ETH');
+      
+      // Step 5: Validate sufficient balance
+      const requiredAmount = ethers.parseEther(amount.toString());
+      if (balance < requiredAmount) {
+        throw {
+          code: 'INSUFFICIENT_FUNDS',
+          message: `Insufficient balance. Required: ${amount} ETH, Available: ${balanceEth} ETH`
+        };
+      }
+      
+      // Step 6: Estimate gas
+      console.log('[EvmRouteExecution][Live] Estimating gas...');
+      const feeData = await provider.getFeeData();
+      const gasPrice = feeData.gasPrice;
+      const gasLimit = 21000n; // Standard ETH transfer
+      const gasCost = gasPrice * gasLimit;
+      const gasCostEth = ethers.formatEther(gasCost);
+      
+      console.log('[EvmRouteExecution][Live] Gas estimate:', {
+        gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
+        gasLimit: gasLimit.toString(),
+        gasCost: gasCostEth + ' ETH'
+      });
+      
+      // Step 7: Validate balance covers amount + gas
+      const totalRequired = requiredAmount + gasCost;
+      if (balance < totalRequired) {
+        throw {
+          code: 'INSUFFICIENT_FUNDS',
+          message: `Insufficient balance for amount + gas. Required: ${ethers.formatEther(totalRequired)} ETH, Available: ${balanceEth} ETH`
+        };
+      }
+      
+      // Step 8: Build unsigned transaction
+      const nonce = await provider.getTransactionCount(walletAddress);
+      const chainId = await provider.getNetwork().then(n => n.chainId);
+      
+      // For Stage 7.0, we're doing a simple ETH transfer
+      // In future stages, this would be a DEX swap transaction
+      const unsignedTx = {
+        from: walletAddress,
+        to: walletAddress, // For demo, send to self (in production, this would be DEX contract)
+        value: requiredAmount.toString(),
+        gasLimit: gasLimit.toString(),
+        gasPrice: gasPrice.toString(),
+        nonce,
+        chainId: Number(chainId),
+        data: '0x' // No data for simple transfer
+      };
+      
+      console.log('[EvmRouteExecution][Live] Unsigned transaction prepared:', {
+        from: unsignedTx.from,
+        to: unsignedTx.to,
+        value: ethers.formatEther(unsignedTx.value) + ' ETH',
+        gasLimit: unsignedTx.gasLimit,
+        gasPrice: ethers.formatUnits(unsignedTx.gasPrice, 'gwei') + ' gwei',
+        nonce: unsignedTx.nonce,
+        chainId: unsignedTx.chainId
+      });
+      
+      // Step 9: Return unsigned transaction for MetaMask signing
+      return {
+        success: true,
+        requiresSignature: true,
+        unsignedTransaction: unsignedTx,
+        metadata: {
+          chain,
+          base,
+          quote,
+          amount,
+          side,
+          walletAddress,
+          balance: balanceEth,
+          gasEstimate: {
+            gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
+            gasLimit: gasLimit.toString(),
+            gasCost: gasCostEth + ' ETH'
+          },
+          routeId
+        },
+        message: 'Transaction prepared. Please sign with MetaMask.'
+      };
+      
+    } catch (error) {
+      console.error('[EvmRouteExecution][Live] Error:', error);
+      
+      // Map error codes
+      const errorCode = error.code || 'EXECUTION_FAILED';
+      const errorMessage = error.message || 'Live execution failed';
+      
+      return this._errorResponse(errorCode, errorMessage, {
+        chain,
+        walletAddress,
+        error: error.toString()
+      });
+    }
+  }
+  
+  /**
+   * Broadcast signed transaction and wait for confirmation
+   * Stage 7.0: Accept signed tx from MetaMask and broadcast
+   * @param {string} chain - Chain identifier
+   * @param {string} signedTx - Signed transaction hex
+   * @param {Object} metadata - Transaction metadata
+   * @returns {Promise<Object>} Execution result
+   */
+  async broadcastSignedTransaction(chain, signedTx, metadata) {
+    console.log('[EvmRouteExecution][Live] Broadcasting signed transaction...');
+    
+    try {
+      // Get RPC provider
+      const rpcUrl = this.config.getRpcUrl(chain);
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      // Broadcast transaction
+      const txResponse = await provider.broadcastTransaction(signedTx);
+      console.log('[EvmRouteExecution][Live] Transaction broadcasted:', txResponse.hash);
+      
+      // Wait for confirmation (1 block)
+      console.log('[EvmRouteExecution][Live] Waiting for confirmation...');
+      const receipt = await txResponse.wait(1);
+      
+      console.log('[EvmRouteExecution][Live] Transaction confirmed:', {
+        hash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        status: receipt.status === 1 ? 'success' : 'failed'
+      });
+      
+      // Build success response
+      return {
+        success: true,
+        chain,
+        executionMode: 'live',
+        transaction: {
+          hash: receipt.hash,
+          chainId: this.config.getChainId(chain),
+          from: receipt.from,
+          to: receipt.to,
+          value: ethers.formatEther(metadata.amount || '0'),
+          gasUsed: receipt.gasUsed.toString(),
+          gasPrice: ethers.formatUnits(receipt.gasPrice || 0n, 'gwei') + ' gwei',
+          blockNumber: receipt.blockNumber,
+          network: this._getNetworkLabel(chain),
+          status: receipt.status === 1 ? 'confirmed' : 'failed'
+        },
+        settlement: {
+          status: receipt.status === 1 ? 'confirmed' : 'failed',
+          blockNumber: receipt.blockNumber,
+          confirmations: 1,
+          timestamp: new Date().toISOString()
+        },
+        metadata,
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      console.error('[EvmRouteExecution][Live] Broadcast failed:', error);
+      
+      return this._errorResponse('BROADCAST_FAILED', error.message, {
+        chain,
+        error: error.toString()
       });
     }
   }

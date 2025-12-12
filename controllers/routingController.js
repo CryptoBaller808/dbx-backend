@@ -259,6 +259,7 @@ exports.reloadLiquidity = async (req, res) => {
 /**
  * POST /api/routing/execute
  * Execute a route end-to-end (Stage 6)
+ * Stage 7.0: Enhanced to support live execution with wallet
  */
 exports.executeRoute = async (req, res) => {
   try {
@@ -272,7 +273,8 @@ exports.executeRoute = async (req, res) => {
       mode = 'auto',
       routeId,
       preview = true,
-      executionMode = 'demo'
+      executionMode = 'demo',
+      walletAddress // Stage 7.0: Wallet address for live execution
     } = req.body;
 
     console.log('[Routing API] Execute request:', {
@@ -324,7 +326,8 @@ exports.executeRoute = async (req, res) => {
       mode,
       routeId,
       preview,
-      executionMode
+      executionMode,
+      walletAddress // Stage 7.0: Pass wallet address for live execution
     });
 
     // Return result (success or error)
@@ -349,6 +352,75 @@ exports.executeRoute = async (req, res) => {
 
   } catch (error) {
     console.error('[Routing API] Error executing route:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * POST /api/routing/broadcast
+ * Broadcast signed transaction (Stage 7.0)
+ */
+exports.broadcastTransaction = async (req, res) => {
+  try {
+    const {
+      chain,
+      signedTransaction,
+      metadata
+    } = req.body;
+
+    console.log('[Routing API] Broadcast request:', {
+      chain,
+      signedTxLength: signedTransaction?.length,
+      metadata
+    });
+
+    // Validate required parameters
+    if (!chain || !signedTransaction) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: chain, signedTransaction'
+      });
+    }
+
+    // Validate chain is ETH (Stage 7.0 only)
+    if (chain !== 'ETH') {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'UNSUPPORTED_CHAIN',
+        message: 'Broadcast is only supported for ETH in Stage 7.0'
+      });
+    }
+
+    // Broadcast signed transaction
+    const result = await routeExecutionService.broadcastSignedTransaction(
+      chain,
+      signedTransaction,
+      metadata
+    );
+
+    // Return result
+    if (result.success) {
+      return res.json(result);
+    } else {
+      const statusCode = {
+        'BROADCAST_FAILED': 500,
+        'RPC_ERROR': 502,
+        'INVALID_TRANSACTION': 400
+      }[result.errorCode] || 500;
+
+      return res.status(statusCode).json(result);
+    }
+
+  } catch (error) {
+    console.error('[Routing API] Error broadcasting transaction:', error);
     return res.status(500).json({
       success: false,
       errorCode: 'INTERNAL_ERROR',

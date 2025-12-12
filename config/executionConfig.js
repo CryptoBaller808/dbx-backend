@@ -1,0 +1,184 @@
+/**
+ * executionConfig.js
+ * Stage 7.0: Execution Mode Control
+ * 
+ * Responsibilities:
+ * - Manage global execution mode (demo vs live)
+ * - Enforce kill switch for live execution
+ * - Provide chain-specific mode resolution
+ * - Validate execution permissions
+ */
+
+class ExecutionConfig {
+  constructor() {
+    // Global execution mode (default: demo)
+    this.globalMode = process.env.EXECUTION_MODE || 'demo';
+    
+    // Kill switch for live execution (default: false)
+    this.liveExecutionEnabled = process.env.LIVE_EXECUTION_ENABLED === 'true';
+    
+    // Safety limits
+    this.maxTradeUSD = parseFloat(process.env.MAX_TRADE_USD) || 50000;
+    this.maxSlippageBPS = parseInt(process.env.MAX_SLIPPAGE_BPS) || 50; // 0.5%
+    
+    console.log('[ExecutionConfig] Initialized:', {
+      globalMode: this.globalMode,
+      liveExecutionEnabled: this.liveExecutionEnabled,
+      maxTradeUSD: this.maxTradeUSD,
+      maxSlippageBPS: this.maxSlippageBPS
+    });
+  }
+  
+  /**
+   * Get execution mode for a specific chain
+   * @param {string} chain - Chain identifier (ETH, BNB, XRP, etc.)
+   * @returns {string} 'demo' or 'live'
+   */
+  getMode(chain) {
+    // Check chain-specific override (e.g., EVM_EXECUTION_MODE, XRPL_EXECUTION_MODE)
+    const chainGroup = this._getChainGroup(chain);
+    const chainMode = process.env[`${chainGroup}_EXECUTION_MODE`];
+    
+    if (chainMode && (chainMode === 'demo' || chainMode === 'live')) {
+      return chainMode;
+    }
+    
+    // Fall back to global mode
+    return this.globalMode;
+  }
+  
+  /**
+   * Check if live execution is allowed for a chain
+   * @param {string} chain - Chain identifier
+   * @returns {boolean}
+   */
+  isLiveAllowed(chain) {
+    // Live execution requires BOTH conditions:
+    // 1. EXECUTION_MODE=live (or chain-specific override)
+    // 2. LIVE_EXECUTION_ENABLED=true
+    const mode = this.getMode(chain);
+    return mode === 'live' && this.liveExecutionEnabled;
+  }
+  
+  /**
+   * Check if demo mode is active for a chain
+   * @param {string} chain - Chain identifier
+   * @returns {boolean}
+   */
+  isDemoMode(chain) {
+    return this.getMode(chain) === 'demo';
+  }
+  
+  /**
+   * Validate if execution can proceed
+   * @param {string} chain - Chain identifier
+   * @param {string} requestedMode - Requested execution mode
+   * @returns {Object} { allowed: boolean, reason?: string }
+   */
+  validateExecution(chain, requestedMode) {
+    // Demo mode always allowed
+    if (requestedMode === 'demo') {
+      return { allowed: true };
+    }
+    
+    // Live mode requires kill switch to be enabled
+    if (requestedMode === 'live') {
+      if (!this.liveExecutionEnabled) {
+        return {
+          allowed: false,
+          reason: 'Live execution is currently disabled. Please contact support.',
+          code: 'LIVE_DISABLED'
+        };
+      }
+      
+      const configuredMode = this.getMode(chain);
+      if (configuredMode !== 'live') {
+        return {
+          allowed: false,
+          reason: `Live execution is not enabled for ${chain}. Current mode: ${configuredMode}`,
+          code: 'LIVE_DISABLED'
+        };
+      }
+      
+      return { allowed: true };
+    }
+    
+    // Invalid mode
+    return {
+      allowed: false,
+      reason: `Invalid execution mode: ${requestedMode}. Supported modes: demo, live`,
+      code: 'INVALID_MODE'
+    };
+  }
+  
+  /**
+   * Get chain group for env var lookup
+   * @param {string} chain - Chain identifier
+   * @returns {string} Chain group (EVM, XRPL, XDC, etc.)
+   * @private
+   */
+  _getChainGroup(chain) {
+    const evmChains = ['ETH', 'BNB', 'AVAX', 'MATIC'];
+    const xrplChains = ['XRP'];
+    const xdcChains = ['XDC'];
+    
+    if (evmChains.includes(chain)) return 'EVM';
+    if (xrplChains.includes(chain)) return 'XRPL';
+    if (xdcChains.includes(chain)) return 'XDC';
+    
+    return chain; // Default to chain name
+  }
+  
+  /**
+   * Get maximum trade limit in USD
+   * @returns {number}
+   */
+  getMaxTradeUSD() {
+    return this.maxTradeUSD;
+  }
+  
+  /**
+   * Get maximum slippage in basis points
+   * @returns {number}
+   */
+  getMaxSlippageBPS() {
+    return this.maxSlippageBPS;
+  }
+  
+  /**
+   * Validate trade amount against limits
+   * @param {number} amountUSD - Trade amount in USD
+   * @returns {Object} { valid: boolean, reason?: string }
+   */
+  validateTradeAmount(amountUSD) {
+    if (amountUSD > this.maxTradeUSD) {
+      return {
+        valid: false,
+        reason: `Trade amount ($${amountUSD.toFixed(2)}) exceeds maximum limit ($${this.maxTradeUSD.toFixed(2)})`,
+        code: 'AMOUNT_EXCEEDS_LIMIT'
+      };
+    }
+    
+    return { valid: true };
+  }
+  
+  /**
+   * Validate slippage against limits
+   * @param {number} slippageBPS - Slippage in basis points
+   * @returns {Object} { valid: boolean, reason?: string }
+   */
+  validateSlippage(slippageBPS) {
+    if (slippageBPS > this.maxSlippageBPS) {
+      return {
+        valid: false,
+        reason: `Slippage (${(slippageBPS / 100).toFixed(2)}%) exceeds maximum limit (${(this.maxSlippageBPS / 100).toFixed(2)}%)`,
+        code: 'SLIPPAGE_EXCEEDED'
+      };
+    }
+    
+    return { valid: true };
+  }
+}
+
+// Export singleton instance
+module.exports = new ExecutionConfig();

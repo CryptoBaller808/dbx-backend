@@ -40,6 +40,35 @@ class RouteExecutionService {
   }
   
   /**
+   * Broadcast signed transaction (Stage 7.0)
+   * @param {string} chain - Chain identifier
+   * @param {string} signedTransaction - Signed transaction hex
+   * @param {Object} metadata - Transaction metadata
+   * @returns {Promise<Object>} Execution result
+   */
+  async broadcastSignedTransaction(chain, signedTransaction, metadata) {
+    console.log('[RouteExecution] Broadcasting signed transaction for chain:', chain);
+    
+    // Route to appropriate chain service
+    if (chain === 'ETH' || chain === 'BNB' || chain === 'AVAX' || chain === 'MATIC') {
+      return await this.evmService.broadcastSignedTransaction(chain, signedTransaction, metadata);
+    } else if (chain === 'XRP') {
+      // XRPL broadcast (future implementation)
+      return {
+        success: false,
+        errorCode: 'NOT_IMPLEMENTED',
+        message: 'XRPL signed transaction broadcast not implemented yet'
+      };
+    } else {
+      return {
+        success: false,
+        errorCode: 'UNSUPPORTED_CHAIN',
+        message: `Broadcast not supported for chain: ${chain}`
+      };
+    }
+  }
+  
+  /**
    * Execute a route end-to-end
    * @param {Object} params - Execution parameters
    * @returns {Promise<Object>} Execution result
