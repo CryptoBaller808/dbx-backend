@@ -25,6 +25,12 @@ class CrossChainNFTBridge {
    */
   async initialize(socketIO = null) {
     try {
+      // Check if NFT Bridge is disabled
+      if (process.env.DISABLE_NFT_BRIDGE === 'true') {
+        console.log('[NFT-BRIDGE] Bridge disabled — monitor not started.');
+        return false;
+      }
+      
       this.socketIO = socketIO;
       
       // Load active bridge transactions
@@ -820,7 +826,7 @@ class CrossChainNFTBridge {
       try {
         const stuckTransactions = await db.NFTBridgeTransaction.findAll({
           where: {
-            status: ['INITIATED', 'BURN_COMPLETED', 'VERIFYING'],
+            status: ['INITIATED', 'BURN_COMPLETED'],
             created_at: {
               [Op.lt]: new Date(Date.now() - 30 * 60 * 1000) // 30 minutes ago
             }

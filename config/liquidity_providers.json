@@ -1,0 +1,36 @@
+{
+  "mode": "auto",
+  "providers": {
+    "simulated": {
+      "enabled": true,
+      "priority": 999
+    },
+    "xrpl": {
+      "enabled": true,
+      "priority": 1,
+      "chains": ["XRPL"],
+      "config": {
+        "network": "testnet",
+        "timeout": 5000
+      }
+    },
+    "evm": {
+      "enabled": true,
+      "priority": 2,
+      "chains": ["ETH", "BSC", "MATIC", "XDC"],
+      "config": {
+        "timeout": 5000
+      }
+    }
+  },
+  "chainPriorities": {
+    "XRPL": ["xrpl", "simulated"],
+    "ETH": ["evm", "simulated"],
+    "BSC": ["evm", "simulated"],
+    "MATIC": ["evm", "simulated"],
+    "XDC": ["evm", "simulated"],
+    "BTC": ["simulated"],
+    "SOL": ["simulated"],
+    "XLM": ["simulated"]
+  }
+}
