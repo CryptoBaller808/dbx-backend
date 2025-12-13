@@ -17,15 +17,21 @@ class ExecutionConfig {
     // Kill switch for live execution (default: false)
     this.liveExecutionEnabled = process.env.LIVE_EXECUTION_ENABLED === 'true';
     
-    // Safety limits
-    this.maxTradeUSD = parseFloat(process.env.MAX_TRADE_USD) || 50000;
+    // Safety limits (Stage 7.1)
+    this.maxTradeUSD = parseFloat(process.env.LIVE_MAX_NOTIONAL_USD) || parseFloat(process.env.MAX_TRADE_USD) || 25;
     this.maxSlippageBPS = parseInt(process.env.MAX_SLIPPAGE_BPS) || 50; // 0.5%
+    this.maxTradesPerHour = parseInt(process.env.LIVE_MAX_TRADES_PER_HOUR) || 3;
+    
+    // Chain allowlist (Stage 7.1)
+    this.liveEvmChains = (process.env.LIVE_EVM_CHAINS || 'ETH').split(',').map(c => c.trim());
     
     console.log('[ExecutionConfig] Initialized:', {
       globalMode: this.globalMode,
       liveExecutionEnabled: this.liveExecutionEnabled,
       maxTradeUSD: this.maxTradeUSD,
-      maxSlippageBPS: this.maxSlippageBPS
+      maxSlippageBPS: this.maxSlippageBPS,
+      maxTradesPerHour: this.maxTradesPerHour,
+      liveEvmChains: this.liveEvmChains
     });
   }
   
@@ -70,7 +76,7 @@ class ExecutionConfig {
   }
   
   /**
-   * Validate if execution can proceed
+   * Validate if execution can proceed (Stage 7.1 enhanced)
    * @param {string} chain - Chain identifier
    * @param {string} requestedMode - Requested execution mode
    * @returns {Object} { allowed: boolean, reason?: string }
@@ -86,8 +92,17 @@ class ExecutionConfig {
       if (!this.liveExecutionEnabled) {
         return {
           allowed: false,
-          reason: 'Live execution is currently disabled. Please contact support.',
-          code: 'LIVE_DISABLED'
+          reason: 'Live execution is currently disabled by server.',
+          code: 'LIVE_DISABLED_BY_SERVER'
+        };
+      }
+      
+      // Check chain allowlist (Stage 7.1)
+      if (!this.isChainAllowedForLive(chain)) {
+        return {
+          allowed: false,
+          reason: `Chain ${chain} is not enabled for live execution. Allowed chains: ${this.liveEvmChains.join(', ')}`,
+          code: 'CHAIN_NOT_ENABLED_FOR_LIVE'
         };
       }
       
@@ -143,6 +158,38 @@ class ExecutionConfig {
    */
   getMaxSlippageBPS() {
     return this.maxSlippageBPS;
+  }
+  
+  /**
+   * Check if chain is allowed for live execution (Stage 7.1)
+   * @param {string} chain - Chain identifier
+   * @returns {boolean}
+   */
+  isChainAllowedForLive(chain) {
+    const evmChains = ['ETH', 'BNB', 'AVAX', 'MATIC'];
+    if (evmChains.includes(chain)) {
+      return this.liveEvmChains.includes(chain);
+    }
+    
+    // For non-EVM chains, check if they have specific allowlist env vars
+    // (not implemented yet for XRP, XDC, etc.)
+    return false;
+  }
+  
+  /**
+   * Get execution config for frontend (Stage 7.1)
+   * @returns {Object} Configuration object
+   */
+  getConfig() {
+    return {
+      executionMode: this.globalMode,
+      liveEnabled: this.liveExecutionEnabled,
+      liveChainsEnabled: this.liveEvmChains,
+      killSwitch: !this.liveExecutionEnabled,
+      maxUsdPerTrade: this.maxTradeUSD,
+      maxTradesPerHour: this.maxTradesPerHour,
+      maxSlippageBPS: this.maxSlippageBPS
+    };
   }
   
   /**

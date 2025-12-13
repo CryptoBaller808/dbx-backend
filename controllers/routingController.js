@@ -7,6 +7,8 @@
 
 const RoutePlanner = require('../services/routing/RoutePlanner');
 const RouteExecutionService = require('../services/routing/RouteExecutionService');
+const executionConfig = require('../config/executionConfig');
+const { recordTrade } = require('../middleware/rateLimiter');
 
 const routePlanner = new RoutePlanner();
 const routeExecutionService = new RouteExecutionService();
@@ -315,6 +317,38 @@ exports.executeRoute = async (req, res) => {
       });
     }
 
+    // Stage 7.1: Validate live execution requirements
+    if (executionMode === 'live') {
+      // Validate wallet address
+      if (!walletAddress) {
+        return res.status(400).json({
+          success: false,
+          errorCode: 'WALLET_NOT_CONNECTED',
+          message: 'Wallet address is required for live execution'
+        });
+      }
+
+      // Validate chain allowlist
+      const chain = fromChain || base; // Use fromChain if specified, otherwise base token
+      if (!executionConfig.isChainAllowedForLive(chain)) {
+        return res.status(403).json({
+          success: false,
+          errorCode: 'CHAIN_NOT_ENABLED_FOR_LIVE',
+          message: `Chain ${chain} is not enabled for live execution. Allowed chains: ${executionConfig.liveEvmChains.join(', ')}`
+        });
+      }
+
+      // Validate execution mode
+      const validation = executionConfig.validateExecution(chain, executionMode);
+      if (!validation.allowed) {
+        return res.status(403).json({
+          success: false,
+          errorCode: validation.code,
+          message: validation.reason
+        });
+      }
+    }
+
     // Execute route
     const result = await routeExecutionService.executeRoute({
       base,
@@ -332,6 +366,12 @@ exports.executeRoute = async (req, res) => {
 
     // Return result (success or error)
     if (result.success) {
+      // Stage 7.1: Record trade for rate limiting (live execution only)
+      if (executionMode === 'live' && walletAddress) {
+        recordTrade(walletAddress);
+        console.log(`[Rate Limiter] Recorded trade for wallet ${walletAddress}`);
+      }
+      
       return res.json(result);
     } else {
       // Map error codes to HTTP status codes
