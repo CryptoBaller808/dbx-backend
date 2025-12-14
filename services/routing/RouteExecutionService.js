@@ -13,6 +13,7 @@
 const RoutePlanner = require('./RoutePlanner');
 const { XRPLTransactionService } = require('../XRPLTransactionService');
 const EvmRouteExecutionService = require('./EvmRouteExecutionService');
+const executionConfig = require('../../config/executionConfig');
 
 class RouteExecutionService {
   constructor() {
@@ -100,14 +101,27 @@ class RouteExecutionService {
     });
     
     try {
-      // Step 1: Validate execution mode
-      if (this.executionMode === 'disabled') {
-        return this._errorResponse('EXECUTION_DISABLED', 'Route execution is currently disabled');
+      // Step 1: Validate execution mode (Stage 7.1: Use execution config)
+      const chain = fromChain || base; // Determine chain from params
+      
+      // Debug logging for execution mode resolution
+      console.log('[RouteExecution] Execution mode validation:', {
+        requestedMode: executionMode,
+        globalMode: executionConfig.globalMode,
+        chainMode: executionConfig.getMode(chain),
+        liveEnabled: executionConfig.liveExecutionEnabled,
+        killSwitch: !executionConfig.liveExecutionEnabled,
+        chainAllowlist: executionConfig.liveEvmChains
+      });
+      
+      // Validate execution mode using execution config
+      const validation = executionConfig.validateExecution(chain, executionMode);
+      if (!validation.allowed) {
+        console.log('[RouteExecution] Execution rejected:', validation);
+        return this._errorResponse(validation.code, validation.reason);
       }
       
-      if (executionMode !== 'demo' && this.executionMode !== 'production') {
-        return this._errorResponse('INVALID_EXECUTION_MODE', 'Only demo execution mode is supported in Stage 6');
-      }
+      console.log('[RouteExecution] Execution allowed:', { chain, executionMode });
       
       // Step 2: Get or validate route
       let route;
