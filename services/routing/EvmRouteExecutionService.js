@@ -187,17 +187,42 @@ class EvmRouteExecutionService {
   async _executeLiveTransaction(chain, route, params) {
     const { base, quote, amount, side, walletAddress, routeId } = params;
     
-    console.log('[EvmRouteExecution][Live] Preparing LIVE transaction for chain:', chain);
-    console.log('[EvmRouteExecution][Live] Wallet:', walletAddress);
+    // Debug logging for wallet validation (Stage 7.1)
+    const walletPrefix = walletAddress ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}` : 'none';
+    const isValidAddress = walletAddress ? ethers.isAddress(walletAddress) : false;
+    
+    console.log('[LiveExecute] Validation:', {
+      chain,
+      executionMode: 'live',
+      walletProvided: !!walletAddress,
+      wallet: walletPrefix,
+      isAddress: isValidAddress,
+      amount,
+      base,
+      quote
+    });
     
     try {
       // Step 1: Validate wallet address
-      if (!walletAddress || !ethers.isAddress(walletAddress)) {
+      if (!walletAddress) {
+        console.log('[LiveExecute] Rejected: No wallet address provided');
         throw {
           code: 'WALLET_NOT_CONNECTED',
-          message: 'Valid wallet address is required for live execution'
+          message: 'Wallet address is required for live execution'
         };
       }
+      
+      if (!ethers.isAddress(walletAddress)) {
+        console.log('[LiveExecute] Rejected: Invalid wallet address format');
+        throw {
+          code: 'WALLET_NOT_CONNECTED',
+          message: 'Invalid wallet address format'
+        };
+      }
+      
+      // Normalize wallet address
+      const normalizedWallet = ethers.getAddress(walletAddress);
+      console.log('[LiveExecute] Wallet validated:', normalizedWallet);
       
       // Step 2: Validate chain is ETH (Stage 7.0 only supports ETH)
       if (chain !== 'ETH') {
@@ -220,7 +245,7 @@ class EvmRouteExecutionService {
       
       // Step 4: Fetch on-chain balance
       console.log('[EvmRouteExecution][Live] Fetching on-chain balance...');
-      const balance = await provider.getBalance(walletAddress);
+      const balance = await provider.getBalance(normalizedWallet);
       const balanceEth = ethers.formatEther(balance);
       
       console.log('[EvmRouteExecution][Live] Wallet balance:', balanceEth, 'ETH');
@@ -258,14 +283,14 @@ class EvmRouteExecutionService {
       }
       
       // Step 8: Build unsigned transaction
-      const nonce = await provider.getTransactionCount(walletAddress);
+      const nonce = await provider.getTransactionCount(normalizedWallet);
       const chainId = await provider.getNetwork().then(n => n.chainId);
       
       // For Stage 7.0, we're doing a simple ETH transfer
       // In future stages, this would be a DEX swap transaction
       const unsignedTx = {
-        from: walletAddress,
-        to: walletAddress, // For demo, send to self (in production, this would be DEX contract)
+        from: normalizedWallet,
+        to: normalizedWallet, // For demo, send to self (in production, this would be DEX contract)
         value: requiredAmount.toString(),
         gasLimit: gasLimit.toString(),
         gasPrice: gasPrice.toString(),
@@ -295,7 +320,7 @@ class EvmRouteExecutionService {
           quote,
           amount,
           side,
-          walletAddress,
+          walletAddress: normalizedWallet,
           balance: balanceEth,
           gasEstimate: {
             gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
@@ -316,8 +341,7 @@ class EvmRouteExecutionService {
       
       return this._errorResponse(errorCode, errorMessage, {
         chain,
-        walletAddress,
-        error: error.toString()
+        error: error.message || error.toString()
       });
     }
   }

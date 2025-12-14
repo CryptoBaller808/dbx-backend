@@ -380,8 +380,11 @@ exports.executeRoute = async (req, res) => {
         'INVALID_AMOUNT': 400,
         'INVALID_SIDE': 400,
         'INVALID_EXECUTION_MODE': 400,
-        'NO_ROUTE': 404,
+        'WALLET_NOT_CONNECTED': 400,
+        'INSUFFICIENT_FUNDS': 400,
+        'RPC_NOT_CONFIGURED': 503,
         'UNSUPPORTED_CHAIN': 501,
+        'NO_ROUTE': 404,
         'UNSUPPORTED_PATH_TYPE': 501,
         'EXECUTION_DISABLED': 503,
         'EXECUTION_FAILED': 500
