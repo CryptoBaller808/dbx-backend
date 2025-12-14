@@ -41,15 +41,20 @@ class ExecutionConfig {
    * @returns {string} 'demo' or 'live'
    */
   getMode(chain) {
+    // Stage 7.1: Prioritize global mode unless chain-specific override is explicitly set
+    // This ensures EXECUTION_MODE=live works without requiring per-chain overrides
+    
     // Check chain-specific override (e.g., EVM_EXECUTION_MODE, XRPL_EXECUTION_MODE)
     const chainGroup = this._getChainGroup(chain);
     const chainMode = process.env[`${chainGroup}_EXECUTION_MODE`];
     
-    if (chainMode && (chainMode === 'demo' || chainMode === 'live')) {
+    // Only use chain-specific override if it's explicitly set to 'live' or 'demo'
+    // If not set or set to other values, fall back to global mode
+    if (chainMode === 'live' || chainMode === 'demo') {
       return chainMode;
     }
     
-    // Fall back to global mode
+    // Fall back to global mode (EXECUTION_MODE)
     return this.globalMode;
   }
   
