@@ -102,26 +102,7 @@ class RouteExecutionService {
     
     try {
       // Step 1: Validate execution mode (Stage 7.1: Use execution config)
-      const chain = fromChain || base; // Determine chain from params
-      
-      // Debug logging for execution mode resolution
-      console.log('[RouteExecution] Execution mode validation:', {
-        requestedMode: executionMode,
-        globalMode: executionConfig.globalMode,
-        chainMode: executionConfig.getMode(chain),
-        liveEnabled: executionConfig.liveExecutionEnabled,
-        killSwitch: !executionConfig.liveExecutionEnabled,
-        chainAllowlist: executionConfig.liveEvmChains
-      });
-      
-      // Validate execution mode using execution config
-      const validation = executionConfig.validateExecution(chain, executionMode);
-      if (!validation.allowed) {
-        console.log('[RouteExecution] Execution rejected:', validation);
-        return this._errorResponse(validation.code, validation.reason);
-      }
-      
-      console.log('[RouteExecution] Execution allowed:', { chain, executionMode });
+      // Note: Chain validation happens after route is computed
       
       // Step 2: Get or validate route
       let route;
@@ -159,9 +140,28 @@ class RouteExecutionService {
         expectedOutput: route.expectedOutput
       });
       
-      // Step 3: Route to appropriate execution service based on chain
+      // Step 2.5: Validate execution mode for the route's chain
       const chain = route.chain;
       console.log('[RouteExecution] Route chain detected:', chain);
+      
+      // Debug logging for execution mode resolution
+      console.log('[RouteExecution] Execution mode validation:', {
+        requestedMode: executionMode,
+        globalMode: executionConfig.globalMode,
+        chainMode: executionConfig.getMode(chain),
+        liveEnabled: executionConfig.liveExecutionEnabled,
+        killSwitch: !executionConfig.liveExecutionEnabled,
+        chainAllowlist: executionConfig.liveEvmChains
+      });
+      
+      // Validate execution mode using execution config
+      const validation = executionConfig.validateExecution(chain, executionMode);
+      if (!validation.allowed) {
+        console.log('[RouteExecution] Execution rejected:', validation);
+        return this._errorResponse(validation.code, validation.reason);
+      }
+      
+      console.log('[RouteExecution] Execution allowed:', { chain, executionMode });
       
       // Determine which execution service to use
       if (chain === 'XRPL') {
