@@ -51,9 +51,13 @@ class EvmRouteExecutionService {
     });
     
     try {
-      // Step 1: Validate execution mode
-      if (!this.config.isExecutionEnabled()) {
-        return this._errorResponse('EXECUTION_DISABLED', 'EVM route execution is currently disabled');
+      // Step 1: Validate execution mode (Stage 7.1: Use unified execution config)
+      // Note: Execution mode validation already done in RouteExecutionService
+      // This is a secondary check for safety
+      const validation = executionConfig.validateExecution(chain, executionMode);
+      if (!validation.allowed) {
+        console.log('[EvmRouteExecution] Execution rejected:', validation);
+        return this._errorResponse(validation.code, validation.reason);
       }
       
       // Step 2: Validate chain is supported
