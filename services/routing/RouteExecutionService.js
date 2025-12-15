@@ -86,7 +86,8 @@ class RouteExecutionService {
       mode = 'auto',
       routeId,
       preview = true,
-      executionMode = 'demo'
+      executionMode = 'demo',
+      walletAddress // Stage 7.0: Wallet address for live execution
     } = params;
     
     console.log('[RouteExecution] Executing route:', {
