@@ -219,6 +219,7 @@ class RouteExecutionService {
           amount,
           side,
           executionMode,
+          walletAddress, // Stage 7.0: Pass wallet address for live execution
           routeId: routeId || `route_${Date.now()}`
         });
         
