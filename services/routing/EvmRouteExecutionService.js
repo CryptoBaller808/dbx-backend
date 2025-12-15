@@ -288,14 +288,15 @@ class EvmRouteExecutionService {
       
       // For Stage 7.0, we're doing a simple ETH transfer
       // In future stages, this would be a DEX swap transaction
+      // MetaMask requires hex-formatted values with 0x prefix
       const unsignedTx = {
         from: normalizedWallet,
         to: normalizedWallet, // For demo, send to self (in production, this would be DEX contract)
-        value: requiredAmount.toString(),
-        gasLimit: gasLimit.toString(),
-        gasPrice: gasPrice.toString(),
-        nonce,
-        chainId: Number(chainId),
+        value: '0x' + requiredAmount.toString(16),
+        gas: '0x' + gasLimit.toString(16), // MetaMask uses 'gas' not 'gasLimit'
+        gasPrice: '0x' + gasPrice.toString(16),
+        nonce: '0x' + nonce.toString(16),
+        chainId: '0x' + Number(chainId).toString(16),
         data: '0x' // No data for simple transfer
       };
       
