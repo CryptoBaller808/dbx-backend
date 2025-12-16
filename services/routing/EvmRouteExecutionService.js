@@ -224,13 +224,15 @@ class EvmRouteExecutionService {
       const normalizedWallet = ethers.getAddress(walletAddress);
       console.log('[LiveExecute] Wallet validated:', normalizedWallet);
       
-      // Step 2: Validate chain is ETH (Stage 7.0 only supports ETH)
-      if (chain !== 'ETH') {
+      // Step 2: Get native currency symbol for chain
+      const nativeCurrency = this.config.getNativeCurrency(chain);
+      if (!nativeCurrency) {
         throw {
           code: 'UNSUPPORTED_CHAIN',
-          message: `Live execution is only supported for ETH in Stage 7.0. Requested chain: ${chain}`
+          message: `Native currency not configured for chain: ${chain}`
         };
       }
+      console.log('[LiveExecute] Native currency:', nativeCurrency);
       
       // Step 3: Get RPC provider for chain
       const rpcUrl = this.config.getRpcUrl(chain);
@@ -243,19 +245,18 @@ class EvmRouteExecutionService {
       
       const provider = new ethers.JsonRpcProvider(rpcUrl);
       
-      // Step 4: Fetch on-chain balance
+         // Step 4: Fetch on-chain balance
       console.log('[EvmRouteExecution][Live] Fetching on-chain balance...');
       const balance = await provider.getBalance(normalizedWallet);
-      const balanceEth = ethers.formatEther(balance);
-      
-      console.log('[EvmRouteExecution][Live] Wallet balance:', balanceEth, 'ETH');
+      const balanceFormatted = ethers.formatEther(balance);
+      console.log(`[EvmRouteExecution][Live] Wallet balance: ${balanceFormatted} ${nativeCurrency}`);
       
       // Step 5: Validate sufficient balance
       const requiredAmount = ethers.parseEther(amount.toString());
       if (balance < requiredAmount) {
         throw {
           code: 'INSUFFICIENT_FUNDS',
-          message: `Insufficient balance. Required: ${amount} ETH, Available: ${balanceEth} ETH`
+          message: `Insufficient balance. Required: ${amount} ${nativeCurrency}, Available: ${balanceFormatted} ${nativeCurrency}`
         };
       }
       
@@ -263,14 +264,14 @@ class EvmRouteExecutionService {
       console.log('[EvmRouteExecution][Live] Estimating gas...');
       const feeData = await provider.getFeeData();
       const gasPrice = feeData.gasPrice;
-      const gasLimit = 21000n; // Standard ETH transfer
+      const gasLimit = 21000n; // Standard native token transfer
       const gasCost = gasPrice * gasLimit;
-      const gasCostEth = ethers.formatEther(gasCost);
+      const gasCostFormatted = ethers.formatEther(gasCost);
       
       console.log('[EvmRouteExecution][Live] Gas estimate:', {
         gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
         gasLimit: gasLimit.toString(),
-        gasCost: gasCostEth + ' ETH'
+        gasCost: `${gasCostFormatted} ${nativeCurrency}`
       });
       
       // Step 7: Validate balance covers amount + gas
@@ -278,7 +279,7 @@ class EvmRouteExecutionService {
       if (balance < totalRequired) {
         throw {
           code: 'INSUFFICIENT_FUNDS',
-          message: `Insufficient balance for amount + gas. Required: ${ethers.formatEther(totalRequired)} ETH, Available: ${balanceEth} ETH`
+          message: `Insufficient balance for amount + gas. Required: ${ethers.formatEther(totalRequired)} ${nativeCurrency}, Available: ${balanceFormatted} ${nativeCurrency}`
         };
       }
       
@@ -303,8 +304,8 @@ class EvmRouteExecutionService {
       console.log('[EvmRouteExecution][Live] Unsigned transaction prepared:', {
         from: unsignedTx.from,
         to: unsignedTx.to,
-        value: ethers.formatEther(unsignedTx.value) + ' ETH',
-        gasLimit: unsignedTx.gasLimit,
+        value: `${ethers.formatEther(unsignedTx.value)} ${nativeCurrency}`,
+        gas: unsignedTx.gas,
         gasPrice: ethers.formatUnits(unsignedTx.gasPrice, 'gwei') + ' gwei',
         nonce: unsignedTx.nonce,
         chainId: unsignedTx.chainId
@@ -322,11 +323,12 @@ class EvmRouteExecutionService {
           amount,
           side,
           walletAddress: normalizedWallet,
-          balance: balanceEth,
+          balance: balanceFormatted,
+          nativeCurrency,
           gasEstimate: {
             gasPrice: ethers.formatUnits(gasPrice, 'gwei') + ' gwei',
             gasLimit: gasLimit.toString(),
-            gasCost: gasCostEth + ' ETH'
+            gasCost: `${gasCostFormatted} ${nativeCurrency}`
           },
           routeId
         },
