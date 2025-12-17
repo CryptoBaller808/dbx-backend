@@ -432,9 +432,10 @@ class RoutePlanner {
   async findBestRoute(params) {
     const { fromToken, toToken, executionMode } = params;
     
-    // Stage 6C: Generate deterministic single-hop EVM demo route for all EVM pairs
+    // Stage 7.1: Generate deterministic single-hop EVM route for enabled EVM pairs
+    // Supports both 'demo' and 'live' execution modes
     // Supports: ETH/USDT, BNB/USDT, AVAX/USDT, MATIC/USDT
-    if (executionMode === 'demo') {
+    if (executionMode === 'demo' || executionMode === 'live') {
       const evmPairs = [
         { base: 'ETH', quote: 'USDT', chain: 'ETH' },
         { base: 'BNB', quote: 'USDT', chain: 'BSC' },
@@ -445,7 +446,7 @@ class RoutePlanner {
       for (const pair of evmPairs) {
         if ((fromToken === pair.base && toToken === pair.quote) || 
             (fromToken === pair.quote && toToken === pair.base)) {
-          console.log(`[RoutePlanner] Generating single-hop EVM demo route for ${pair.base}/${pair.quote}`);
+          console.log(`[RoutePlanner] Generating single-hop EVM ${executionMode} route for ${pair.base}/${pair.quote}`);
           return this._generateEvmDemoRoute({ ...params, chain: pair.chain, baseToken: pair.base });
         }
       }

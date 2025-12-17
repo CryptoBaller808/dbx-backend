@@ -330,6 +330,13 @@ exports.executeRoute = async (req, res) => {
 
       // Validate chain allowlist
       const chain = fromChain || base; // Use fromChain if specified, otherwise base token
+      console.log('[CHAIN DEBUG] Resolved chain for live execution:', {
+        fromChain,
+        base,
+        resolvedChain: chain,
+        allowedChains: executionConfig.liveEvmChains
+      });
+      
       if (!executionConfig.isChainAllowedForLive(chain)) {
         return res.status(403).json({
           success: false,
@@ -384,7 +391,7 @@ exports.executeRoute = async (req, res) => {
         'INSUFFICIENT_FUNDS': 400,
         'RPC_NOT_CONFIGURED': 503,
         'UNSUPPORTED_CHAIN': 501,
-        'NO_ROUTE': 404,
+        'NO_ROUTE': 422, // Changed from 404 to 422 (Unprocessable Entity)
         'UNSUPPORTED_PATH_TYPE': 501,
         'EXECUTION_DISABLED': 503,
         'EXECUTION_FAILED': 500
