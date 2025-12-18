@@ -573,7 +573,7 @@ exports.initializeSeedData = () => {
     { symbol: 'XRP', name: 'Ripple', chain: 'XRP', decimals: 6, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'XRPUSDT', sort: 3 },
     { symbol: 'XLM', name: 'Stellar', chain: 'XLM', decimals: 7, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'XLMUSDT', sort: 4 },
     { symbol: 'MATIC', name: 'Polygon', chain: 'MATIC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'MATICUSDT', sort: 5 },
-    { symbol: 'BNB', name: 'Binance Coin', chain: 'BSC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'BNBUSDT', sort: 6 },
+    { symbol: 'BNB', name: 'Binance Coin', chain: 'BNB', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'BNBUSDT', sort: 6 },
     { symbol: 'SOL', name: 'Solana', chain: 'SOL', decimals: 9, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'SOLUSDT', sort: 7 },
     { symbol: 'AVAX', name: 'Avalanche', chain: 'AVAX', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'AVAXUSDT', sort: 8 },
     { symbol: 'XDC', name: 'XDC Network', chain: 'XDC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'kucoin', tvSymbol: 'XDCUSDT', sort: 9 },

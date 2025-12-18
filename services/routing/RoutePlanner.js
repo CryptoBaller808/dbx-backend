@@ -438,7 +438,7 @@ class RoutePlanner {
     if (executionMode === 'demo' || executionMode === 'live') {
       const evmPairs = [
         { base: 'ETH', quote: 'USDT', chain: 'ETH' },
-        { base: 'BNB', quote: 'USDT', chain: 'BSC' },
+        { base: 'BNB', quote: 'USDT', chain: 'BNB' },
         { base: 'AVAX', quote: 'USDT', chain: 'AVAX' },
         { base: 'MATIC', quote: 'USDT', chain: 'MATIC' }
       ];
@@ -517,7 +517,7 @@ class RoutePlanner {
     // Determine protocol name based on chain
     const protocolNames = {
       'ETH': 'EVM_DEMO_UNISWAP',
-      'BSC': 'EVM_DEMO_PANCAKESWAP',
+      'BNB': 'EVM_DEMO_PANCAKESWAP',
       'AVAX': 'EVM_DEMO_TRADERJOE',
       'MATIC': 'EVM_DEMO_QUICKSWAP'
     };

@@ -206,7 +206,7 @@ class EvmConfig {
    * @returns {string[]} Array of supported chain identifiers
    */
   getSupportedChains() {
-    return ['ETH', 'BSC', 'AVAX', 'MATIC'];
+    return ['ETH', 'BNB', 'AVAX', 'MATIC'];
   }
   
   /**
