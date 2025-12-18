@@ -19,13 +19,13 @@
       "networkLabel": "BSC Testnet – Demo"
     },
     "MATIC": {
-      "chainId": 80001,
-      "name": "Polygon Mumbai",
+      "chainId": 80002,
+      "name": "Polygon Amoy",
       "nativeCurrency": "MATIC",
-      "rpcUrl": "https://rpc-mumbai.maticvigil.com",
+      "rpcUrl": "https://rpc-amoy.polygon.technology",
       "enabled": true,
       "demoSupported": true,
-      "networkLabel": "Mumbai – Demo"
+      "networkLabel": "Amoy – Demo"
     },
     "AVAX": {
       "chainId": 43113,
