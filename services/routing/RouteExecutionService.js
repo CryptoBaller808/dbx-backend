@@ -209,7 +209,7 @@ class RouteExecutionService {
           executionTimeMs: executionTime
         };
         
-      } else if (['ETH', 'BSC', 'AVAX', 'MATIC'].includes(chain)) {
+      } else if (['ETH', 'BNB', 'AVAX', 'MATIC'].includes(chain)) {
         // Use EVM execution path (Stage 6A)
         console.log('[RouteExecution] Routing to EVM execution service...');
         
@@ -231,7 +231,7 @@ class RouteExecutionService {
         // Unsupported chain
         return this._errorResponse('UNSUPPORTED_CHAIN', `Chain ${chain} is not supported for route execution`, {
           routeChain: chain,
-          supportedChains: ['XRPL', 'ETH', 'BSC', 'AVAX', 'MATIC']
+          supportedChains: ['XRPL', 'ETH', 'BNB', 'AVAX', 'MATIC']
         });
       }
       
