@@ -82,14 +82,17 @@ exports.getRoutingQuote = async (req, res) => {
     }
 
     // Build response
+    // Handle both UniversalRoute instances and plain objects from _generateEvmDemoRoute
+    const routeData = typeof bestRoute.toJSON === 'function' ? bestRoute.toJSON() : bestRoute;
+    
     const response = {
       success: true,
-      bestRoute: bestRoute.toJSON(),
+      bestRoute: routeData,
       alternativeRoutes: [], // findBestRoute doesn't return alternatives
-      expectedOutput: bestRoute.expectedOutput,
-      fees: bestRoute.fees,
-      slippage: bestRoute.slippage,
-      routeExplanation: routePlanner.getRouteExplanation(bestRoute),
+      expectedOutput: routeData.expectedOutput,
+      fees: routeData.fees,
+      slippage: routeData.slippage,
+      routeExplanation: typeof bestRoute.toJSON === 'function' ? routePlanner.getRouteExplanation(bestRoute) : 'Direct EVM execution route',
       totalRoutesFound: 1,
       preview: isPreview,
       timestamp: new Date().toISOString()
