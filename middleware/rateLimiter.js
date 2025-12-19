@@ -124,6 +124,12 @@ function rateLimitMiddleware(req, res, next) {
     });
   }
   
+  // QA Bypass: Skip rate limiting if QA bypass flag is enabled
+  if (process.env.LIVE_EXECUTION_QA_BYPASS === 'true') {
+    console.log(`[LiveExecute] QA rate-limit bypass active for wallet ${walletAddress}`);
+    return next();
+  }
+  
   const limit = checkRateLimit(walletAddress);
   
   if (!limit.allowed) {
