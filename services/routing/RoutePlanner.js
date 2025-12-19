@@ -20,8 +20,8 @@ class RoutePlanner {
     this.routeValidator = new RouteValidator();
     
     // Supported chains
-    this.supportedChains = ['XRPL', 'ETH', 'BSC', 'MATIC', 'AVAX', 'XDC'];
-    this.stubChains = ['BTC', 'SOL', 'XLM']; // Stubs for future implementation
+    this.supportedChains = ['XRPL', 'ETH', 'BSC', 'MATIC', 'AVAX', 'XDC', 'SOL'];
+    this.stubChains = ['BTC', 'XLM']; // Stubs for future implementation
     
     // Max hops for multi-hop routing
     this.maxHops = 3;
@@ -440,7 +440,8 @@ class RoutePlanner {
         { base: 'ETH', quote: 'USDT', chain: 'ETH' },
         { base: 'BNB', quote: 'USDT', chain: 'BNB' },
         { base: 'AVAX', quote: 'USDT', chain: 'AVAX' },
-        { base: 'MATIC', quote: 'USDT', chain: 'MATIC' }
+        { base: 'MATIC', quote: 'USDT', chain: 'MATIC' },
+        { base: 'SOL', quote: 'USDT', chain: 'SOL' }
       ];
       
       for (const pair of evmPairs) {
@@ -480,7 +481,8 @@ class RoutePlanner {
       'ETH': 3000,   // 1 ETH = $3000
       'BNB': 600,    // 1 BNB = $600
       'AVAX': 40,    // 1 AVAX = $40
-      'MATIC': 1     // 1 MATIC = $1
+      'MATIC': 1,    // 1 MATIC = $1
+      'SOL': 150     // 1 SOL = $150
     };
     
     const baseUsdtPrice = demoPrices[baseToken] || 1;

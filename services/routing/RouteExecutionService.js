@@ -13,6 +13,7 @@
 const RoutePlanner = require('./RoutePlanner');
 const { XRPLTransactionService } = require('../XRPLTransactionService');
 const EvmRouteExecutionService = require('./EvmRouteExecutionService');
+const SolanaRouteExecutionService = require('./SolanaRouteExecutionService');
 const executionConfig = require('../../config/executionConfig');
 
 class RouteExecutionService {
@@ -20,6 +21,7 @@ class RouteExecutionService {
     this.routePlanner = new RoutePlanner();
     this.xrplService = new XRPLTransactionService();
     this.evmService = new EvmRouteExecutionService();
+    this.solanaService = new SolanaRouteExecutionService();
     
     // Execution mode from environment
     this.executionMode = process.env.XRPL_EXECUTION_MODE || 'demo';
@@ -227,11 +229,29 @@ class RouteExecutionService {
         // EvmRouteExecutionService already returns structured response
         return evmResult;
         
+      } else if (chain === 'SOL') {
+        // Use Solana execution path (Stage 7.4)
+        console.log('[RouteExecution] Routing to Solana execution service...');
+        
+        // Delegate to SolanaRouteExecutionService
+        const solanaResult = await this.solanaService.executeRoute(route, {
+          base,
+          quote,
+          amount,
+          side,
+          executionMode,
+          walletAddress, // Pass wallet address for live execution
+          routeId: routeId || `route_${Date.now()}`
+        });
+        
+        // SolanaRouteExecutionService returns structured response
+        return solanaResult;
+        
       } else {
         // Unsupported chain
         return this._errorResponse('UNSUPPORTED_CHAIN', `Chain ${chain} is not supported for route execution`, {
           routeChain: chain,
-          supportedChains: ['XRPL', 'ETH', 'BNB', 'AVAX', 'MATIC']
+          supportedChains: ['XRPL', 'ETH', 'BNB', 'AVAX', 'MATIC', 'SOL']
         });
       }
       

@@ -176,7 +176,12 @@ class ExecutionConfig {
       return this.liveEvmChains.includes(chain);
     }
     
-    // For non-EVM chains, check if they have specific allowlist env vars
+    // Solana uses the same allowlist as EVM chains for now
+    if (chain === 'SOL') {
+      return this.liveEvmChains.includes('SOL');
+    }
+    
+    // For other non-EVM chains, check if they have specific allowlist env vars
     // (not implemented yet for XRP, XDC, etc.)
     return false;
   }
