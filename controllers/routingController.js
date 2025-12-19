@@ -61,39 +61,39 @@ exports.getRoutingQuote = async (req, res) => {
     }
 
     // Plan routes with optional mode override
-    const routingResult = await routePlanner.planRoutes({
+    // Use findBestRoute which includes fallback logic for live execution
+    const bestRoute = await routePlanner.findBestRoute({
       fromToken,
       toToken,
       amount,
       side,
       fromChain,
       toChain,
-      mode // Pass mode to route planner
+      mode, // Pass mode to route planner
+      executionMode: mode === 'live' ? 'live' : 'demo' // Determine execution mode
     });
 
-    if (!routingResult.success) {
-      return res.status(404).json(routingResult);
+    if (!bestRoute) {
+      return res.status(422).json({
+        success: false,
+        errorCode: 'NO_ROUTE',
+        message: 'No valid routes found for the given parameters'
+      });
     }
 
     // Build response
     const response = {
       success: true,
-      bestRoute: routingResult.bestRoute.toJSON(),
-      alternativeRoutes: routingResult.alternativeRoutes.map(r => r.toJSON()),
-      expectedOutput: routingResult.bestRoute.expectedOutput,
-      fees: routingResult.bestRoute.fees,
-      slippage: routingResult.bestRoute.slippage,
-      routeExplanation: routePlanner.getRouteExplanation(routingResult.bestRoute),
-      totalRoutesFound: routingResult.totalRoutesFound,
+      bestRoute: bestRoute.toJSON(),
+      alternativeRoutes: [], // findBestRoute doesn't return alternatives
+      expectedOutput: bestRoute.expectedOutput,
+      fees: bestRoute.fees,
+      slippage: bestRoute.slippage,
+      routeExplanation: routePlanner.getRouteExplanation(bestRoute),
+      totalRoutesFound: 1,
       preview: isPreview,
-      timestamp: routingResult.timestamp
+      timestamp: new Date().toISOString()
     };
-
-    // Add alternative route explanations
-    response.alternativeRoutes = response.alternativeRoutes.map((route, index) => ({
-      ...route,
-      explanation: routePlanner.getRouteExplanation(routingResult.alternativeRoutes[index])
-    }));
 
     return res.json(response);
 
