@@ -484,3 +484,83 @@ exports.broadcastTransaction = async (req, res) => {
     });
   }
 };
+
+/**
+ * GET /api/routing/xaman/status/:payloadUuid
+ * Get Xaman payload status (Stage 7.3)
+ */
+exports.getXamanPayloadStatus = async (req, res) => {
+  try {
+    const { payloadUuid } = req.params;
+
+    console.log('[Routing API] Xaman payload status request:', payloadUuid);
+
+    if (!payloadUuid) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: payloadUuid'
+      });
+    }
+
+    // Get payload status from XRPL service
+    const xrplService = routeExecutionService.xrplLiveService;
+    const status = await xrplService.getPayloadStatus(payloadUuid);
+
+    return res.json({
+      success: true,
+      ...status
+    });
+
+  } catch (error) {
+    console.error('[Routing API] Error getting Xaman payload status:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to get payload status',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * POST /api/routing/xaman/submit
+ * Submit signed XRPL transaction from Xaman (Stage 7.3)
+ */
+exports.submitXamanTransaction = async (req, res) => {
+  try {
+    const { signedBlob, payloadUuid } = req.body;
+
+    console.log('[Routing API] Xaman submit request:', {
+      payloadUuid,
+      signedBlobLength: signedBlob?.length
+    });
+
+    if (!signedBlob) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: signedBlob'
+      });
+    }
+
+    // Submit signed transaction to XRPL
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.submitSignedTransaction(signedBlob);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error submitting Xaman transaction:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'SUBMIT_FAILED',
+      message: 'Failed to submit transaction',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};

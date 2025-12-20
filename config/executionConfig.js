@@ -25,13 +25,21 @@ class ExecutionConfig {
     // Chain allowlist (Stage 7.1)
     this.liveEvmChains = (process.env.LIVE_EVM_CHAINS || 'ETH').split(',').map(c => c.trim());
     
+    // XRPL chain allowlist (Stage 7.3)
+    this.liveXrplChains = (process.env.LIVE_XRPL_CHAINS || '').split(',').map(c => c.trim()).filter(c => c);
+    
+    // XRPL network (testnet or mainnet)
+    this.xrplNetwork = process.env.XRPL_NETWORK || 'testnet';
+    
     console.log('[ExecutionConfig] Initialized:', {
       globalMode: this.globalMode,
       liveExecutionEnabled: this.liveExecutionEnabled,
       maxTradeUSD: this.maxTradeUSD,
       maxSlippageBPS: this.maxSlippageBPS,
       maxTradesPerHour: this.maxTradesPerHour,
-      liveEvmChains: this.liveEvmChains
+      liveEvmChains: this.liveEvmChains,
+      liveXrplChains: this.liveXrplChains,
+      xrplNetwork: this.xrplNetwork
     });
   }
   
@@ -181,8 +189,12 @@ class ExecutionConfig {
       return this.liveEvmChains.includes('SOL');
     }
     
-    // For other non-EVM chains, check if they have specific allowlist env vars
-    // (not implemented yet for XRP, XDC, etc.)
+    // XRPL chains (Stage 7.3)
+    if (chain === 'XRP') {
+      return this.liveXrplChains.includes('XRP');
+    }
+    
+    // For other non-EVM chains, not yet supported
     return false;
   }
   
@@ -191,10 +203,16 @@ class ExecutionConfig {
    * @returns {Object} Configuration object
    */
   getConfig() {
+    // Combine all enabled live chains (EVM + XRPL)
+    const allLiveChains = [...this.liveEvmChains, ...this.liveXrplChains];
+    
     return {
       executionMode: this.globalMode,
       liveEnabled: this.liveExecutionEnabled,
-      liveChainsEnabled: this.liveEvmChains,
+      liveChainsEnabled: allLiveChains,
+      liveEvmChains: this.liveEvmChains,
+      liveXrplChains: this.liveXrplChains,
+      xrplNetwork: this.xrplNetwork,
       killSwitch: !this.liveExecutionEnabled,
       maxUsdPerTrade: this.maxTradeUSD,
       maxTradesPerHour: this.maxTradesPerHour,

@@ -14,12 +14,14 @@ const RoutePlanner = require('./RoutePlanner');
 const { XRPLTransactionService } = require('../XRPLTransactionService');
 const EvmRouteExecutionService = require('./EvmRouteExecutionService');
 const SolanaRouteExecutionService = require('./SolanaRouteExecutionService');
+const XrplRouteExecutionService = require('./XrplRouteExecutionService');
 const executionConfig = require('../../config/executionConfig');
 
 class RouteExecutionService {
   constructor() {
     this.routePlanner = new RoutePlanner();
     this.xrplService = new XRPLTransactionService();
+    this.xrplLiveService = new XrplRouteExecutionService();
     this.evmService = new EvmRouteExecutionService();
     this.solanaService = new SolanaRouteExecutionService();
     
@@ -167,10 +169,27 @@ class RouteExecutionService {
       console.log('[RouteExecution] Execution allowed:', { chain, executionMode });
       
       // Determine which execution service to use
-      if (chain === 'XRPL') {
-        // Use XRPL execution path (existing, stable)
+      if (chain === 'XRPL' || chain === 'XRP') {
+        // Use XRPL execution path
         console.log('[RouteExecution] Routing to XRPL execution service...');
         
+        // For live execution, use XrplRouteExecutionService (Stage 7.3)
+        if (executionMode === 'live') {
+          console.log('[RouteExecution] Using XrplRouteExecutionService for live execution');
+          const xrplResult = await this.xrplLiveService.executeRoute(route, {
+            base,
+            quote,
+            amount,
+            side,
+            executionMode,
+            walletAddress,
+            routeId: routeId || `route_${Date.now()}`
+          });
+          
+          return xrplResult;
+        }
+        
+        // For demo execution, use legacy XRPL service
         // Validate XRPL route path type
         const supportedPathTypes = ['direct', 'XRPL_AMM', 'XRPL_DEX'];
         if (!supportedPathTypes.includes(route.pathType)) {
@@ -181,7 +200,7 @@ class RouteExecutionService {
         }
         
         // Execute XRPL transaction
-        console.log('[RouteExecution] Executing XRPL transaction...');
+        console.log('[RouteExecution] Executing XRPL demo transaction...');
         const txResult = await this._executeXrplRoute(route, {
           base,
           quote,
