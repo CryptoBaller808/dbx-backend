@@ -115,6 +115,7 @@ class SolanaRouteExecutionService {
         success: true,
         network: 'SOL_DEVNET',
         executionMode: 'live',
+        requiresSignature: true,
         unsignedTransaction: {
           serialized: serializedTransaction,
           blockhash,
