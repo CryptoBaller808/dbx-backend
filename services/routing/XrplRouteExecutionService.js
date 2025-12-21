@@ -219,6 +219,7 @@ class XrplRouteExecutionService {
    */
   async submitSignedTransaction(signedBlob) {
     console.log('[XRPL Execution] Submitting signed transaction to XRPL');
+    console.log('[XRPL Execution] Using endpoint:', this.rpcUrl);
 
     try {
       const client = new xrpl.Client(this.rpcUrl);
@@ -227,26 +228,104 @@ class XrplRouteExecutionService {
       // Submit the signed transaction
       const result = await client.submit(signedBlob);
 
-      console.log('[XRPL Execution] Transaction submitted:', result);
+      console.log('[XRPL Execution] Submit response:', JSON.stringify(result, null, 2));
 
-      // Wait for validation
-      const txHash = result.result.tx_json.hash;
+      const engineResult = result.result.engine_result;
+      const engineResultCode = result.result.engine_result_code;
+      const engineResultMessage = result.result.engine_result_message;
+      const txHash = result.result.tx_json?.hash;
+
+      console.log('[XRPL Execution] Engine result:', {
+        engineResult,
+        engineResultCode,
+        engineResultMessage,
+        txHash
+      });
+
+      // Check if transaction was successful or queued
+      const isSuccess = engineResult === 'tesSUCCESS';
+      const isQueued = engineResult === 'terQUEUED';
+      const shouldValidate = isSuccess || isQueued;
+
+      // Handle redundant transaction (already submitted)
+      if (engineResultCode === -275 || engineResult === 'tefPAST_SEQ') {
+        console.log('[XRPL Execution] Transaction redundant (already submitted)');
+        client.disconnect();
+        
+        return {
+          success: true,
+          status: 'already_submitted',
+          network: `xrpl-${this.network}`,
+          transaction: {
+            hash: txHash || 'unknown',
+            network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+            status: 'redundant'
+          },
+          settlement: {
+            status: 'already_submitted'
+          },
+          explorerUrl: txHash ? (
+            this.network === 'testnet'
+              ? `https://testnet.xrpl.org/transactions/${txHash}`
+              : `https://livenet.xrpl.org/transactions/${txHash}`
+          ) : null,
+          message: engineResultMessage,
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Handle other non-success results
+      if (!shouldValidate) {
+        console.log('[XRPL Execution] Transaction not successful, skipping validation');
+        client.disconnect();
+        
+        return {
+          success: false,
+          status: 'xrpl_engine_result',
+          engine_result: engineResult,
+          engine_result_code: engineResultCode,
+          message: engineResultMessage || `Transaction failed with result: ${engineResult}`,
+          network: `xrpl-${this.network}`,
+          transaction: {
+            hash: txHash,
+            network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+            status: 'failed'
+          },
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Transaction successful or queued - wait for validation
+      console.log('[XRPL Execution] Transaction successful, waiting for validation...');
       const validated = await this.waitForValidation(client, txHash);
 
       client.disconnect();
 
       if (!validated.success) {
-        throw new Error(`Transaction failed: ${validated.error || 'Unknown error'}`);
+        return {
+          success: false,
+          status: 'validation_failed',
+          message: validated.error || 'Transaction validation failed',
+          network: `xrpl-${this.network}`,
+          transaction: {
+            hash: txHash,
+            network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+            status: 'pending'
+          },
+          timestamp: new Date().toISOString()
+        };
       }
 
       return {
         success: true,
+        status: 'confirmed',
         network: `xrpl-${this.network}`,
         transaction: {
           hash: txHash,
           ledgerIndex: validated.ledgerIndex,
           fee: validated.fee,
-          network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`
+          network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+          status: 'confirmed'
         },
         settlement: {
           status: 'confirmed'
@@ -258,7 +337,14 @@ class XrplRouteExecutionService {
       };
     } catch (error) {
       console.error('[XRPL Execution] Failed to submit transaction:', error);
-      throw error;
+      // Return structured error instead of throwing
+      return {
+        success: false,
+        status: 'error',
+        message: error.message || 'Failed to submit transaction',
+        error: error.toString(),
+        timestamp: new Date().toISOString()
+      };
     }
   }
 
