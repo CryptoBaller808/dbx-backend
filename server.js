@@ -1521,6 +1521,7 @@ app.post('/api/routing/reload', routingController.reloadLiquidity);
 const { rateLimitMiddleware } = require('./middleware/rateLimiter');
 app.post('/api/routing/execute', rateLimitMiddleware, routingController.executeRoute); // Stage 6: Route Execution
 app.post('/api/routing/broadcast', routingController.broadcastTransaction); // Stage 7.0: Broadcast signed tx
+app.post('/api/routing/xaman/create', routingController.createXamanPayload); // Stage 7.3: Create Xaman payload
 app.get('/api/routing/xaman/status/:payloadUuid', routingController.getXamanPayloadStatus); // Stage 7.3: Xaman payload status
 app.post('/api/routing/xaman/submit', routingController.submitXamanTransaction); // Stage 7.3: Submit Xaman signed tx
 console.log('✅ [STARTUP] Routing API routes mounted at /api/routing!');

@@ -503,6 +503,105 @@ exports.broadcastTransaction = async (req, res) => {
 };
 
 /**
+ * POST /api/routing/xaman/create
+ * Create Xaman signing payload for XRPL live execution (Stage 7.3)
+ */
+exports.createXamanPayload = async (req, res) => {
+  try {
+    const {
+      base,
+      quote,
+      amount,
+      side = 'sell',
+      walletAddress
+    } = req.body;
+
+    console.log('[Routing API] Xaman create payload request:', {
+      base,
+      quote,
+      amount,
+      side,
+      walletAddress
+    });
+
+    // Validate required parameters
+    if (!base || !quote || !amount || !walletAddress) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: base, quote, amount, walletAddress'
+      });
+    }
+
+    // Validate amount
+    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_AMOUNT',
+        message: 'Invalid amount: must be a positive number'
+      });
+    }
+
+    // Validate XRPL wallet address
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_WALLET_ADDRESS',
+        message: 'Invalid XRPL wallet address: must start with "r"'
+      });
+    }
+
+    // Create a simple route object for XRPL
+    const route = {
+      routeId: `xrpl_${Date.now()}`,
+      chain: 'XRPL',
+      pathType: 'direct',
+      expectedOutput: parseFloat(amount),
+      fees: {
+        totalFeeUSD: 0.0045,
+        totalFeeNative: 0.000012,
+        breakdown: [
+          {
+            type: 'network',
+            amount: 0.000012,
+            percentage: 0
+          }
+        ],
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    // Create Xaman payload
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.executeRoute(route, {
+      base,
+      quote,
+      amount: parseFloat(amount),
+      side,
+      executionMode: 'live',
+      walletAddress
+    });
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error creating Xaman payload:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to create Xaman payload',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
  * GET /api/routing/xaman/status/:payloadUuid
  * Get Xaman payload status (Stage 7.3)
  */

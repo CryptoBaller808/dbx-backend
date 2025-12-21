@@ -26,7 +26,12 @@ class ExecutionConfig {
     this.liveEvmChains = (process.env.LIVE_EVM_CHAINS || 'ETH').split(',').map(c => c.trim());
     
     // XRPL chain allowlist (Stage 7.3)
-    this.liveXrplChains = (process.env.LIVE_XRPL_CHAINS || '').split(',').map(c => c.trim()).filter(c => c);
+    // Map token symbols to chain IDs (XRP -> XRPL)
+    this.liveXrplChains = (process.env.LIVE_XRPL_CHAINS || '')
+      .split(',')
+      .map(c => c.trim())
+      .filter(c => c)
+      .map(c => c === 'XRP' ? 'XRPL' : c); // Normalize XRP token to XRPL chain
     
     // XRPL network (testnet or mainnet)
     this.xrplNetwork = process.env.XRPL_NETWORK || 'testnet';
