@@ -332,19 +332,36 @@ exports.executeRoute = async (req, res) => {
       }
 
       // Validate chain allowlist
-      const chain = fromChain || base; // Use fromChain if specified, otherwise base token
+      let chain = fromChain || base; // Use fromChain if specified, otherwise base token
+      
+      // Map token symbols to chain identifiers
+      // XRP (token) -> XRPL (chain)
+      if (chain === 'XRP') {
+        chain = 'XRPL';
+      }
+      
+      // Get all allowed chains for error message
+      const allAllowedChains = [...executionConfig.liveEvmChains, ...executionConfig.liveXrplChains];
+      
       console.log('[CHAIN DEBUG] Resolved chain for live execution:', {
         fromChain,
         base,
         resolvedChain: chain,
-        allowedChains: executionConfig.liveEvmChains
+        liveEvmChains: executionConfig.liveEvmChains,
+        liveXrplChains: executionConfig.liveXrplChains,
+        allAllowedChains
       });
       
       if (!executionConfig.isChainAllowedForLive(chain)) {
-        return res.status(403).json({
+        return res.status(400).json({
           success: false,
           errorCode: 'CHAIN_NOT_ENABLED_FOR_LIVE',
-          message: `Chain ${chain} is not enabled for live execution. Allowed chains: ${executionConfig.liveEvmChains.join(', ')}`
+          message: `Chain ${chain} is not enabled for live execution. Allowed chains: ${allAllowedChains.join(', ')}`,
+          details: {
+            requestedChain: chain,
+            allowedChains: allAllowedChains
+          },
+          timestamp: new Date().toISOString()
         });
       }
 
