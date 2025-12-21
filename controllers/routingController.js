@@ -508,6 +508,8 @@ exports.broadcastTransaction = async (req, res) => {
  */
 exports.createXamanPayload = async (req, res) => {
   try {
+    // TODO: Validate JWT token from Authorization header and derive walletAddress from session
+    // For now, accepting walletAddress from request body (passed from frontend localStorage)
     const {
       base,
       quote,
