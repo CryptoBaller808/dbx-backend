@@ -598,6 +598,19 @@ class XrplRouteExecutionService {
       console.log('[XRPL Execution] TrustSet transaction:', txJson);
 
       // Create Xaman signing payload
+      // Validate SDK is initialized
+      if (!this.xumm || !process.env.XUMM_API_KEY || !process.env.XUMM_API_SECRET) {
+        throw new Error('Xaman SDK not properly initialized - missing API credentials');
+      }
+      
+      console.log('[XRPL Execution] SDK check:', {
+        hasXumm: !!this.xumm,
+        hasApiKey: !!process.env.XUMM_API_KEY,
+        hasApiSecret: !!process.env.XUMM_API_SECRET,
+        apiKeyLength: process.env.XUMM_API_KEY?.length,
+        apiSecretLength: process.env.XUMM_API_SECRET?.length
+      });
+      
       console.log('[XRPL Execution] Calling Xaman SDK with:', {
         txjson: txJson,
         options: {
