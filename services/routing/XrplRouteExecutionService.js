@@ -585,9 +585,9 @@ class XrplRouteExecutionService {
       }
 
       // Build TrustSet transaction
-      // Note: We don't set Account, Sequence, or Fee - Xaman will inject these
       const txJson = {
         TransactionType: 'TrustSet',
+        Account: walletAddress,
         LimitAmount: {
           currency: currency,
           issuer: issuer,
