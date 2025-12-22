@@ -290,12 +290,11 @@ class XrplRouteExecutionService {
           expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
         },
         transaction: {
-          type: 'Payment',
-          from: walletAddress,
-          to: walletAddress,
-          amount: route.expectedOutput,
-          amountDrops: amountDrops,
-          fee: '12'
+          type: 'OfferCreate',
+          account: walletAddress,
+          takerGets: prepared.TakerGets,
+          takerPays: prepared.TakerPays,
+          fee: prepared.Fee || '12'
         },
         route: {
           routeId: route.routeId,
