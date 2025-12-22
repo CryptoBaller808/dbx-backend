@@ -598,6 +598,17 @@ class XrplRouteExecutionService {
       console.log('[XRPL Execution] TrustSet transaction:', txJson);
 
       // Create Xaman signing payload
+      console.log('[XRPL Execution] Calling Xaman SDK with:', {
+        txjson: txJson,
+        options: {
+          submit: false,
+          expire: 5,
+          return_url: {
+            web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+          }
+        }
+      });
+      
       const payload = await this.xumm.payload.create({
         txjson: txJson,
         options: {
@@ -608,6 +619,12 @@ class XrplRouteExecutionService {
           }
         }
       });
+
+      console.log('[XRPL Execution] Xaman SDK returned:', payload);
+      
+      if (!payload) {
+        throw new Error('Xaman SDK returned null - check API credentials and transaction structure');
+      }
 
       console.log('[XRPL Execution] TrustSet Xaman payload created:', {
         uuid: payload.uuid,
