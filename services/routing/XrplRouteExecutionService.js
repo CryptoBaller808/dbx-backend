@@ -305,6 +305,12 @@ class XrplRouteExecutionService {
       };
     } catch (error) {
       console.error('[XRPL Execution] Failed to build Xaman payload:', error);
+      
+      // Re-throw trustline errors with code preserved
+      if (error.code === 'TRUSTLINE_REQUIRED') {
+        throw error;
+      }
+      
       throw new Error(`Failed to build XRPL transaction: ${error.message}`);
     }
   }
