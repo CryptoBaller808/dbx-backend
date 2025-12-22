@@ -592,6 +592,17 @@ exports.createXamanPayload = async (req, res) => {
 
   } catch (error) {
     console.error('[Routing API] Error creating Xaman payload:', error);
+    
+    // Handle trustline error specifically
+    if (error.code === 'TRUSTLINE_REQUIRED') {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'TRUSTLINE_REQUIRED',
+        message: error.message,
+        details: error.details
+      });
+    }
+    
     return res.status(500).json({
       success: false,
       errorCode: 'INTERNAL_ERROR',

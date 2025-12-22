@@ -27,10 +27,25 @@ class XrplRouteExecutionService {
       ? 'wss://s.altnet.rippletest.net:51233'
       : 'wss://xrplcluster.com';
     
+    // USDT issuer configuration
+    this.issuers = {
+      testnet: {
+        USDT: process.env.XRPL_TESTNET_USDT_ISSUER || 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
+        USD: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
+        USDC: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH'
+      },
+      mainnet: {
+        USDT: 'rcvxE9PS9YBwxtGg1qNeewV6ZB3wGubZq', // Tether
+        USD: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B', // Bitstamp
+        USDC: 'rcEGREd8NmkKRE8GE424sksyt1tJVFZwu' // Circle
+      }
+    };
+    
     console.log('[XRPL Execution] Initialized:', {
       network: this.network,
       rpcUrl: this.rpcUrl,
-      xummConfigured: !!(process.env.XUMM_API_KEY && process.env.XUMM_API_SECRET)
+      xummConfigured: !!(process.env.XUMM_API_KEY && process.env.XUMM_API_SECRET),
+      usdtIssuer: this.issuers[this.network].USDT
     });
   }
 
@@ -74,6 +89,122 @@ class XrplRouteExecutionService {
   }
 
   /**
+   * Build OfferCreate transaction for XRPL DEX
+   * @param {Object} route - Route object
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {Object} client - XRPL client
+   * @returns {Object} Transaction JSON
+   */
+  async buildOfferCreateTx(route, walletAddress, client) {
+    console.log('[XRPL Execution] Building OfferCreate transaction');
+
+    // Parse trade details from route
+    const base = route.fromToken || 'XRP';
+    const quote = route.toToken || 'USDT';
+    const amount = route.amount || 0;
+    const side = route.side || 'buy'; // buy = buy quote with base, sell = sell base for quote
+
+    console.log('[XRPL Execution] Trade details:', { base, quote, amount, side });
+
+    // Get issuer for quote currency (USDT)
+    const quoteIssuer = this.issuers[this.network][quote];
+    if (!quoteIssuer) {
+      throw new Error(`No issuer configured for ${quote} on ${this.network}`);
+    }
+
+    // Calculate amounts with slippage
+    const slippageTolerance = 0.01; // 1% slippage
+    const expectedOutput = route.expectedOutput || amount;
+
+    let takerGets, takerPays;
+
+    if (side === 'buy') {
+      // Buy USDT with XRP
+      // TakerGets = what we receive (USDT)
+      // TakerPays = what we pay (XRP)
+      const usdtAmount = expectedOutput;
+      const xrpAmount = amount;
+      const maxXrpWithSlippage = xrpAmount * (1 + slippageTolerance);
+
+      takerGets = {
+        currency: quote,
+        issuer: quoteIssuer,
+        value: usdtAmount.toString()
+      };
+
+      takerPays = Math.floor(maxXrpWithSlippage * 1000000).toString(); // XRP in drops
+
+    } else {
+      // Sell XRP for USDT
+      // TakerGets = what we receive (XRP)
+      // TakerPays = what we pay (USDT)
+      const xrpAmount = amount;
+      const usdtAmount = expectedOutput;
+      const minUsdtWithSlippage = usdtAmount * (1 - slippageTolerance);
+
+      takerGets = Math.floor(xrpAmount * 1000000).toString(); // XRP in drops
+
+      takerPays = {
+        currency: quote,
+        issuer: quoteIssuer,
+        value: minUsdtWithSlippage.toString()
+      };
+    }
+
+    console.log('[XRPL Execution] OfferCreate amounts:', {
+      takerGets,
+      takerPays,
+      side
+    });
+
+    const txJson = {
+      TransactionType: 'OfferCreate',
+      Account: walletAddress,
+      TakerGets: takerGets,
+      TakerPays: takerPays,
+      Fee: '12' // 12 drops = 0.000012 XRP (standard fee)
+    };
+
+    return txJson;
+  }
+
+  /**
+   * Check if wallet has trustline to a specific issuer
+   * @param {Object} client - XRPL client
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {string} currency - Currency code (e.g., 'USDT')
+   * @param {string} issuer - Issuer address
+   * @returns {boolean} True if trustline exists
+   */
+  async checkTrustline(client, walletAddress, currency, issuer) {
+    console.log('[XRPL Execution] Checking trustline:', { walletAddress, currency, issuer });
+
+    try {
+      const response = await client.request({
+        command: 'account_lines',
+        account: walletAddress,
+        ledger_index: 'current'
+      });
+
+      const lines = response.result.lines || [];
+      const hasTrustline = lines.some(line => 
+        line.currency === currency && line.account === issuer
+      );
+
+      console.log('[XRPL Execution] Trustline check result:', {
+        hasTrustline,
+        totalLines: lines.length
+      });
+
+      return hasTrustline;
+    } catch (error) {
+      console.error('[XRPL Execution] Error checking trustline:', error);
+      // If we can't check, assume no trustline to be safe
+      return false;
+    }
+  }
+
+  /**
    * Build Xaman signing payload for live execution
    * @param {Object} route - Route object
    * @param {string} walletAddress - User's XRPL wallet address
@@ -99,18 +230,27 @@ class XrplRouteExecutionService {
         throw new Error(`Wallet address not found on XRPL ${this.network}: ${walletAddress}`);
       }
 
-      // Calculate amount in drops (1 XRP = 1,000,000 drops)
-      const amountDrops = Math.floor(route.expectedOutput * 1000000).toString();
+      // Validate trustline before building OfferCreate
+      const quote = route.toToken || 'USDT';
+      if (quote !== 'XRP') {
+        const quoteIssuer = this.issuers[this.network][quote];
+        const hasTrustline = await this.checkTrustline(client, walletAddress, quote, quoteIssuer);
+        
+        if (!hasTrustline) {
+          client.disconnect();
+          const error = new Error(`Trustline required for ${quote}`);
+          error.code = 'TRUSTLINE_REQUIRED';
+          error.details = {
+            currency: quote,
+            issuer: quoteIssuer,
+            message: `Your wallet needs a trustline to ${quote} (issuer: ${quoteIssuer}) before trading. Please set up the trustline in your Xaman wallet first.`
+          };
+          throw error;
+        }
+      }
 
-      // For this stage, we'll do a self-transfer to prove the signing flow
-      // In production, this would be a swap transaction or payment to exchange
-      const txJson = {
-        TransactionType: 'Payment',
-        Account: walletAddress,
-        Destination: walletAddress, // Self-transfer for demo
-        Amount: amountDrops,
-        Fee: '12' // 12 drops = 0.000012 XRP (standard fee)
-      };
+      // Build OfferCreate transaction for XRPL DEX
+      const txJson = await this.buildOfferCreateTx(route, walletAddress, client);
 
       // Auto-fill transaction fields (sequence, last ledger sequence, etc.)
       const prepared = await client.autofill(txJson);
