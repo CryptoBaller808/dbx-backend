@@ -609,16 +609,22 @@ class XrplRouteExecutionService {
         }
       });
       
-      const payload = await this.xumm.payload.create({
-        txjson: txJson,
-        options: {
-          submit: false, // We'll submit after getting the signed blob
-          expire: 5, // Expire in 5 minutes
-          return_url: {
-            web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+      let payload;
+      try {
+        payload = await this.xumm.payload.create({
+          txjson: txJson,
+          options: {
+            submit: false, // We'll submit after getting the signed blob
+            expire: 5, // Expire in 5 minutes
+            return_url: {
+              web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+            }
           }
-        }
-      });
+        });
+      } catch (sdkError) {
+        console.error('[XRPL Execution] Xaman SDK threw error:', sdkError);
+        throw new Error(`Xaman SDK error: ${sdkError.message || JSON.stringify(sdkError)}`);
+      }
 
       console.log('[XRPL Execution] Xaman SDK returned:', payload);
       
