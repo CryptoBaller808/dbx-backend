@@ -693,3 +693,54 @@ exports.submitXamanTransaction = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/routing/xaman/trustline/create
+ * Create Xaman payload for TrustSet transaction (Stage 7.3)
+ */
+exports.createTrustlinePayload = async (req, res) => {
+  try {
+    const { walletAddress, currency = 'USDT' } = req.body;
+
+    console.log('[Routing API] Trustline creation request:', { walletAddress, currency });
+
+    // Validate wallet address
+    if (!walletAddress) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: walletAddress'
+      });
+    }
+
+    // Validate XRPL address format
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_ADDRESS',
+        message: `Invalid XRPL wallet address: ${walletAddress}`
+      });
+    }
+
+    // Create TrustSet payload
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.createTrustlinePayload(walletAddress, currency);
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error creating trustline payload:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to create trustline payload',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};

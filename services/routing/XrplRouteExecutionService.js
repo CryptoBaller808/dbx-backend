@@ -562,6 +562,75 @@ class XrplRouteExecutionService {
       timestamp: new Date().toISOString()
     };
   }
+
+  /**
+   * Create Xaman payload for TrustSet transaction
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {string} currency - Currency code (e.g., 'USDT')
+   * @returns {Object} Xaman payload details
+   */
+  async createTrustlinePayload(walletAddress, currency = 'USDT') {
+    console.log('[XRPL Execution] Creating TrustSet payload:', { walletAddress, currency });
+
+    try {
+      // Get issuer for the currency
+      const issuer = this.issuers[this.network][currency];
+      if (!issuer) {
+        throw new Error(`No issuer configured for ${currency} on ${this.network}`);
+      }
+
+      // Build TrustSet transaction
+      // Note: We don't set Account, Sequence, or Fee - Xaman will inject these
+      const txJson = {
+        TransactionType: 'TrustSet',
+        LimitAmount: {
+          currency: currency,
+          issuer: issuer,
+          value: '1000' // Trust limit
+        }
+      };
+
+      console.log('[XRPL Execution] TrustSet transaction:', txJson);
+
+      // Create Xaman signing payload
+      const payload = await this.xumm.payload.create({
+        txjson: txJson,
+        options: {
+          submit: false, // We'll submit after getting the signed blob
+          expire: 5, // Expire in 5 minutes
+          return_url: {
+            web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+          }
+        }
+      });
+
+      console.log('[XRPL Execution] TrustSet Xaman payload created:', {
+        uuid: payload.uuid,
+        qrUrl: payload.refs.qr_png,
+        deepLink: payload.next.always
+      });
+
+      return {
+        success: true,
+        xamanPayload: {
+          uuid: payload.uuid,
+          qrUrl: payload.refs.qr_png,
+          deepLink: payload.next.always,
+          websocket: payload.refs.websocket_status,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        },
+        transaction: {
+          type: 'TrustSet',
+          currency: currency,
+          issuer: issuer,
+          limit: '1000'
+        }
+      };
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to create TrustSet payload:', error);
+      throw new Error(`Failed to create trustline payload: ${error.message}`);
+    }
+  }
 }
 
 module.exports = XrplRouteExecutionService;
