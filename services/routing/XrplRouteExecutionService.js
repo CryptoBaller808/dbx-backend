@@ -614,6 +614,15 @@ class XrplRouteExecutionService {
         throw new Error('Xaman SDK not properly initialized - missing API credentials');
       }
       
+      // Test API credentials with ping
+      try {
+        const pingResult = await this.xumm.ping();
+        console.log('[XRPL Execution] Xaman API ping result:', pingResult);
+      } catch (pingError) {
+        console.error('[XRPL Execution] Xaman API ping failed:', pingError);
+        throw new Error(`Xaman API credentials invalid: ${pingError.message}`);
+      }
+      
       console.log('[XRPL Execution] SDK check:', {
         hasXumm: !!this.xumm,
         hasPayloadMethod: !!this.xumm?.payload,
