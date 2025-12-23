@@ -585,25 +585,16 @@ class XrplRouteExecutionService {
       }
 
       // Build TrustSet transaction
-      // For non-standard 3-char codes, XRPL requires hex encoding
-      const currencyCode = currency.length === 3 && currency !== 'XRP'
-        ? currency.toUpperCase().padEnd(20, '\0').split('').map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').toUpperCase()
-        : currency;
-      
       const txJson = {
         TransactionType: 'TrustSet',
         Account: walletAddress,
         LimitAmount: {
-          currency: currencyCode,
+          currency: currency.toUpperCase(),
           issuer: issuer,
-          value: '1000' // Trust limit
-        }
+          value: '1000000000' // Trust limit (1 billion)
+        },
+        Flags: 131072 // tfSetNoRipple
       };
-      
-      console.log('[XRPL Execution] Currency encoding:', {
-        original: currency,
-        encoded: currencyCode
-      });
 
       console.log('[XRPL Execution] TrustSet transaction:', txJson);
 
