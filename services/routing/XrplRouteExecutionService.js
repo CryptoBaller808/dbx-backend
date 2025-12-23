@@ -298,6 +298,12 @@ class XrplRouteExecutionService {
             web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
           }
         }
+      }, true); // returnErrors = true to get detailed error information
+      
+      console.log('[XRPL Execution] Xaman SDK response:', {
+        payload,
+        isNull: payload === null,
+        type: typeof payload
       });
 
       console.log('[XRPL Execution] Xaman payload created:', {
