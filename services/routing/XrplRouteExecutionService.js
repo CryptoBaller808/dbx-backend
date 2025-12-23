@@ -606,6 +606,10 @@ class XrplRouteExecutionService {
       
       console.log('[XRPL Execution] SDK check:', {
         hasXumm: !!this.xumm,
+        hasPayloadMethod: !!this.xumm?.payload,
+        hasCreateMethod: !!this.xumm?.payload?.create,
+        xummType: typeof this.xumm,
+        payloadType: typeof this.xumm?.payload,
         hasApiKey: !!process.env.XUMM_API_KEY,
         hasApiSecret: !!process.env.XUMM_API_SECRET,
         apiKeyLength: process.env.XUMM_API_KEY?.length,
