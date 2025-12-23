@@ -678,6 +678,13 @@ class XrplRouteExecutionService {
         });
         
         console.log('[XRPL Execution] Payload created without return_url');
+        console.log('[XRPL Execution] Raw SDK response:', {
+          payload,
+          type: typeof payload,
+          isNull: payload === null,
+          isUndefined: payload === undefined,
+          keys: payload ? Object.keys(payload) : 'N/A'
+        });
         
         // If that didn't work, the error will be caught below
       } catch (err) {
