@@ -112,6 +112,11 @@ class XrplRouteExecutionService {
       throw new Error(`No issuer configured for ${quote} on ${this.network}`);
     }
 
+    // Hex-encode currency if it's not exactly 3 characters
+    const quoteCurrency = quote.length === 3 
+      ? quote.toUpperCase() 
+      : quote.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
+
     // Calculate amounts with slippage
     const slippageTolerance = 0.01; // 1% slippage
     const expectedOutput = route.expectedOutput || amount;
@@ -127,7 +132,7 @@ class XrplRouteExecutionService {
       const maxXrpWithSlippage = xrpAmount * (1 + slippageTolerance);
 
       takerGets = {
-        currency: quote,
+        currency: quoteCurrency,
         issuer: quoteIssuer,
         value: usdtAmount.toString()
       };
@@ -145,7 +150,7 @@ class XrplRouteExecutionService {
       takerGets = Math.floor(xrpAmount * 1000000).toString(); // XRP in drops
 
       takerPays = {
-        currency: quote,
+        currency: quoteCurrency,
         issuer: quoteIssuer,
         value: minUsdtWithSlippage.toString()
       };
