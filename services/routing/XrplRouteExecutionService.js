@@ -193,13 +193,26 @@ class XrplRouteExecutionService {
         ? currency.toUpperCase()
         : currency.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
       
+      console.log('[XRPL Execution] DEBUG - Trustlines found:', {
+        totalLines: lines.length,
+        lines: lines.map(l => ({ currency: l.currency, account: l.account, balance: l.balance })),
+        lookingFor: { currency, currencyHex, issuer }
+      });
+      
       const hasTrustline = lines.some(line => {
         // XRPL API returns currency in hex format for non-standard codes
         // Compare both the original currency string and hex-encoded version
         const currencyMatches = line.currency === currency || 
                                line.currency === currency.toUpperCase() ||
                                line.currency === currencyHex;
-        return currencyMatches && line.account === issuer;
+        const issuerMatches = line.account === issuer;
+        console.log('[XRPL Execution] DEBUG - Comparing line:', {
+          lineCurrency: line.currency,
+          lineAccount: line.account,
+          currencyMatches,
+          issuerMatches
+        });
+        return currencyMatches && issuerMatches;
       });
 
       console.log('[XRPL Execution] Trustline check result:', {
