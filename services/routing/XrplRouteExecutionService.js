@@ -702,7 +702,7 @@ class XrplRouteExecutionService {
         payload = await this.xumm.payload.create({
           txjson: prepared,
           options: {
-            submit: false,
+            submit: true, // Auto-submit TrustSet after signing
             expire: 5
           }
         }, true); // returnErrors = true to get detailed error information
