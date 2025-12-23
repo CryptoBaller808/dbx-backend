@@ -668,16 +668,18 @@ class XrplRouteExecutionService {
       let sdkError = null;
       
       try {
+        // Try without return_url first to see if that's the issue
         payload = await this.xumm.payload.create({
           txjson: prepared,
           options: {
             submit: false,
-            expire: 5,
-            return_url: {
-              web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
-            }
+            expire: 5
           }
         });
+        
+        console.log('[XRPL Execution] Payload created without return_url');
+        
+        // If that didn't work, the error will be caught below
       } catch (err) {
         sdkError = err;
         console.error('[XRPL Execution] Xaman SDK threw error:', {
