@@ -734,13 +734,21 @@ exports.createTrustlinePayload = async (req, res) => {
 
   } catch (error) {
     console.error('[Routing API] Error creating trustline payload:', error);
+    
+    // Return diagnostic details if available
+    const errorCode = error.code || 'INTERNAL_ERROR';
+    const details = error.diagnostics ? {
+      ...error.diagnostics,
+      error: error.message
+    } : {
+      error: error.message
+    };
+    
     return res.status(500).json({
       success: false,
-      errorCode: 'INTERNAL_ERROR',
+      errorCode: errorCode,
       message: 'Failed to create trustline payload',
-      details: {
-        error: error.message
-      }
+      details: details
     });
   }
 };

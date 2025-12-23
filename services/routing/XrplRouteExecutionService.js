@@ -623,27 +623,62 @@ class XrplRouteExecutionService {
         }
       });
       
+      // Prepare diagnostic info
+      const diagnostics = {
+        sdkVersion: require('xumm-sdk/package.json').version,
+        hasApiKey: !!process.env.XUMM_API_KEY,
+        hasApiSecret: !!process.env.XUMM_API_SECRET,
+        apiKeyLength: process.env.XUMM_API_KEY?.length,
+        apiSecretLength: process.env.XUMM_API_SECRET?.length,
+        requestPayloadSummary: {
+          TransactionType: txJson.TransactionType,
+          issuer: txJson.LimitAmount.issuer,
+          currency: txJson.LimitAmount.currency,
+          limit: txJson.LimitAmount.value,
+          returnUrlDomain: new URL(process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com').hostname,
+          submitFlag: false,
+          expire: 5
+        }
+      };
+
       let payload;
+      let sdkError = null;
+      
       try {
         payload = await this.xumm.payload.create({
           txjson: txJson,
           options: {
-            submit: false, // We'll submit after getting the signed blob
-            expire: 5, // Expire in 5 minutes
+            submit: false,
+            expire: 5,
             return_url: {
               web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
             }
           }
         });
-      } catch (sdkError) {
-        console.error('[XRPL Execution] Xaman SDK threw error:', sdkError);
-        throw new Error(`Xaman SDK error: ${sdkError.message || JSON.stringify(sdkError)}`);
+      } catch (err) {
+        sdkError = err;
+        console.error('[XRPL Execution] Xaman SDK threw error:', {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          status: err.response?.status,
+          statusText: err.response?.statusText
+        });
       }
 
       console.log('[XRPL Execution] Xaman SDK returned:', payload);
       
-      if (!payload) {
-        throw new Error('Xaman SDK returned null - check API credentials and transaction structure');
+      if (!payload || sdkError) {
+        const error = new Error('Xaman SDK failed to create payload');
+        error.code = 'XAMAN_CREATE_FAILED';
+        error.diagnostics = {
+          ...diagnostics,
+          httpStatus: sdkError?.response?.status,
+          httpBody: sdkError?.response?.data,
+          errorMessage: sdkError?.message,
+          errorStack: sdkError?.stack?.split('\n').slice(0, 3).join('\n')
+        };
+        throw error;
       }
 
       console.log('[XRPL Execution] TrustSet Xaman payload created:', {
