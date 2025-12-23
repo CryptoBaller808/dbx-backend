@@ -675,7 +675,7 @@ class XrplRouteExecutionService {
             submit: false,
             expire: 5
           }
-        });
+        }, true); // returnErrors = true to get detailed error information
         
         console.log('[XRPL Execution] Payload created without return_url');
         console.log('[XRPL Execution] Raw SDK response:', {
