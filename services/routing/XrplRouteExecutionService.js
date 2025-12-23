@@ -596,7 +596,17 @@ class XrplRouteExecutionService {
         Flags: 131072 // tfSetNoRipple
       };
 
-      console.log('[XRPL Execution] TrustSet transaction:', txJson);
+      console.log('[XRPL Execution] TrustSet transaction (before autofill):', txJson);
+
+      // Connect to XRPL and autofill transaction fields
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+      
+      const prepared = await client.autofill(txJson);
+      
+      await client.disconnect();
+      
+      console.log('[XRPL Execution] TrustSet transaction (after autofill):', prepared);
 
       // Create Xaman signing payload
       // Validate SDK is initialized
@@ -650,7 +660,7 @@ class XrplRouteExecutionService {
       
       try {
         payload = await this.xumm.payload.create({
-          txjson: txJson,
+          txjson: prepared,
           options: {
             submit: false,
             expire: 5,
