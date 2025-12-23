@@ -585,11 +585,17 @@ class XrplRouteExecutionService {
       }
 
       // Build TrustSet transaction
+      // XRPL requires currency codes to be EXACTLY 3 characters for standard format
+      // USDT is 4 characters, so it must be hex-encoded to 40 characters (160 bits)
+      const currencyCode = currency.length === 3 
+        ? currency.toUpperCase() 
+        : currency.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
+      
       const txJson = {
         TransactionType: 'TrustSet',
         Account: walletAddress,
         LimitAmount: {
-          currency: currency.toUpperCase(),
+          currency: currencyCode,
           issuer: issuer,
           value: '1000000000' // Trust limit (1 billion)
         },
