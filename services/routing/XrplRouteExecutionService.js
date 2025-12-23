@@ -187,9 +187,20 @@ class XrplRouteExecutionService {
       });
 
       const lines = response.result.lines || [];
-      const hasTrustline = lines.some(line => 
-        line.currency === currency && line.account === issuer
-      );
+      
+      // Convert currency to hex if it's not 3 characters (for comparison)
+      const currencyHex = currency.length === 3 
+        ? currency.toUpperCase()
+        : currency.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
+      
+      const hasTrustline = lines.some(line => {
+        // XRPL API returns currency in hex format for non-standard codes
+        // Compare both the original currency string and hex-encoded version
+        const currencyMatches = line.currency === currency || 
+                               line.currency === currency.toUpperCase() ||
+                               line.currency === currencyHex;
+        return currencyMatches && line.account === issuer;
+      });
 
       console.log('[XRPL Execution] Trustline check result:', {
         hasTrustline,
