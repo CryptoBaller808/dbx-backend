@@ -73,7 +73,7 @@ class XrplRouteExecutionService {
 
       // For live execution, build Xaman signing payload
       if (executionMode === 'live') {
-        return await this.buildXamanPayload(route, walletAddress);
+        return await this.buildXamanPayload(route, params);
       }
 
       // For demo execution, simulate the transaction
@@ -91,18 +91,17 @@ class XrplRouteExecutionService {
   /**
    * Build OfferCreate transaction for XRPL DEX
    * @param {Object} route - Route object
-   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {Object} params - Execution parameters (walletAddress, amount, side, etc.)
    * @param {Object} client - XRPL client
    * @returns {Object} Transaction JSON
    */
-  async buildOfferCreateTx(route, walletAddress, client) {
+  async buildOfferCreateTx(route, params, client) {
     console.log('[XRPL Execution] Building OfferCreate transaction');
 
-    // Parse trade details from route
-    const base = route.fromToken || 'XRP';
-    const quote = route.toToken || 'USDT';
-    const amount = route.amount || 0;
-    const side = route.side || 'buy'; // buy = buy quote with base, sell = sell base for quote
+    // Parse trade details from params (not route!)
+    const { walletAddress, amount, side, base: paramBase, quote: paramQuote } = params;
+    const base = paramBase || route.fromToken || 'XRP';
+    const quote = paramQuote || route.toToken || 'USDT';
 
     console.log('[XRPL Execution] Trade details:', { base, quote, amount, side });
 
@@ -236,10 +235,11 @@ class XrplRouteExecutionService {
   /**
    * Build Xaman signing payload for live execution
    * @param {Object} route - Route object
-   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {Object} params - Execution parameters (walletAddress, amount, side, etc.)
    * @returns {Object} Xaman payload details
    */
-  async buildXamanPayload(route, walletAddress) {
+  async buildXamanPayload(route, params) {
+    const { walletAddress } = params;
     console.log('[XRPL Execution] Building Xaman payload for live execution');
 
     try {
@@ -279,7 +279,7 @@ class XrplRouteExecutionService {
       }
 
       // Build OfferCreate transaction for XRPL DEX
-      const txJson = await this.buildOfferCreateTx(route, walletAddress, client);
+      const txJson = await this.buildOfferCreateTx(route, params, client);
 
       // Auto-fill transaction fields (sequence, last ledger sequence, etc.)
       const prepared = await client.autofill(txJson);
