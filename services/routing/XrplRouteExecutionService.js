@@ -842,6 +842,169 @@ class XrplRouteExecutionService {
       throw new Error(`Failed to create OfferCancel payload: ${error.message}`);
     }
   }
+
+  /**
+   * Get user's open and completed orders from XRPL
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @returns {Object} Open and completed orders
+   */
+  async getUserOrders(walletAddress) {
+    console.log('[XRPL Execution] Fetching orders for:', walletAddress);
+
+    try {
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+
+      // Get open offers
+      const offersResponse = await client.request({
+        command: 'account_offers',
+        account: walletAddress
+      });
+
+      const openOffers = offersResponse.result.offers.map(offer => {
+        // Determine order type (buy/sell)
+        const isSellXRP = typeof offer.taker_gets === 'string'; // XRP is string (drops)
+        const type = isSellXRP ? 'sell' : 'buy';
+
+        // Parse amounts
+        let baseAmount, quoteAmount, baseCurrency, quoteCurrency;
+        
+        if (isSellXRP) {
+          // Selling XRP for token
+          baseAmount = (parseInt(offer.taker_gets) / 1000000).toFixed(6);
+          baseCurrency = 'XRP';
+          quoteAmount = parseFloat(offer.taker_pays.value).toFixed(6);
+          quoteCurrency = this.decodeCurrency(offer.taker_pays.currency);
+        } else {
+          // Buying XRP with token
+          baseAmount = (parseInt(offer.taker_pays) / 1000000).toFixed(6);
+          baseCurrency = 'XRP';
+          quoteAmount = parseFloat(offer.taker_gets.value).toFixed(6);
+          quoteCurrency = this.decodeCurrency(offer.taker_gets.currency);
+        }
+
+        // Calculate price
+        const price = (parseFloat(quoteAmount) / parseFloat(baseAmount)).toFixed(6);
+
+        return {
+          sequence: offer.seq,
+          type,
+          baseAmount,
+          baseCurrency,
+          quoteAmount,
+          quoteCurrency,
+          price,
+          quality: offer.quality,
+          status: 'open'
+        };
+      });
+
+      // Get recent account transactions for completed orders
+      const txResponse = await client.request({
+        command: 'account_tx',
+        account: walletAddress,
+        limit: 20,
+        ledger_index_min: -1,
+        ledger_index_max: -1
+      });
+
+      const completedOrders = txResponse.result.transactions
+        .filter(tx => {
+          const meta = tx.meta;
+          const txType = tx.tx.TransactionType;
+          // Only show OfferCreate transactions that were successful
+          return txType === 'OfferCreate' && meta.TransactionResult === 'tesSUCCESS';
+        })
+        .map(tx => {
+          const txData = tx.tx;
+          const meta = tx.meta;
+          
+          // Check if offer was filled by looking at balance changes
+          const wasFilled = meta.AffectedNodes?.some(node => {
+            return node.ModifiedNode?.LedgerEntryType === 'AccountRoot' &&
+                   node.ModifiedNode?.FinalFields?.Balance !== node.ModifiedNode?.PreviousFields?.Balance;
+          });
+
+          // Determine order type
+          const isSellXRP = typeof txData.TakerGets === 'string';
+          const type = isSellXRP ? 'sell' : 'buy';
+
+          // Parse amounts
+          let baseAmount, quoteAmount, baseCurrency, quoteCurrency;
+          
+          if (isSellXRP) {
+            baseAmount = (parseInt(txData.TakerGets) / 1000000).toFixed(6);
+            baseCurrency = 'XRP';
+            quoteAmount = parseFloat(txData.TakerPays.value).toFixed(6);
+            quoteCurrency = this.decodeCurrency(txData.TakerPays.currency);
+          } else {
+            baseAmount = (parseInt(txData.TakerPays) / 1000000).toFixed(6);
+            baseCurrency = 'XRP';
+            quoteAmount = parseFloat(txData.TakerGets.value).toFixed(6);
+            quoteCurrency = this.decodeCurrency(txData.TakerGets.currency);
+          }
+
+          const price = (parseFloat(quoteAmount) / parseFloat(baseAmount)).toFixed(6);
+
+          return {
+            hash: txData.hash,
+            sequence: txData.Sequence,
+            type,
+            baseAmount,
+            baseCurrency,
+            quoteAmount,
+            quoteCurrency,
+            price,
+            status: wasFilled ? 'filled' : 'cancelled',
+            timestamp: tx.tx.date ? new Date((tx.tx.date + 946684800) * 1000).toISOString() : null,
+            ledgerIndex: tx.tx.ledger_index
+          };
+        });
+
+      await client.disconnect();
+
+      return {
+        success: true,
+        openOffers,
+        completedOrders,
+        totalOpen: openOffers.length,
+        totalCompleted: completedOrders.length
+      };
+
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to fetch orders:', error);
+      throw new Error(`Failed to fetch orders: ${error.message}`);
+    }
+  }
+
+  /**
+   * Decode hex-encoded currency code to readable string
+   * @param {string} currency - Currency code (hex or standard)
+   * @returns {string} Decoded currency
+   */
+  decodeCurrency(currency) {
+    if (!currency) return 'UNKNOWN';
+    
+    // If it's a standard 3-char code, return as-is
+    if (currency.length === 3) {
+      return currency;
+    }
+    
+    // If it's hex-encoded (40 chars), decode it
+    if (currency.length === 40) {
+      // Remove trailing zeros
+      const trimmed = currency.replace(/0+$/, '');
+      // Convert hex to ASCII
+      let decoded = '';
+      for (let i = 0; i < trimmed.length; i += 2) {
+        const hex = trimmed.substr(i, 2);
+        decoded += String.fromCharCode(parseInt(hex, 16));
+      }
+      return decoded || currency;
+    }
+    
+    return currency;
+  }
 }
 
 module.exports = XrplRouteExecutionService;

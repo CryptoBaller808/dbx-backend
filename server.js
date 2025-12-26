@@ -1526,6 +1526,7 @@ app.get('/api/routing/xaman/status/:payloadUuid', routingController.getXamanPayl
 app.post('/api/routing/xaman/submit', routingController.submitXamanTransaction); // Stage 7.3: Submit Xaman signed tx
 app.post('/api/routing/xaman/trustline/create', routingController.createTrustlinePayload); // Stage 7.3: Create TrustSet payload
 app.post('/api/routing/xaman/cancel-offer', routingController.cancelOffer); // Stage 7.4: Cancel open offer
+app.get('/api/routing/xrpl/orders', routingController.getUserOrders); // Stage 7.5: Get user's orders
 console.log('✅ [STARTUP] Routing API routes mounted at /api/routing!');
 
 // Mount Price Routes (for spot price feed)

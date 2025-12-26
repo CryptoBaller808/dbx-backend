@@ -816,3 +816,55 @@ exports.cancelOffer = async (req, res) => {
     });
   }
 };
+
+/**
+ * GET /api/routing/xrpl/orders
+ * Get user's open and completed orders from XRPL DEX (Stage 7.5)
+ */
+exports.getUserOrders = async (req, res) => {
+  try {
+    const { walletAddress } = req.query;
+
+    console.log('[Routing API] Get orders request:', { walletAddress });
+
+    // Validate required parameters
+    if (!walletAddress) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: walletAddress'
+      });
+    }
+
+    // Validate XRPL address format
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_ADDRESS',
+        message: `Invalid XRPL wallet address: ${walletAddress}`
+      });
+    }
+
+    // Get user's orders
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.getUserOrders(walletAddress);
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error fetching orders:', error);
+    
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to fetch orders',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
