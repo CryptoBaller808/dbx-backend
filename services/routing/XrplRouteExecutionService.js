@@ -910,6 +910,8 @@ class XrplRouteExecutionService {
 
       const completedOrders = txResponse.result.transactions
         .filter(tx => {
+          // Add null checks to prevent crashes
+          if (!tx || !tx.tx || !tx.meta) return false;
           const meta = tx.meta;
           const txType = tx.tx.TransactionType;
           // Only show OfferCreate transactions that were successful
