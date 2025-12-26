@@ -166,7 +166,7 @@ class XrplRouteExecutionService {
       Account: walletAddress,
       TakerGets: takerGets,
       TakerPays: takerPays,
-      Flags: 0x00020000, // tfImmediateOrCancel (131072) - cancel if not immediately filled
+      Flags: 0, // No flags - order will stay in order book until filled or cancelled
       Fee: '12' // 12 drops = 0.000012 XRP (standard fee)
     };
 
