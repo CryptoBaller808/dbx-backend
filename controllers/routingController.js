@@ -752,3 +752,67 @@ exports.createTrustlinePayload = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/routing/xaman/cancel-offer
+ * Cancel an open offer on XRPL DEX (Stage 7.4)
+ */
+exports.cancelOffer = async (req, res) => {
+  try {
+    const { walletAddress, offerSequence } = req.body;
+
+    console.log('[Routing API] Cancel offer request:', {
+      walletAddress,
+      offerSequence
+    });
+
+    // Validate required parameters
+    if (!walletAddress || !offerSequence) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: walletAddress, offerSequence'
+      });
+    }
+
+    // Validate XRPL address format
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_ADDRESS',
+        message: `Invalid XRPL wallet address: ${walletAddress}`
+      });
+    }
+
+    // Validate offer sequence
+    if (!Number.isInteger(offerSequence) || offerSequence <= 0) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_SEQUENCE',
+        message: 'Invalid offer sequence: must be a positive integer'
+      });
+    }
+
+    // Create OfferCancel payload
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.createOfferCancelPayload(walletAddress, offerSequence);
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error canceling offer:', error);
+    
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to cancel offer',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
