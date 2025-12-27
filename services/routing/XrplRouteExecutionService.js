@@ -30,9 +30,9 @@ class XrplRouteExecutionService {
     // USDT issuer configuration
     this.issuers = {
       testnet: {
-        USDT: process.env.XRPL_TESTNET_USDT_ISSUER || 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-        USD: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-        USDC: 'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH'
+        USDT: process.env.XRPL_TESTNET_USDT_ISSUER || 'rafMqnaaVqT3H9YoFFiRGUiE4badgKUYeL', // Our test issuer
+        USD: 'rafMqnaaVqT3H9YoFFiRGUiE4badgKUYeL',
+        USDC: 'rafMqnaaVqT3H9YoFFiRGUiE4badgKUYeL'
       },
       mainnet: {
         USDT: 'rcvxE9PS9YBwxtGg1qNeewV6ZB3wGubZq', // Tether
