@@ -571,7 +571,7 @@ exports.initializeSeedData = () => {
     { symbol: 'BTC', name: 'Bitcoin', chain: 'BTC', decimals: 8, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'BTCUSDT', sort: 1 },
     { symbol: 'ETH', name: 'Ethereum', chain: 'ETH', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'ETHUSDT', sort: 2 },
     { symbol: 'XRP', name: 'Ripple', chain: 'XRP', decimals: 6, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'XRPUSDT', sort: 3 },
-    { symbol: 'XLM', name: 'Stellar', chain: 'XLM', decimals: 7, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'XLMUSDT', sort: 4 },
+    { symbol: 'XLM', name: 'Stellar', chain: 'XLM', decimals: 7, defaultQuote: 'USDC', priceProvider: 'coingecko', tvSymbol: 'XLMUSD', sort: 4 },
     { symbol: 'MATIC', name: 'Polygon', chain: 'MATIC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'MATICUSDT', sort: 5 },
     { symbol: 'BNB', name: 'Binance Coin', chain: 'BSC', decimals: 18, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'BNBUSDT', sort: 6 },
     { symbol: 'SOL', name: 'Solana', chain: 'SOL', decimals: 9, defaultQuote: 'USDT', priceProvider: 'binance', tvSymbol: 'SOLUSDT', sort: 7 },
