@@ -1505,6 +1505,11 @@ const xrpWalletOrderRoutes = require('./controllers/xrpWalletOrder');
 app.use('/api/xrp', xrpWalletOrderRoutes);
 console.log('✅ [STARTUP] XRP wallet order routes mounted at /api/xrp!');
 
+// Mount Execution Config Routes (Stage 7.1: Execution Configuration)
+const executionController = require('./controllers/executionController');
+app.get('/api/execution/config', executionController.getConfig);
+console.log('✅ [STARTUP] Execution config routes mounted at /api/execution!');
+
 // Mount Routing API Routes (Stage 4: Cross-Chain Routing Engine)
 const routingController = require('./controllers/routingController');
 app.get('/api/routing/quote', routingController.getRoutingQuote);
@@ -1512,7 +1517,16 @@ app.get('/api/routing/pools', routingController.getPools);
 app.get('/api/routing/price', routingController.getPrice);
 app.get('/api/routing/depth', routingController.getMarketDepth);
 app.post('/api/routing/reload', routingController.reloadLiquidity);
-app.post('/api/routing/execute', routingController.executeRoute); // Stage 6: Route Execution
+// Stage 7.1: Add rate limiting middleware for live execution
+const { rateLimitMiddleware } = require('./middleware/rateLimiter');
+app.post('/api/routing/execute', rateLimitMiddleware, routingController.executeRoute); // Stage 6: Route Execution
+app.post('/api/routing/broadcast', routingController.broadcastTransaction); // Stage 7.0: Broadcast signed tx
+app.post('/api/routing/xaman/create', routingController.createXamanPayload); // Stage 7.3: Create Xaman payload
+app.get('/api/routing/xaman/status/:payloadUuid', routingController.getXamanPayloadStatus); // Stage 7.3: Xaman payload status
+app.post('/api/routing/xaman/submit', routingController.submitXamanTransaction); // Stage 7.3: Submit Xaman signed tx
+app.post('/api/routing/xaman/trustline/create', routingController.createTrustlinePayload); // Stage 7.3: Create TrustSet payload
+app.post('/api/routing/xaman/cancel-offer', routingController.cancelOffer); // Stage 7.4: Cancel open offer
+app.get('/api/routing/xrpl/orders', routingController.getUserOrders); // Stage 7.5: Get user's orders
 console.log('✅ [STARTUP] Routing API routes mounted at /api/routing!');
 
 // Mount Price Routes (for spot price feed)

@@ -13,12 +13,17 @@
 const RoutePlanner = require('./RoutePlanner');
 const { XRPLTransactionService } = require('../XRPLTransactionService');
 const EvmRouteExecutionService = require('./EvmRouteExecutionService');
+const SolanaRouteExecutionService = require('./SolanaRouteExecutionService');
+const XrplRouteExecutionService = require('./XrplRouteExecutionService');
+const executionConfig = require('../../config/executionConfig');
 
 class RouteExecutionService {
   constructor() {
     this.routePlanner = new RoutePlanner();
     this.xrplService = new XRPLTransactionService();
+    this.xrplLiveService = new XrplRouteExecutionService();
     this.evmService = new EvmRouteExecutionService();
+    this.solanaService = new SolanaRouteExecutionService();
     
     // Execution mode from environment
     this.executionMode = process.env.XRPL_EXECUTION_MODE || 'demo';
@@ -40,6 +45,35 @@ class RouteExecutionService {
   }
   
   /**
+   * Broadcast signed transaction (Stage 7.0)
+   * @param {string} chain - Chain identifier
+   * @param {string} signedTransaction - Signed transaction hex
+   * @param {Object} metadata - Transaction metadata
+   * @returns {Promise<Object>} Execution result
+   */
+  async broadcastSignedTransaction(chain, signedTransaction, metadata) {
+    console.log('[RouteExecution] Broadcasting signed transaction for chain:', chain);
+    
+    // Route to appropriate chain service
+    if (chain === 'ETH' || chain === 'BNB' || chain === 'AVAX' || chain === 'MATIC') {
+      return await this.evmService.broadcastSignedTransaction(chain, signedTransaction, metadata);
+    } else if (chain === 'XRP') {
+      // XRPL broadcast (future implementation)
+      return {
+        success: false,
+        errorCode: 'NOT_IMPLEMENTED',
+        message: 'XRPL signed transaction broadcast not implemented yet'
+      };
+    } else {
+      return {
+        success: false,
+        errorCode: 'UNSUPPORTED_CHAIN',
+        message: `Broadcast not supported for chain: ${chain}`
+      };
+    }
+  }
+  
+  /**
    * Execute a route end-to-end
    * @param {Object} params - Execution parameters
    * @returns {Promise<Object>} Execution result
@@ -56,7 +90,8 @@ class RouteExecutionService {
       mode = 'auto',
       routeId,
       preview = true,
-      executionMode = 'demo'
+      executionMode = 'demo',
+      walletAddress // Stage 7.0: Wallet address for live execution
     } = params;
     
     console.log('[RouteExecution] Executing route:', {
@@ -71,14 +106,8 @@ class RouteExecutionService {
     });
     
     try {
-      // Step 1: Validate execution mode
-      if (this.executionMode === 'disabled') {
-        return this._errorResponse('EXECUTION_DISABLED', 'Route execution is currently disabled');
-      }
-      
-      if (executionMode !== 'demo' && this.executionMode !== 'production') {
-        return this._errorResponse('INVALID_EXECUTION_MODE', 'Only demo execution mode is supported in Stage 6');
-      }
+      // Step 1: Validate execution mode (Stage 7.1: Use execution config)
+      // Note: Chain validation happens after route is computed
       
       // Step 2: Get or validate route
       let route;
@@ -116,15 +145,51 @@ class RouteExecutionService {
         expectedOutput: route.expectedOutput
       });
       
-      // Step 3: Route to appropriate execution service based on chain
+      // Step 2.5: Validate execution mode for the route's chain
       const chain = route.chain;
       console.log('[RouteExecution] Route chain detected:', chain);
       
+      // Debug logging for execution mode resolution
+      console.log('[RouteExecution] Execution mode validation:', {
+        requestedMode: executionMode,
+        globalMode: executionConfig.globalMode,
+        chainMode: executionConfig.getMode(chain),
+        liveEnabled: executionConfig.liveExecutionEnabled,
+        killSwitch: !executionConfig.liveExecutionEnabled,
+        chainAllowlist: executionConfig.liveEvmChains
+      });
+      
+      // Validate execution mode using execution config
+      const validation = executionConfig.validateExecution(chain, executionMode);
+      if (!validation.allowed) {
+        console.log('[RouteExecution] Execution rejected:', validation);
+        return this._errorResponse(validation.code, validation.reason);
+      }
+      
+      console.log('[RouteExecution] Execution allowed:', { chain, executionMode });
+      
       // Determine which execution service to use
-      if (chain === 'XRPL') {
-        // Use XRPL execution path (existing, stable)
+      if (chain === 'XRPL' || chain === 'XRP') {
+        // Use XRPL execution path
         console.log('[RouteExecution] Routing to XRPL execution service...');
         
+        // For live execution, use XrplRouteExecutionService (Stage 7.3)
+        if (executionMode === 'live') {
+          console.log('[RouteExecution] Using XrplRouteExecutionService for live execution');
+          const xrplResult = await this.xrplLiveService.executeRoute(route, {
+            base,
+            quote,
+            amount,
+            side,
+            executionMode,
+            walletAddress,
+            routeId: routeId || `route_${Date.now()}`
+          });
+          
+          return xrplResult;
+        }
+        
+        // For demo execution, use legacy XRPL service
         // Validate XRPL route path type
         const supportedPathTypes = ['direct', 'XRPL_AMM', 'XRPL_DEX'];
         if (!supportedPathTypes.includes(route.pathType)) {
@@ -135,7 +200,7 @@ class RouteExecutionService {
         }
         
         // Execute XRPL transaction
-        console.log('[RouteExecution] Executing XRPL transaction...');
+        console.log('[RouteExecution] Executing XRPL demo transaction...');
         const txResult = await this._executeXrplRoute(route, {
           base,
           quote,
@@ -165,7 +230,7 @@ class RouteExecutionService {
           executionTimeMs: executionTime
         };
         
-      } else if (['ETH', 'BSC', 'AVAX', 'MATIC'].includes(chain)) {
+      } else if (['ETH', 'BNB', 'AVAX', 'MATIC'].includes(chain)) {
         // Use EVM execution path (Stage 6A)
         console.log('[RouteExecution] Routing to EVM execution service...');
         
@@ -176,17 +241,36 @@ class RouteExecutionService {
           amount,
           side,
           executionMode,
+          walletAddress, // Stage 7.0: Pass wallet address for live execution
           routeId: routeId || `route_${Date.now()}`
         });
         
         // EvmRouteExecutionService already returns structured response
         return evmResult;
         
+      } else if (chain === 'SOL') {
+        // Use Solana execution path (Stage 7.4)
+        console.log('[RouteExecution] Routing to Solana execution service...');
+        
+        // Delegate to SolanaRouteExecutionService
+        const solanaResult = await this.solanaService.executeRoute(route, {
+          base,
+          quote,
+          amount,
+          side,
+          executionMode,
+          walletAddress, // Pass wallet address for live execution
+          routeId: routeId || `route_${Date.now()}`
+        });
+        
+        // SolanaRouteExecutionService returns structured response
+        return solanaResult;
+        
       } else {
         // Unsupported chain
         return this._errorResponse('UNSUPPORTED_CHAIN', `Chain ${chain} is not supported for route execution`, {
           routeChain: chain,
-          supportedChains: ['XRPL', 'ETH', 'BSC', 'AVAX', 'MATIC']
+          supportedChains: ['XRPL', 'ETH', 'BNB', 'AVAX', 'MATIC', 'SOL']
         });
       }
       

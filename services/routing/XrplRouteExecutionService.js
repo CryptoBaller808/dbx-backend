@@ -1,0 +1,1012 @@
+/**
+ * XrplRouteExecutionService.js
+ * Stage 7.3: XRPL Live Execution Service via Xaman
+ * 
+ * Handles execution of XRPL trades on Testnet/Mainnet
+ * - Builds XRPL payment transactions
+ * - Generates Xaman signing payloads
+ * - Polls for signature completion
+ * - Submits signed transactions to XRPL
+ * - Returns transaction confirmation details
+ */
+
+const { XummSdk } = require('xumm-sdk');
+const xrpl = require('xrpl');
+
+class XrplRouteExecutionService {
+  constructor() {
+    // Initialize Xaman SDK
+    this.xumm = new XummSdk(
+      process.env.XUMM_API_KEY || '',
+      process.env.XUMM_API_SECRET || ''
+    );
+    
+    // Network configuration
+    this.network = process.env.XRPL_NETWORK || 'testnet';
+    this.rpcUrl = this.network === 'testnet' 
+      ? 'wss://s.altnet.rippletest.net:51233'
+      : 'wss://xrplcluster.com';
+    
+    // USDT issuer configuration
+    this.issuers = {
+      testnet: {
+        USDT: process.env.XRPL_TESTNET_USDT_ISSUER || 'rafMqnaaVqT3H9YoFFiRGUiE4badgKUYeL', // Our test issuer
+        USD: 'rafMqnaaVqT3H9YoFFiRGUiE4badgKUYeL',
+        USDC: 'rafMqnaaVqT3H9YoFFiRGUiE4badgKUYeL'
+      },
+      mainnet: {
+        USDT: 'rcvxE9PS9YBwxtGg1qNeewV6ZB3wGubZq', // Tether
+        USD: 'rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B', // Bitstamp
+        USDC: 'rcEGREd8NmkKRE8GE424sksyt1tJVFZwu' // Circle
+      }
+    };
+    
+    console.log('[XRPL Execution] Initialized:', {
+      network: this.network,
+      rpcUrl: this.rpcUrl,
+      xummConfigured: !!(process.env.XUMM_API_KEY && process.env.XUMM_API_SECRET),
+      usdtIssuer: this.issuers[this.network].USDT
+    });
+  }
+
+  /**
+   * Execute an XRPL route
+   * @param {Object} route - Route object from RoutePlanner
+   * @param {Object} params - Execution parameters
+   * @returns {Object} Execution result with Xaman payload
+   */
+  async executeRoute(route, params) {
+    const { walletAddress, executionMode } = params;
+
+    console.log(`[XRPL Execution] Starting ${executionMode} execution for route:`, route.routeId);
+
+    try {
+      // Validate wallet address
+      if (!walletAddress) {
+        throw new Error('Wallet address is required for XRPL execution');
+      }
+
+      // Validate XRPL address format
+      if (!walletAddress.startsWith('r')) {
+        throw new Error(`Invalid XRPL wallet address: ${walletAddress}`);
+      }
+
+      // For live execution, build Xaman signing payload
+      if (executionMode === 'live') {
+        return await this.buildXamanPayload(route, params);
+      }
+
+      // For demo execution, simulate the transaction
+      if (executionMode === 'demo') {
+        return await this.simulateExecution(route, walletAddress);
+      }
+
+      throw new Error(`Unsupported execution mode: ${executionMode}`);
+    } catch (error) {
+      console.error('[XRPL Execution] Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Build OfferCreate transaction for XRPL DEX
+   * @param {Object} route - Route object
+   * @param {Object} params - Execution parameters (walletAddress, amount, side, etc.)
+   * @param {Object} client - XRPL client
+   * @returns {Object} Transaction JSON
+   */
+  async buildOfferCreateTx(route, params, client) {
+    console.log('[XRPL Execution] Building OfferCreate transaction');
+
+    // Parse trade details from params (not route!)
+    const { walletAddress, amount, side, base: paramBase, quote: paramQuote } = params;
+    const base = paramBase || route.fromToken || 'XRP';
+    const quote = paramQuote || route.toToken || 'USDT';
+
+    console.log('[XRPL Execution] Trade details:', { base, quote, amount, side });
+
+    // Get issuer for quote currency (USDT)
+    const quoteIssuer = this.issuers[this.network][quote];
+    if (!quoteIssuer) {
+      throw new Error(`No issuer configured for ${quote} on ${this.network}`);
+    }
+
+    // Hex-encode currency if it's not exactly 3 characters
+    const quoteCurrency = quote.length === 3 
+      ? quote.toUpperCase() 
+      : quote.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
+
+    // Calculate amounts with slippage
+    const slippageTolerance = 0.01; // 1% slippage
+    const expectedOutput = route.expectedOutput || amount;
+
+    let takerGets, takerPays;
+
+    if (side === 'buy') {
+      // Buy USDT with XRP
+      // TakerGets = what we receive (USDT)
+      // TakerPays = what we pay (XRP)
+      const usdtAmount = expectedOutput;
+      const xrpAmount = amount;
+      const maxXrpWithSlippage = xrpAmount * (1 + slippageTolerance);
+
+      takerGets = {
+        currency: quoteCurrency,
+        issuer: quoteIssuer,
+        value: usdtAmount.toString()
+      };
+
+      takerPays = Math.floor(maxXrpWithSlippage * 1000000).toString(); // XRP in drops
+
+    } else {
+      // Sell XRP for USDT
+      // TakerGets = what we receive (XRP)
+      // TakerPays = what we pay (USDT)
+      const xrpAmount = amount;
+      const usdtAmount = expectedOutput;
+      const minUsdtWithSlippage = usdtAmount * (1 - slippageTolerance);
+
+      takerGets = Math.floor(xrpAmount * 1000000).toString(); // XRP in drops
+
+      takerPays = {
+        currency: quoteCurrency,
+        issuer: quoteIssuer,
+        value: minUsdtWithSlippage.toString()
+      };
+    }
+
+    console.log('[XRPL Execution] OfferCreate amounts:', {
+      takerGets,
+      takerPays,
+      side
+    });
+
+    const txJson = {
+      TransactionType: 'OfferCreate',
+      Account: walletAddress,
+      TakerGets: takerGets,
+      TakerPays: takerPays,
+      Flags: 0, // No flags - order will stay in order book until filled or cancelled
+      Fee: '12' // 12 drops = 0.000012 XRP (standard fee)
+    };
+
+    return txJson;
+  }
+
+  /**
+   * Check if wallet has trustline to a specific issuer
+   * @param {Object} client - XRPL client
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {string} currency - Currency code (e.g., 'USDT')
+   * @param {string} issuer - Issuer address
+   * @returns {boolean} True if trustline exists
+   */
+  async checkTrustline(client, walletAddress, currency, issuer) {
+    console.log('[XRPL Execution] Checking trustline:', { walletAddress, currency, issuer });
+
+    try {
+      const response = await client.request({
+        command: 'account_lines',
+        account: walletAddress,
+        ledger_index: 'current'
+      });
+
+      const lines = response.result.lines || [];
+      
+      // Convert currency to hex if it's not 3 characters (for comparison)
+      const currencyHex = currency.length === 3 
+        ? currency.toUpperCase()
+        : currency.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
+      
+      console.log('[XRPL Execution] DEBUG - Trustlines found:', {
+        totalLines: lines.length,
+        lines: lines.map(l => ({ currency: l.currency, account: l.account, balance: l.balance })),
+        lookingFor: { currency, currencyHex, issuer }
+      });
+      
+      const hasTrustline = lines.some(line => {
+        // XRPL API returns currency in hex format for non-standard codes
+        // Compare both the original currency string and hex-encoded version
+        const currencyMatches = line.currency === currency || 
+                               line.currency === currency.toUpperCase() ||
+                               line.currency === currencyHex;
+        const issuerMatches = line.account === issuer;
+        console.log('[XRPL Execution] DEBUG - Comparing line:', {
+          lineCurrency: line.currency,
+          lineAccount: line.account,
+          currencyMatches,
+          issuerMatches
+        });
+        return currencyMatches && issuerMatches;
+      });
+
+      console.log('[XRPL Execution] Trustline check result:', {
+        hasTrustline,
+        totalLines: lines.length
+      });
+
+      return hasTrustline;
+    } catch (error) {
+      console.error('[XRPL Execution] Error checking trustline:', error);
+      // If we can't check, assume no trustline to be safe
+      return false;
+    }
+  }
+
+  /**
+   * Build Xaman signing payload for live execution
+   * @param {Object} route - Route object
+   * @param {Object} params - Execution parameters (walletAddress, amount, side, etc.)
+   * @returns {Object} Xaman payload details
+   */
+  async buildXamanPayload(route, params) {
+    const { walletAddress } = params;
+    console.log('[XRPL Execution] Building Xaman payload for live execution');
+
+    try {
+      // Connect to XRPL to get account info and fee
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+
+      // Get account info to validate wallet exists
+      try {
+        await client.request({
+          command: 'account_info',
+          account: walletAddress,
+          ledger_index: 'current'
+        });
+      } catch (err) {
+        client.disconnect();
+        throw new Error(`Wallet address not found on XRPL ${this.network}: ${walletAddress}`);
+      }
+
+      // Validate trustline before building OfferCreate
+      const quote = route.toToken || 'USDT';
+      if (quote !== 'XRP') {
+        const quoteIssuer = this.issuers[this.network][quote];
+        const hasTrustline = await this.checkTrustline(client, walletAddress, quote, quoteIssuer);
+        
+        if (!hasTrustline) {
+          client.disconnect();
+          const error = new Error(`Trustline required for ${quote}`);
+          error.code = 'TRUSTLINE_REQUIRED';
+          error.details = {
+            currency: quote,
+            issuer: quoteIssuer,
+            message: `Your wallet needs a trustline to ${quote} (issuer: ${quoteIssuer}) before trading. Please set up the trustline in your Xaman wallet first.`
+          };
+          throw error;
+        }
+      }
+
+      // Build OfferCreate transaction for XRPL DEX
+      const txJson = await this.buildOfferCreateTx(route, params, client);
+
+      // Auto-fill transaction fields (sequence, last ledger sequence, etc.)
+      const prepared = await client.autofill(txJson);
+
+      client.disconnect();
+
+      console.log('[XRPL Execution] Prepared transaction:', prepared);
+
+      // Create Xaman signing payload
+      const payload = await this.xumm.payload.create({
+        txjson: prepared,
+        options: {
+          submit: false, // We'll submit after getting the signed blob
+          expire: 5, // Expire in 5 minutes
+          return_url: {
+            web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+          }
+        }
+      }, true); // returnErrors = true to get detailed error information
+      
+      console.log('[XRPL Execution] Xaman SDK response:', {
+        payload,
+        isNull: payload === null,
+        type: typeof payload
+      });
+
+      console.log('[XRPL Execution] Xaman payload created:', {
+        uuid: payload.uuid,
+        qrUrl: payload.refs.qr_png,
+        deepLink: payload.next.always
+      });
+
+      return {
+        success: true,
+        network: `XRPL_${this.network.toUpperCase()}`,
+        executionMode: 'live',
+        requiresSignature: true,
+        xamanPayload: {
+          uuid: payload.uuid,
+          qrUrl: payload.refs.qr_png,
+          deepLink: payload.next.always,
+          websocket: payload.refs.websocket_status,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        },
+        transaction: {
+          type: 'OfferCreate',
+          account: walletAddress,
+          takerGets: prepared.TakerGets,
+          takerPays: prepared.TakerPays,
+          fee: prepared.Fee || '12'
+        },
+        route: {
+          routeId: route.routeId,
+          chain: 'XRP',
+          expectedOutput: route.expectedOutput,
+          fees: route.fees
+        }
+      };
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to build Xaman payload:', error);
+      
+      // Re-throw trustline errors with code preserved
+      if (error.code === 'TRUSTLINE_REQUIRED') {
+        throw error;
+      }
+      
+      throw new Error(`Failed to build XRPL transaction: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get Xaman payload status and signed transaction
+   * @param {string} payloadUuid - Xaman payload UUID
+   * @returns {Object} Payload status and signed transaction blob
+   */
+  async getPayloadStatus(payloadUuid) {
+    try {
+      const payload = await this.xumm.payload.get(payloadUuid);
+
+      console.log('[XRPL Execution] Payload status:', {
+        uuid: payloadUuid,
+        signed: payload.meta.signed,
+        resolved: payload.meta.resolved
+      });
+
+      if (!payload.meta.resolved) {
+        return {
+          status: 'pending',
+          signed: false
+        };
+      }
+
+      if (!payload.meta.signed) {
+        return {
+          status: 'rejected',
+          signed: false,
+          reason: 'User rejected the signature request'
+        };
+      }
+
+      return {
+        status: 'signed',
+        signed: true,
+        signedBlob: payload.response.hex,
+        txid: payload.response.txid
+      };
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to get payload status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit signed transaction to XRPL
+   * @param {string} signedBlob - Signed transaction hex
+   * @returns {Object} Transaction result
+   */
+  async submitSignedTransaction(signedBlob) {
+    console.log('[XRPL Execution] Submitting signed transaction to XRPL');
+    console.log('[XRPL Execution] Using endpoint:', this.rpcUrl);
+
+    try {
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+
+      // Submit the signed transaction
+      const result = await client.submit(signedBlob);
+
+      console.log('[XRPL Execution] Submit response:', JSON.stringify(result, null, 2));
+
+      const engineResult = result.result.engine_result;
+      const engineResultCode = result.result.engine_result_code;
+      const engineResultMessage = result.result.engine_result_message;
+      const txHash = result.result.tx_json?.hash;
+
+      console.log('[XRPL Execution] Engine result:', {
+        engineResult,
+        engineResultCode,
+        engineResultMessage,
+        txHash
+      });
+
+      // Check if transaction was successful or queued
+      const isSuccess = engineResult === 'tesSUCCESS';
+      const isQueued = engineResult === 'terQUEUED';
+      const shouldValidate = isSuccess || isQueued;
+
+      // Handle redundant transaction (already submitted)
+      if (engineResultCode === -275 || engineResult === 'tefPAST_SEQ') {
+        console.log('[XRPL Execution] Transaction redundant (already submitted)');
+        client.disconnect();
+        
+        return {
+          success: true,
+          status: 'already_submitted',
+          network: `xrpl-${this.network}`,
+          transaction: {
+            hash: txHash || 'unknown',
+            network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+            status: 'redundant'
+          },
+          settlement: {
+            status: 'already_submitted'
+          },
+          explorerUrl: txHash ? (
+            this.network === 'testnet'
+              ? `https://testnet.xrpl.org/transactions/${txHash}`
+              : `https://livenet.xrpl.org/transactions/${txHash}`
+          ) : null,
+          message: engineResultMessage,
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Handle other non-success results
+      if (!shouldValidate) {
+        console.log('[XRPL Execution] Transaction not successful, skipping validation');
+        client.disconnect();
+        
+        return {
+          success: false,
+          status: 'xrpl_engine_result',
+          engine_result: engineResult,
+          engine_result_code: engineResultCode,
+          message: engineResultMessage || `Transaction failed with result: ${engineResult}`,
+          network: `xrpl-${this.network}`,
+          transaction: {
+            hash: txHash,
+            network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+            status: 'failed'
+          },
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Transaction successful or queued - wait for validation
+      console.log('[XRPL Execution] Transaction successful, waiting for validation...');
+      const validated = await this.waitForValidation(client, txHash);
+
+      client.disconnect();
+
+      if (!validated.success) {
+        return {
+          success: false,
+          status: 'validation_failed',
+          message: validated.error || 'Transaction validation failed',
+          network: `xrpl-${this.network}`,
+          transaction: {
+            hash: txHash,
+            network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+            status: 'pending'
+          },
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      return {
+        success: true,
+        status: 'confirmed',
+        network: `xrpl-${this.network}`,
+        transaction: {
+          hash: txHash,
+          ledgerIndex: validated.ledgerIndex,
+          fee: validated.fee,
+          network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)}`,
+          status: 'confirmed'
+        },
+        settlement: {
+          status: 'confirmed'
+        },
+        explorerUrl: this.network === 'testnet'
+          ? `https://testnet.xrpl.org/transactions/${txHash}`
+          : `https://livenet.xrpl.org/transactions/${txHash}`,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to submit transaction:', error);
+      // Return structured error instead of throwing
+      return {
+        success: false,
+        status: 'error',
+        message: error.message || 'Failed to submit transaction',
+        error: error.toString(),
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * Wait for transaction validation on XRPL
+   * @param {Object} client - XRPL client
+   * @param {string} txHash - Transaction hash
+   * @returns {Object} Validation result
+   */
+  async waitForValidation(client, txHash, maxAttempts = 10) {
+    console.log('[XRPL Execution] Waiting for transaction validation:', txHash);
+
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const tx = await client.request({
+          command: 'tx',
+          transaction: txHash
+        });
+
+        if (tx.result.validated) {
+          console.log('[XRPL Execution] Transaction validated');
+          
+          return {
+            success: tx.result.meta.TransactionResult === 'tesSUCCESS',
+            ledgerIndex: tx.result.ledger_index,
+            fee: tx.result.Fee,
+            error: tx.result.meta.TransactionResult !== 'tesSUCCESS' 
+              ? tx.result.meta.TransactionResult 
+              : null
+          };
+        }
+      } catch (err) {
+        // Transaction not yet in ledger, wait and retry
+      }
+
+      // Wait 1 second before next attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    throw new Error('Transaction validation timeout');
+  }
+
+  /**
+   * Simulate execution for demo mode
+   * @param {Object} route - Route object
+   * @param {string} walletAddress - User's wallet address
+   * @returns {Object} Simulated execution result
+   */
+  async simulateExecution(route, walletAddress) {
+    console.log('[XRPL Execution] Simulating demo execution');
+
+    // Generate a fake transaction hash for demo
+    const fakeHash = `DEMO_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    return {
+      success: true,
+      network: `XRPL_${this.network.toUpperCase()}`,
+      executionMode: 'demo',
+      transaction: {
+        hash: fakeHash,
+        ledgerIndex: Math.floor(Math.random() * 1000000) + 50000000,
+        fee: '12',
+        network: `XRPL ${this.network.charAt(0).toUpperCase() + this.network.slice(1)} (Demo)`
+      },
+      settlement: {
+        status: 'simulated'
+      },
+      explorerUrl: '#',
+      route: {
+        routeId: route.routeId,
+        chain: 'XRP',
+        expectedOutput: route.expectedOutput,
+        fees: route.fees
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Create Xaman payload for TrustSet transaction
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {string} currency - Currency code (e.g., 'USDT')
+   * @returns {Object} Xaman payload details
+   */
+  async createTrustlinePayload(walletAddress, currency = 'USDT', customIssuer = null) {
+    console.log('[XRPL Execution] Creating TrustSet payload:', { walletAddress, currency, customIssuer });
+
+    try {
+      // Get issuer for the currency (use custom issuer if provided)
+      const issuer = customIssuer || this.issuers[this.network][currency];
+      if (!issuer) {
+        throw new Error(`No issuer configured for ${currency} on ${this.network}`);
+      }
+
+      // Build TrustSet transaction
+      // XRPL requires currency codes to be EXACTLY 3 characters for standard format
+      // USDT is 4 characters, so it must be hex-encoded to 40 characters (160 bits)
+      const currencyCode = currency.length === 3 
+        ? currency.toUpperCase() 
+        : currency.split('').map(c => c.charCodeAt(0).toString(16).toUpperCase()).join('').padEnd(40, '0');
+      
+      const txJson = {
+        TransactionType: 'TrustSet',
+        Account: walletAddress,
+        LimitAmount: {
+          currency: currencyCode,
+          issuer: issuer,
+          value: '1000000000' // Trust limit (1 billion)
+        },
+        Flags: 131072 // tfSetNoRipple
+      };
+
+      console.log('[XRPL Execution] TrustSet transaction (before autofill):', txJson);
+
+      // Connect to XRPL and autofill transaction fields
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+      
+      const prepared = await client.autofill(txJson);
+      
+      await client.disconnect();
+      
+      console.log('[XRPL Execution] TrustSet transaction (after autofill):', prepared);
+
+      // Create Xaman signing payload
+      // Validate SDK is initialized
+      if (!this.xumm || !process.env.XUMM_API_KEY || !process.env.XUMM_API_SECRET) {
+        throw new Error('Xaman SDK not properly initialized - missing API credentials');
+      }
+      
+      // Test API credentials with ping
+      try {
+        const pingResult = await this.xumm.ping();
+        console.log('[XRPL Execution] Xaman API ping result:', pingResult);
+      } catch (pingError) {
+        console.error('[XRPL Execution] Xaman API ping failed:', pingError);
+        throw new Error(`Xaman API credentials invalid: ${pingError.message}`);
+      }
+      
+      console.log('[XRPL Execution] SDK check:', {
+        hasXumm: !!this.xumm,
+        hasPayloadMethod: !!this.xumm?.payload,
+        hasCreateMethod: !!this.xumm?.payload?.create,
+        xummType: typeof this.xumm,
+        payloadType: typeof this.xumm?.payload,
+        hasApiKey: !!process.env.XUMM_API_KEY,
+        hasApiSecret: !!process.env.XUMM_API_SECRET,
+        apiKeyLength: process.env.XUMM_API_KEY?.length,
+        apiSecretLength: process.env.XUMM_API_SECRET?.length
+      });
+      
+      console.log('[XRPL Execution] Calling Xaman SDK with:', {
+        txjson: txJson,
+        options: {
+          submit: false,
+          expire: 5,
+          return_url: {
+            web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+          }
+        }
+      });
+      
+      // Prepare diagnostic info
+      const diagnostics = {
+        sdkVersion: require('xumm-sdk/package.json').version,
+        hasApiKey: !!process.env.XUMM_API_KEY,
+        hasApiSecret: !!process.env.XUMM_API_SECRET,
+        apiKeyLength: process.env.XUMM_API_KEY?.length,
+        apiSecretLength: process.env.XUMM_API_SECRET?.length,
+        requestPayloadSummary: {
+          TransactionType: txJson.TransactionType,
+          issuer: txJson.LimitAmount.issuer,
+          currency: txJson.LimitAmount.currency,
+          limit: txJson.LimitAmount.value,
+          returnUrlDomain: new URL(process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com').hostname,
+          submitFlag: false,
+          expire: 5
+        }
+      };
+
+      let payload;
+      let sdkError = null;
+      
+      try {
+        // Try without return_url first to see if that's the issue
+        payload = await this.xumm.payload.create({
+          txjson: prepared,
+          options: {
+            submit: true, // Auto-submit TrustSet after signing
+            expire: 5
+          }
+        }, true); // returnErrors = true to get detailed error information
+        
+        console.log('[XRPL Execution] Payload created without return_url');
+        console.log('[XRPL Execution] Raw SDK response:', {
+          payload,
+          type: typeof payload,
+          isNull: payload === null,
+          isUndefined: payload === undefined,
+          keys: payload ? Object.keys(payload) : 'N/A'
+        });
+        
+        // If that didn't work, the error will be caught below
+      } catch (err) {
+        sdkError = err;
+        console.error('[XRPL Execution] Xaman SDK threw error:', {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          status: err.response?.status,
+          statusText: err.response?.statusText
+        });
+      }
+
+      console.log('[XRPL Execution] Xaman SDK returned:', payload);
+      
+      if (!payload || sdkError) {
+        const error = new Error('Xaman SDK failed to create payload');
+        error.code = 'XAMAN_CREATE_FAILED';
+        error.diagnostics = {
+          ...diagnostics,
+          httpStatus: sdkError?.response?.status,
+          httpBody: sdkError?.response?.data,
+          errorMessage: sdkError?.message,
+          errorStack: sdkError?.stack?.split('\n').slice(0, 3).join('\n')
+        };
+        throw error;
+      }
+
+      console.log('[XRPL Execution] TrustSet Xaman payload created:', {
+        uuid: payload.uuid,
+        qrUrl: payload.refs.qr_png,
+        deepLink: payload.next.always
+      });
+
+      return {
+        success: true,
+        xamanPayload: {
+          uuid: payload.uuid,
+          qrUrl: payload.refs.qr_png,
+          deepLink: payload.next.always,
+          websocket: payload.refs.websocket_status,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        },
+        transaction: {
+          type: 'TrustSet',
+          currency: currency,
+          issuer: issuer,
+          limit: '1000'
+        }
+      };
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to create TrustSet payload:', error);
+      throw new Error(`Failed to create trustline payload: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create Xaman payload to cancel an open offer
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @param {number} offerSequence - Sequence number of the offer to cancel
+   * @returns {Object} Xaman payload details
+   */
+  async createOfferCancelPayload(walletAddress, offerSequence) {
+    console.log('[XRPL Execution] Creating OfferCancel payload');
+
+    try {
+      // Connect to XRPL
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+
+      // Build OfferCancel transaction
+      const txJson = {
+        TransactionType: 'OfferCancel',
+        Account: walletAddress,
+        OfferSequence: offerSequence,
+        Fee: '12' // 12 drops = 0.000012 XRP
+      };
+
+      // Auto-fill transaction fields
+      const prepared = await client.autofill(txJson);
+      client.disconnect();
+
+      console.log('[XRPL Execution] Prepared OfferCancel transaction:', prepared);
+
+      // Create Xaman signing payload
+      const payload = await this.xumm.payload.create({
+        txjson: prepared,
+        options: {
+          submit: true, // Auto-submit after signing
+          expire: 5,
+          return_url: {
+            web: `${process.env.FRONTEND_URL || 'https://dbx-frontend.onrender.com'}/exchange?network=XRP`
+          }
+        }
+      }, true);
+
+      console.log('[XRPL Execution] OfferCancel Xaman payload created:', {
+        uuid: payload.uuid,
+        qrUrl: payload.refs.qr_png,
+        deepLink: payload.next.always
+      });
+
+      return {
+        success: true,
+        payloadId: payload.uuid,
+        qrCode: payload.refs.qr_png,
+        deepLink: payload.next.always,
+        websocket: payload.refs.websocket_status
+      };
+
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to create OfferCancel payload:', error);
+      throw new Error(`Failed to create OfferCancel payload: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get user's open and completed orders from XRPL
+   * @param {string} walletAddress - User's XRPL wallet address
+   * @returns {Object} Open and completed orders
+   */
+  async getUserOrders(walletAddress) {
+    console.log('[XRPL Execution] Fetching orders for:', walletAddress);
+
+    try {
+      const client = new xrpl.Client(this.rpcUrl);
+      await client.connect();
+
+      // Get open offers
+      const offersResponse = await client.request({
+        command: 'account_offers',
+        account: walletAddress
+      });
+
+      const openOffers = offersResponse.result.offers.map(offer => {
+        // Determine order type (buy/sell)
+        const isSellXRP = typeof offer.taker_gets === 'string'; // XRP is string (drops)
+        const type = isSellXRP ? 'sell' : 'buy';
+
+        // Parse amounts
+        let baseAmount, quoteAmount, baseCurrency, quoteCurrency;
+        
+        if (isSellXRP) {
+          // Selling XRP for token
+          baseAmount = (parseInt(offer.taker_gets) / 1000000).toFixed(6);
+          baseCurrency = 'XRP';
+          quoteAmount = parseFloat(offer.taker_pays.value).toFixed(6);
+          quoteCurrency = this.decodeCurrency(offer.taker_pays.currency);
+        } else {
+          // Buying XRP with token
+          baseAmount = (parseInt(offer.taker_pays) / 1000000).toFixed(6);
+          baseCurrency = 'XRP';
+          quoteAmount = parseFloat(offer.taker_gets.value).toFixed(6);
+          quoteCurrency = this.decodeCurrency(offer.taker_gets.currency);
+        }
+
+        // Calculate price
+        const price = (parseFloat(quoteAmount) / parseFloat(baseAmount)).toFixed(6);
+
+        return {
+          sequence: offer.seq,
+          type,
+          baseAmount,
+          baseCurrency,
+          quoteAmount,
+          quoteCurrency,
+          price,
+          quality: offer.quality,
+          status: 'open'
+        };
+      });
+
+      // Get recent account transactions for completed orders
+      const txResponse = await client.request({
+        command: 'account_tx',
+        account: walletAddress,
+        limit: 20,
+        ledger_index_min: -1,
+        ledger_index_max: -1
+      });
+
+      const completedOrders = txResponse.result.transactions
+        .filter(tx => {
+          // Add null checks to prevent crashes
+          if (!tx || !tx.tx || !tx.meta) return false;
+          const meta = tx.meta;
+          const txType = tx.tx.TransactionType;
+          // Only show OfferCreate transactions that were successful
+          return txType === 'OfferCreate' && meta.TransactionResult === 'tesSUCCESS';
+        })
+        .map(tx => {
+          const txData = tx.tx;
+          const meta = tx.meta;
+          
+          // Check if offer was filled by looking at balance changes
+          const wasFilled = meta.AffectedNodes?.some(node => {
+            return node.ModifiedNode?.LedgerEntryType === 'AccountRoot' &&
+                   node.ModifiedNode?.FinalFields?.Balance !== node.ModifiedNode?.PreviousFields?.Balance;
+          });
+
+          // Determine order type
+          const isSellXRP = typeof txData.TakerGets === 'string';
+          const type = isSellXRP ? 'sell' : 'buy';
+
+          // Parse amounts
+          let baseAmount, quoteAmount, baseCurrency, quoteCurrency;
+          
+          if (isSellXRP) {
+            baseAmount = (parseInt(txData.TakerGets) / 1000000).toFixed(6);
+            baseCurrency = 'XRP';
+            quoteAmount = parseFloat(txData.TakerPays.value).toFixed(6);
+            quoteCurrency = this.decodeCurrency(txData.TakerPays.currency);
+          } else {
+            baseAmount = (parseInt(txData.TakerPays) / 1000000).toFixed(6);
+            baseCurrency = 'XRP';
+            quoteAmount = parseFloat(txData.TakerGets.value).toFixed(6);
+            quoteCurrency = this.decodeCurrency(txData.TakerGets.currency);
+          }
+
+          const price = (parseFloat(quoteAmount) / parseFloat(baseAmount)).toFixed(6);
+
+          return {
+            hash: txData.hash,
+            sequence: txData.Sequence,
+            type,
+            baseAmount,
+            baseCurrency,
+            quoteAmount,
+            quoteCurrency,
+            price,
+            status: wasFilled ? 'filled' : 'cancelled',
+            timestamp: tx.tx.date ? new Date((tx.tx.date + 946684800) * 1000).toISOString() : null,
+            ledgerIndex: tx.tx.ledger_index
+          };
+        });
+
+      await client.disconnect();
+
+      return {
+        success: true,
+        openOffers,
+        completedOrders,
+        totalOpen: openOffers.length,
+        totalCompleted: completedOrders.length
+      };
+
+    } catch (error) {
+      console.error('[XRPL Execution] Failed to fetch orders:', error);
+      throw new Error(`Failed to fetch orders: ${error.message}`);
+    }
+  }
+
+  /**
+   * Decode hex-encoded currency code to readable string
+   * @param {string} currency - Currency code (hex or standard)
+   * @returns {string} Decoded currency
+   */
+  decodeCurrency(currency) {
+    if (!currency) return 'UNKNOWN';
+    
+    // If it's a standard 3-char code, return as-is
+    if (currency.length === 3) {
+      return currency;
+    }
+    
+    // If it's hex-encoded (40 chars), decode it
+    if (currency.length === 40) {
+      // Remove trailing zeros
+      const trimmed = currency.replace(/0+$/, '');
+      // Convert hex to ASCII
+      let decoded = '';
+      for (let i = 0; i < trimmed.length; i += 2) {
+        const hex = trimmed.substr(i, 2);
+        decoded += String.fromCharCode(parseInt(hex, 16));
+      }
+      return decoded || currency;
+    }
+    
+    return currency;
+  }
+}
+
+module.exports = XrplRouteExecutionService;

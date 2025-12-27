@@ -7,6 +7,8 @@
 
 const RoutePlanner = require('../services/routing/RoutePlanner');
 const RouteExecutionService = require('../services/routing/RouteExecutionService');
+const executionConfig = require('../config/executionConfig');
+const { recordTrade } = require('../middleware/rateLimiter');
 
 const routePlanner = new RoutePlanner();
 const routeExecutionService = new RouteExecutionService();
@@ -59,39 +61,42 @@ exports.getRoutingQuote = async (req, res) => {
     }
 
     // Plan routes with optional mode override
-    const routingResult = await routePlanner.planRoutes({
+    // Use findBestRoute which includes fallback logic for live execution
+    const bestRoute = await routePlanner.findBestRoute({
       fromToken,
       toToken,
       amount,
       side,
       fromChain,
       toChain,
-      mode // Pass mode to route planner
+      mode, // Pass mode to route planner
+      executionMode: mode === 'live' ? 'live' : 'demo' // Determine execution mode
     });
 
-    if (!routingResult.success) {
-      return res.status(404).json(routingResult);
+    if (!bestRoute) {
+      return res.status(422).json({
+        success: false,
+        errorCode: 'NO_ROUTE',
+        message: 'No valid routes found for the given parameters'
+      });
     }
 
     // Build response
+    // Handle both UniversalRoute instances and plain objects from _generateEvmDemoRoute
+    const routeData = typeof bestRoute.toJSON === 'function' ? bestRoute.toJSON() : bestRoute;
+    
     const response = {
       success: true,
-      bestRoute: routingResult.bestRoute.toJSON(),
-      alternativeRoutes: routingResult.alternativeRoutes.map(r => r.toJSON()),
-      expectedOutput: routingResult.bestRoute.expectedOutput,
-      fees: routingResult.bestRoute.fees,
-      slippage: routingResult.bestRoute.slippage,
-      routeExplanation: routePlanner.getRouteExplanation(routingResult.bestRoute),
-      totalRoutesFound: routingResult.totalRoutesFound,
+      bestRoute: routeData,
+      alternativeRoutes: [], // findBestRoute doesn't return alternatives
+      expectedOutput: routeData.expectedOutput,
+      fees: routeData.fees,
+      slippage: routeData.slippage,
+      routeExplanation: typeof bestRoute.toJSON === 'function' ? routePlanner.getRouteExplanation(bestRoute) : 'Direct EVM execution route',
+      totalRoutesFound: 1,
       preview: isPreview,
-      timestamp: routingResult.timestamp
+      timestamp: new Date().toISOString()
     };
-
-    // Add alternative route explanations
-    response.alternativeRoutes = response.alternativeRoutes.map((route, index) => ({
-      ...route,
-      explanation: routePlanner.getRouteExplanation(routingResult.alternativeRoutes[index])
-    }));
 
     return res.json(response);
 
@@ -259,6 +264,7 @@ exports.reloadLiquidity = async (req, res) => {
 /**
  * POST /api/routing/execute
  * Execute a route end-to-end (Stage 6)
+ * Stage 7.0: Enhanced to support live execution with wallet
  */
 exports.executeRoute = async (req, res) => {
   try {
@@ -272,7 +278,8 @@ exports.executeRoute = async (req, res) => {
       mode = 'auto',
       routeId,
       preview = true,
-      executionMode = 'demo'
+      executionMode = 'demo',
+      walletAddress // Stage 7.0: Wallet address for live execution
     } = req.body;
 
     console.log('[Routing API] Execute request:', {
@@ -313,6 +320,62 @@ exports.executeRoute = async (req, res) => {
       });
     }
 
+    // Stage 7.1: Validate live execution requirements
+    if (executionMode === 'live') {
+      // Validate wallet address
+      if (!walletAddress) {
+        return res.status(400).json({
+          success: false,
+          errorCode: 'WALLET_NOT_CONNECTED',
+          message: 'Wallet address is required for live execution'
+        });
+      }
+
+      // Validate chain allowlist
+      let chain = fromChain || base; // Use fromChain if specified, otherwise base token
+      
+      // Map token symbols to chain identifiers
+      // XRP (token) -> XRPL (chain)
+      if (chain === 'XRP') {
+        chain = 'XRPL';
+      }
+      
+      // Get all allowed chains for error message
+      const allAllowedChains = [...executionConfig.liveEvmChains, ...executionConfig.liveXrplChains];
+      
+      console.log('[CHAIN DEBUG] Resolved chain for live execution:', {
+        fromChain,
+        base,
+        resolvedChain: chain,
+        liveEvmChains: executionConfig.liveEvmChains,
+        liveXrplChains: executionConfig.liveXrplChains,
+        allAllowedChains
+      });
+      
+      if (!executionConfig.isChainAllowedForLive(chain)) {
+        return res.status(400).json({
+          success: false,
+          errorCode: 'CHAIN_NOT_ENABLED_FOR_LIVE',
+          message: `Chain ${chain} is not enabled for live execution. Allowed chains: ${allAllowedChains.join(', ')}`,
+          details: {
+            requestedChain: chain,
+            allowedChains: allAllowedChains
+          },
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Validate execution mode
+      const validation = executionConfig.validateExecution(chain, executionMode);
+      if (!validation.allowed) {
+        return res.status(403).json({
+          success: false,
+          errorCode: validation.code,
+          message: validation.reason
+        });
+      }
+    }
+
     // Execute route
     const result = await routeExecutionService.executeRoute({
       base,
@@ -324,11 +387,18 @@ exports.executeRoute = async (req, res) => {
       mode,
       routeId,
       preview,
-      executionMode
+      executionMode,
+      walletAddress // Stage 7.0: Pass wallet address for live execution
     });
 
     // Return result (success or error)
     if (result.success) {
+      // Stage 7.1: Record trade for rate limiting (live execution only)
+      if (executionMode === 'live' && walletAddress) {
+        recordTrade(walletAddress);
+        console.log(`[Rate Limiter] Recorded trade for wallet ${walletAddress}`);
+      }
+      
       return res.json(result);
     } else {
       // Map error codes to HTTP status codes
@@ -337,8 +407,11 @@ exports.executeRoute = async (req, res) => {
         'INVALID_AMOUNT': 400,
         'INVALID_SIDE': 400,
         'INVALID_EXECUTION_MODE': 400,
-        'NO_ROUTE': 404,
+        'WALLET_NOT_CONNECTED': 400,
+        'INSUFFICIENT_FUNDS': 400,
+        'RPC_NOT_CONFIGURED': 503,
         'UNSUPPORTED_CHAIN': 501,
+        'NO_ROUTE': 422, // Changed from 404 to 422 (Unprocessable Entity)
         'UNSUPPORTED_PATH_TYPE': 501,
         'EXECUTION_DISABLED': 503,
         'EXECUTION_FAILED': 500
@@ -353,6 +426,442 @@ exports.executeRoute = async (req, res) => {
       success: false,
       errorCode: 'INTERNAL_ERROR',
       message: 'Internal server error',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * POST /api/routing/broadcast
+ * Broadcast signed transaction (Stage 7.0)
+ */
+exports.broadcastTransaction = async (req, res) => {
+  try {
+    const {
+      chain,
+      signedTransaction,
+      metadata
+    } = req.body;
+
+    console.log('[Routing API] Broadcast request:', {
+      chain,
+      signedTxLength: signedTransaction?.length,
+      metadata
+    });
+
+    // Validate required parameters
+    if (!chain || !signedTransaction) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: chain, signedTransaction'
+      });
+    }
+
+    // Validate chain is ETH (Stage 7.0 only)
+    if (chain !== 'ETH') {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'UNSUPPORTED_CHAIN',
+        message: 'Broadcast is only supported for ETH in Stage 7.0'
+      });
+    }
+
+    // Broadcast signed transaction
+    const result = await routeExecutionService.broadcastSignedTransaction(
+      chain,
+      signedTransaction,
+      metadata
+    );
+
+    // Return result
+    if (result.success) {
+      return res.json(result);
+    } else {
+      const statusCode = {
+        'BROADCAST_FAILED': 500,
+        'RPC_ERROR': 502,
+        'INVALID_TRANSACTION': 400
+      }[result.errorCode] || 500;
+
+      return res.status(statusCode).json(result);
+    }
+
+  } catch (error) {
+    console.error('[Routing API] Error broadcasting transaction:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * POST /api/routing/xaman/create
+ * Create Xaman signing payload for XRPL live execution (Stage 7.3)
+ */
+exports.createXamanPayload = async (req, res) => {
+  try {
+    // TODO: Validate JWT token from Authorization header and derive walletAddress from session
+    // For now, accepting walletAddress from request body (passed from frontend localStorage)
+    const {
+      base,
+      quote,
+      amount,
+      side = 'sell',
+      walletAddress
+    } = req.body;
+
+    console.log('[Routing API] Xaman create payload request:', {
+      base,
+      quote,
+      amount,
+      side,
+      walletAddress
+    });
+
+    // Validate required parameters
+    if (!base || !quote || !amount || !walletAddress) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: base, quote, amount, walletAddress'
+      });
+    }
+
+    // Validate amount
+    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_AMOUNT',
+        message: 'Invalid amount: must be a positive number'
+      });
+    }
+
+    // Validate XRPL wallet address
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_WALLET_ADDRESS',
+        message: 'Invalid XRPL wallet address: must start with "r"'
+      });
+    }
+
+    // Create a simple route object for XRPL
+    const route = {
+      routeId: `xrpl_${Date.now()}`,
+      chain: 'XRPL',
+      pathType: 'direct',
+      expectedOutput: parseFloat(amount),
+      fees: {
+        totalFeeUSD: 0.0045,
+        totalFeeNative: 0.000012,
+        breakdown: [
+          {
+            type: 'network',
+            amount: 0.000012,
+            percentage: 0
+          }
+        ],
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    // Create Xaman payload
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.executeRoute(route, {
+      base,
+      quote,
+      amount: parseFloat(amount),
+      side,
+      executionMode: 'live',
+      walletAddress
+    });
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error creating Xaman payload:', error);
+    
+    // Handle trustline error specifically
+    if (error.code === 'TRUSTLINE_REQUIRED') {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'TRUSTLINE_REQUIRED',
+        message: error.message,
+        details: error.details
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to create Xaman payload',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * GET /api/routing/xaman/status/:payloadUuid
+ * Get Xaman payload status (Stage 7.3)
+ */
+exports.getXamanPayloadStatus = async (req, res) => {
+  try {
+    const { payloadUuid } = req.params;
+
+    console.log('[Routing API] Xaman payload status request:', payloadUuid);
+
+    if (!payloadUuid) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: payloadUuid'
+      });
+    }
+
+    // Get payload status from XRPL service
+    const xrplService = routeExecutionService.xrplLiveService;
+    const status = await xrplService.getPayloadStatus(payloadUuid);
+
+    return res.json({
+      success: true,
+      ...status
+    });
+
+  } catch (error) {
+    console.error('[Routing API] Error getting Xaman payload status:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to get payload status',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * POST /api/routing/xaman/submit
+ * Submit signed XRPL transaction from Xaman (Stage 7.3)
+ */
+exports.submitXamanTransaction = async (req, res) => {
+  try {
+    const { signedBlob, payloadUuid } = req.body;
+
+    console.log('[Routing API] Xaman submit request:', {
+      payloadUuid,
+      signedBlobLength: signedBlob?.length
+    });
+
+    if (!signedBlob) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: signedBlob'
+      });
+    }
+
+    // Submit signed transaction to XRPL
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.submitSignedTransaction(signedBlob);
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error submitting Xaman transaction:', error);
+    return res.status(500).json({
+      success: false,
+      errorCode: 'SUBMIT_FAILED',
+      message: 'Failed to submit transaction',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * POST /api/routing/xaman/trustline/create
+ * Create Xaman payload for TrustSet transaction (Stage 7.3)
+ */
+exports.createTrustlinePayload = async (req, res) => {
+  try {
+    const { walletAddress, currency = 'USDT', issuer = null } = req.body;
+
+    console.log('[Routing API] Trustline creation request:', { walletAddress, currency, issuer });
+
+    // Validate wallet address
+    if (!walletAddress) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: walletAddress'
+      });
+    }
+
+    // Validate XRPL address format
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_ADDRESS',
+        message: `Invalid XRPL wallet address: ${walletAddress}`
+      });
+    }
+
+    // Create TrustSet payload
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.createTrustlinePayload(walletAddress, currency, issuer);
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error creating trustline payload:', error);
+    
+    // Return diagnostic details if available
+    const errorCode = error.code || 'INTERNAL_ERROR';
+    const details = error.diagnostics ? {
+      ...error.diagnostics,
+      error: error.message
+    } : {
+      error: error.message
+    };
+    
+    return res.status(500).json({
+      success: false,
+      errorCode: errorCode,
+      message: 'Failed to create trustline payload',
+      details: details
+    });
+  }
+};
+
+/**
+ * POST /api/routing/xaman/cancel-offer
+ * Cancel an open offer on XRPL DEX (Stage 7.4)
+ */
+exports.cancelOffer = async (req, res) => {
+  try {
+    const { walletAddress, offerSequence } = req.body;
+
+    console.log('[Routing API] Cancel offer request:', {
+      walletAddress,
+      offerSequence
+    });
+
+    // Validate required parameters
+    if (!walletAddress || !offerSequence) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameters: walletAddress, offerSequence'
+      });
+    }
+
+    // Validate XRPL address format
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_ADDRESS',
+        message: `Invalid XRPL wallet address: ${walletAddress}`
+      });
+    }
+
+    // Validate offer sequence
+    if (!Number.isInteger(offerSequence) || offerSequence <= 0) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_SEQUENCE',
+        message: 'Invalid offer sequence: must be a positive integer'
+      });
+    }
+
+    // Create OfferCancel payload
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.createOfferCancelPayload(walletAddress, offerSequence);
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error canceling offer:', error);
+    
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to cancel offer',
+      details: {
+        error: error.message
+      }
+    });
+  }
+};
+
+/**
+ * GET /api/routing/xrpl/orders
+ * Get user's open and completed orders from XRPL DEX (Stage 7.5)
+ */
+exports.getUserOrders = async (req, res) => {
+  try {
+    const { walletAddress } = req.query;
+
+    console.log('[Routing API] Get orders request:', { walletAddress });
+
+    // Validate required parameters
+    if (!walletAddress) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'MISSING_PARAMETERS',
+        message: 'Missing required parameter: walletAddress'
+      });
+    }
+
+    // Validate XRPL address format
+    if (!walletAddress.startsWith('r')) {
+      return res.status(400).json({
+        success: false,
+        errorCode: 'INVALID_ADDRESS',
+        message: `Invalid XRPL wallet address: ${walletAddress}`
+      });
+    }
+
+    // Get user's orders
+    const xrplService = routeExecutionService.xrplLiveService;
+    const result = await xrplService.getUserOrders(walletAddress);
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[Routing API] Error fetching orders:', error);
+    
+    return res.status(500).json({
+      success: false,
+      errorCode: 'INTERNAL_ERROR',
+      message: 'Failed to fetch orders',
       details: {
         error: error.message
       }
