@@ -610,12 +610,12 @@ class XrplRouteExecutionService {
    * @param {string} currency - Currency code (e.g., 'USDT')
    * @returns {Object} Xaman payload details
    */
-  async createTrustlinePayload(walletAddress, currency = 'USDT') {
-    console.log('[XRPL Execution] Creating TrustSet payload:', { walletAddress, currency });
+  async createTrustlinePayload(walletAddress, currency = 'USDT', customIssuer = null) {
+    console.log('[XRPL Execution] Creating TrustSet payload:', { walletAddress, currency, customIssuer });
 
     try {
-      // Get issuer for the currency
-      const issuer = this.issuers[this.network][currency];
+      // Get issuer for the currency (use custom issuer if provided)
+      const issuer = customIssuer || this.issuers[this.network][currency];
       if (!issuer) {
         throw new Error(`No issuer configured for ${currency} on ${this.network}`);
       }

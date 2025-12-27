@@ -700,9 +700,9 @@ exports.submitXamanTransaction = async (req, res) => {
  */
 exports.createTrustlinePayload = async (req, res) => {
   try {
-    const { walletAddress, currency = 'USDT' } = req.body;
+    const { walletAddress, currency = 'USDT', issuer = null } = req.body;
 
-    console.log('[Routing API] Trustline creation request:', { walletAddress, currency });
+    console.log('[Routing API] Trustline creation request:', { walletAddress, currency, issuer });
 
     // Validate wallet address
     if (!walletAddress) {
@@ -724,7 +724,7 @@ exports.createTrustlinePayload = async (req, res) => {
 
     // Create TrustSet payload
     const xrplService = routeExecutionService.xrplLiveService;
-    const result = await xrplService.createTrustlinePayload(walletAddress, currency);
+    const result = await xrplService.createTrustlinePayload(walletAddress, currency, issuer);
 
     if (!result.success) {
       return res.status(500).json(result);
